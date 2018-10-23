@@ -31,6 +31,8 @@ module Language.Mist.UX
   -- * Pretty Printing
   , Text
   , PPrint (..)
+  , pprintMany
+
   ) where
 
 import           Control.Exception
@@ -219,3 +221,9 @@ renderError e = do
   let sp   = sourceSpan e
   snippet <- readFileSpan sp
   return   $ printf "%s: %s\n\n%s" (pprint sp) (eMsg e) snippet
+
+
+pprintMany :: (PPrint a) => [a] -> Text
+pprintMany xs = L.intercalate ", " (map pprint xs)
+
+

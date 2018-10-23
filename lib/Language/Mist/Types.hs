@@ -51,6 +51,7 @@ module Language.Mist.Types
   , Ext (..)
   , ext
 
+  
   ) where
 
 import           GHC.Exts( IsString(..) )
@@ -94,10 +95,10 @@ data Expr a
   | Let     !(Bind a) !Sig       !(Expr a)  !(Expr a) a
   | Tuple   !(Expr a) !(Expr a)            a
   | GetItem !(Expr a) !Field               a
-  | App     !(Expr a) [Expr a]             a
+  | App     !(Expr a) !(Expr a)            a
   | Lam               [Bind a]   !(Expr a) a
   -- | Fun     !(Bind a) !Sig        [Bind a]   !(Expr a)  a
-  | Skip
+  | Skip                                   a
     deriving (Show, Functor)
 
 data Sig
@@ -125,7 +126,10 @@ type Def a = (Bind a, Sig, Expr a)
 -- dec f t xs e e' l = Let f (Fun f t xs e l) e' l
 
 defsExpr :: [Def a] -> Expr a 
-defsExpr = undefined 
+defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs  
+  where 
+    go l []               = Skip l
+    go _ ((b, s, e) : ds) = Let b s e (go l ds) l where l = bindLabel b 
 
 -- | Constructing `Expr` from let-binds
 bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
@@ -152,7 +156,7 @@ getLabel (Tuple _ _ l)   = l
 getLabel (GetItem _ _ l) = l
 getLabel (Lam _ _ l)     = l
 -- getLabel (Fun _ _ _ _ l) = l
-getLabel Skip            = error "getLabel: Skip"
+getLabel (Skip  l)       = l 
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -187,8 +191,8 @@ instance PPrint Prim2 where
   pprint Equal   = "=="
 
 instance PPrint Bool where
-  pprint True  = "true"
-  pprint False = "false"
+  pprint True  = "True"
+  pprint False = "False"
 
 instance PPrint (Bind a) where
   pprint (Bind x _) = x
@@ -201,48 +205,29 @@ instance PPrint (Expr a) where
   pprint (Number n _)    = show n
   pprint (Boolean b _)   = pprint b
   pprint (Id x _)        = x
-  pprint (Prim2 o l r _) = printf "%s %s %s"             (pprint l)   (pprint o) (pprint r)
-  pprint (If    c t e _) = printf "(if %s: %s else: %s)" (pprint c)   (pprint t) (pprint e)
-  -- pprint (Let _ (Fun f _ xs e _) e' _)
-  --                        = ppDec f xs e e'
-  pprint e@(Let {})      = printf "(let %s in %s)"       (ppDefs ds) (pprint e') where (ds, e') = exprDefs e
-  pprint (App e es _)    = printf "%s(%s)"               (pprint e)  (pprintMany es)
-  pprint (Tuple e1 e2 _) = printf "(%s, %s)"             (pprint e1) (pprint e2)
-  pprint (GetItem e i _) = printf "%s[%s]"               (pprint e)   (pprint i)
-  pprint (Lam xs e _)    = printf "lambda (%s): %s"      (pprintMany xs) (pprint e)
-  pprint (Skip)           = "skip" 
+  pprint (Prim2 o l r _) = printf "%s %s %s"                (pprint l)      (pprint o) (pprint r)
+  pprint (If    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
+  pprint e@(Let {})      = printf "(let %s in %s)"          (ppDefs ds)     (pprint e') where (ds, e') = exprDefs e
+  pprint (App e1 e2 _)   = printf "(%s %s)"                 (pprint e1)     (pprint e2)
+  pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
+  pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
+  pprint (Lam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
+  pprint (Skip _)        = "skip" 
 
-{- 
-ppDec :: Bind a -> [Bind a] -> Expr a -> Expr a -> Text
-ppDec f xs e e'  = printf "%s\nin\n%s" (ppDef f xs e) (pprint e')
-
-ppDef :: Bind a -> [Bind a] -> Expr a -> Text
-ppDef f xs e     = printf "def %s(%s):\n%s"
-                     (pprint f)
-                     (pprintMany xs)
-                     (nest 4 (pprint e))
--}
-
--- pprintArgs :: [Id] -> Text
--- pprintArgs xs = L.intercalate ", " xs
-
-
-
-pprintMany :: (PPrint a) => [a] -> Text
-pprintMany xs = L.intercalate ", " (map pprint xs)
+ppMany :: (PPrint a) => Text -> [a] -> Text 
+ppMany sep = L.intercalate sep . fmap pprint 
 
 ppDefs :: [Def a] -> Text
 ppDefs = L.intercalate "\n " . fmap ppDef 
 
 ppDef :: Def a -> Text 
-ppDef (b, Check s , e) = ppSig ""        b s ++ ppEqn b e 
-ppDef (b, Assume s, e) = ppSig "assume " b s ++ ppEqn b e 
-ppDef (b, Infer   , e) =                        ppEqn b e 
+ppDef (b, Check s , e) = ppSig "::" b s ++ ppEqn b e 
+ppDef (b, Assume s, e) = ppSig "as" b s ++ ppEqn b e 
+ppDef (b, Infer   , e) =                   ppEqn b e 
 
-ppSig k b _s = printf "%s%s :: %s\n" k (pprint b) "TODO-SIGNATURE" -- (pprint s) 
+ppSig k b _s = printf "%s %s %s\n" (pprint b) k "TODO-SIGNATURE" -- (pprint s) 
 ppEqn b e    = printf "%s = \n" (pprint b)
             ++ nest 2           (pprint e)
-
 
 nest       :: Int -> Text -> Text
 nest n     = unlines . map pad . lines
@@ -258,7 +243,7 @@ label :: Expr a -> Expr (a, Tag)
 --------------------------------------------------------------------------------
 label = snd . go 0
   where
-    go i Skip              = (i, Skip) 
+    go i (Skip l)          = labelTop i l  Skip 
 
     go i (Number n l)      = labelTop i  l (Number n)
 
@@ -300,9 +285,9 @@ label = snd . go 0
         -- (i', e')           = go i e
         -- (i'', f':xs')      = L.mapAccumL labelBind i' (f:xs)
 
-    go i (App e es l)      = labelTop i' l (App e' es')
+    go i (App e1 e2 l)     = labelTop i' l (App e1' e2')
       where
-        (i', e':es')       = L.mapAccumL go i (e:es)
+        (i', [e1', e2'])   = L.mapAccumL go i [e1, e2]
 
 labelTop :: Tag -> a -> ((a, Tag) -> b) -> (Tag, b)
 labelTop i l c             = (i + 1, c (l, i))
@@ -315,7 +300,7 @@ labelBind i (Bind x l)     = labelTop i l (Bind x)
 --------------------------------------------------------------------------------
 {-@ measure isAnf @-}
 isAnf :: Expr a -> Bool
-isAnf (Skip)           = True
+isAnf (Skip _)         = True
 isAnf (Number  _ _)    = True
 isAnf (Boolean _ _)    = True
 isAnf (Id      _ _)    = True
@@ -324,7 +309,7 @@ isAnf (If c t e _)     = isImm c && isAnf t && isAnf e
 isAnf (Let _ _ e e' _) = isAnf e && isAnf e'
 isAnf (Tuple e e' _)   = isAnf e && isAnf e'
 isAnf (GetItem e _ _)  = isAnf e
-isAnf (App e es _)     = isAnf e  && all isAnf es
+isAnf (App e e' _)     = isAnf e  && isAnf e'
 isAnf (Lam _ e _)      = isAnf e
 --isAnf (Fun _ _ _ e _)  = isAnf e
 
@@ -422,6 +407,9 @@ instance IsString TVar where
 
 instance IsString Type where
   fromString = TVar . TV
+
+instance PPrint Type where 
+  pprint = show 
 
 prType            :: Type -> PP.Doc
 prType (TVar a)     = prTVar a

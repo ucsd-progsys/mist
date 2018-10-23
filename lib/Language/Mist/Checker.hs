@@ -47,7 +47,7 @@ wellFormed = go emptyEnv
                              ++ go (addEnv x vEnv) e2
     go vEnv (Tuple e1 e2   _) = gos vEnv [e1, e2]
     go vEnv (GetItem e1 _ _)  = go  vEnv e1
-    go vEnv (App e es      _) = gos vEnv (e:es)
+    go vEnv (App e1 e2     _) = gos vEnv [e1, e2]
     go vEnv (Lam xs e      _) = duplicateParamErrors xs
                              ++ go (addsEnv xs vEnv) e
     -- go vEnv (Fun f _ xs e  _) = duplicateParamErrors xs
@@ -139,7 +139,7 @@ ti env su (Let x (Assume s) _ e _)
   where
     env'                   = extTypeEnv (bindId x) s env
 
-ti env su (App eF eArgs l) = tiApp (sourceSpan l) sF (apply sF env) tF eArgs
+ti env su (App eF eArg l)  = tiApp (sourceSpan l) sF (apply sF env) tF [eArg]
   where
     (sF, tF)               = ti env su eF                            -- eF :: T1
 
@@ -167,15 +167,15 @@ ti env su (Lam xs body l)  = (su3, apply su3 (tXs :=> tOut))
     -- OLD-FUN sp                     = sourceSpan (bindLabel f)
 
 -- HIDE : HARD
-ti env su (Let f (Check s) e1 _e2 _) 
-  | ok                     = (su'', t')
-  | otherwise              = abort (errMismatch sp s s')
+ti env su (Let f (Check s1) e1 e2 _) 
+  | ok                     = ti env' su'' e2
+  | otherwise              = abort (errMismatch sp s1 s1')
   where 
-    ok                     = eqPoly (generalize env t) (generalize env t')
-    s'                     = generalize env t'
-    (su'', t')             = tiFun sp env [] e1 su' (Just f) tXs tOut
-    (su' , t)              = instantiate su s
-    (tXs, tOut)            = splitFun sp (undefined {- length xs -}) t
+    ok                     = eqPoly s1 s1'
+    s1'                    = generalize env (apply su'' t1')
+    (su'', t1')            = ti env' su' e1 
+    env'                   = extTypeEnv (bindId f) s1 env 
+    (su' , t)              = instantiate su s1
     sp                     = sourceSpan (bindLabel f)
 
 -- ti env su (Fun f (Check s) xs e _)
@@ -196,9 +196,8 @@ ti env su e@(Let x _ e1 e2 _) = traceShow (pprint e) $ ti env'' su1 e2          
     env'                   = apply su1 env
     s1                     = generalize env' t1
 
-
 -- DEAD CODE
-ti _ _ e                   = panic "ti: dead code" (sourceSpan (getLabel e))
+ti _ su (Skip _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (getLabel e))
 
 
 splitFun :: SourceSpan -> Int -> Type -> ([Type], Type)

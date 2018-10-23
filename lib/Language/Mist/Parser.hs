@@ -1,8 +1,10 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE FlexibleContexts      #-}
 
 module Language.Mist.Parser ( parse, parseFile ) where
 
+import qualified Text.Printf as Printf 
 import qualified Control.Exception          as Ex 
 import           Control.Monad (void)
 import           Text.Megaparsec hiding (parse)
@@ -107,8 +109,8 @@ keywords =
   [ "if"      , "else"
   , "true"    , "false"
   , "let"     , "in"
-  , "add1"    , "sub1"  , "isNum"   , "isBool",   "print"
-  , "def"     , "lambda"
+  -- , "add1"    , "sub1"  , "isNum"   , "isBool",   "print"
+  -- , "def"     , "lambda"
   , "Int"     , "Bool"  , "forall"  , "as"
   ]
 
@@ -153,19 +155,30 @@ topDefs :: Parser [BareDef]
 topDefs = many topDef 
 
 topDef :: Parser BareDef 
+topDef = do 
+  f  <- binder 
+  s  <- typeSig
+  f' <- binder <* symbol "="
+  e  <- expr 
+  return (f, s, e) -- (mkDef f s f' [e]) 
+ 
+{- 
+topDef :: Parser BareDef 
 topDef = L.nonIndented scn (L.indentBlock scn p) 
   where 
     p = do 
       f  <- binder 
       s  <- typeSig
-      _  <- string (bindId f) <* symbol "="
       f' <- binder <* symbol "="
-      return (L.IndentSome Nothing (mkDef f s f') expr)
-     
+      return (L.IndentMany Nothing (mkDef f s f') expr)
+    
+-}      
+
 mkDef f s f' es 
   | okBind    = case es of 
                   [e] -> return (f, s, e)
-                  _   -> fail $ "Invalid body with multiple expressions, for " ++ show (bindId f)
+                  es  -> fail $ Printf.printf "Invalid body with multiple expressions %s for %s " 
+                                  (pprintMany es) (pprint f) --show (bindId f)
   | otherwise = fail $ "Definition for " ++ show f ++ " must follow its type signature."
   where 
     okBind    = bindId f == bindId f' 
@@ -193,9 +206,9 @@ expr0 =  try letExpr
      <|> try ifExpr
      <|> try lamExpr
      -- <|> try defExpr
-     <|> try getExpr
-     <|> try appExpr
-     <|> try tupExpr
+    -- <|> try getExpr
+     <|> try (mkApps <$> parens (sepBy1 expr0 sc)) 
+    -- <|> try tupExpr
      <|> try constExpr
      <|> idExpr
 
@@ -208,10 +221,12 @@ getExpr = withSpan' (GetItem <$> funExpr <*> brackets field)
   field =  (symbol "0" *> pure Zero)
        <|> (symbol "1" *> pure One)
 
-appExpr :: Parser Bare
-appExpr  = apps <$> funExpr <*> sepBy exprs sc
-  where
-    apps = L.foldl' (\e es -> App e es (stretch (e:es)))
+-- appExpr :: Parser Bare
+-- appExpr  = apps <$> funExpr <*> sepBy exprs sc
+
+mkApps :: [Bare] -> Bare
+mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2])) 
+
 
 funExpr :: Parser Bare
 funExpr = try idExpr <|> tupExpr
@@ -245,8 +260,8 @@ idExpr = uncurry Id <$> identifier
 constExpr :: Parser Bare
 constExpr
    =  (uncurry Number <$> integer)
-  <|> (Boolean True   <$> rWord "true")
-  <|> (Boolean False  <$> rWord "false")
+  <|> (Boolean True   <$> rWord "True")
+  <|> (Boolean False  <$> rWord "False")
 
 letExpr :: Parser Bare
 letExpr = withSpan' $ do
@@ -271,13 +286,12 @@ ifExpr = withSpan' $ do
 
 lamExpr :: Parser Bare
 lamExpr = withSpan' $ do
-  rWord "lambda"
-  xs    <- parens (sepBy binder comma) <* colon
+  -- rWord "lambda"
+  char '\\'
+  -- xs    <- parens (sepBy binder comma) <* symbol "->" 
+  xs    <- sepBy binder sc <* symbol "->" 
   e     <- expr
   return (Lam xs e)
-
-
-
 
 
 typeSig :: Parser Sig
@@ -292,19 +306,30 @@ scheme
  <|>     (Forall [] <$> typeType)
 
 typeType :: Parser Type
-typeType
+typeType = mkArrow <$> sepBy1 baseType (symbol "->")
+
+--  <|> try ((:=>) <$> types <* symbol "->" <*> typeType)
+
+baseType :: Parser Type 
+baseType 
   =  try (rWord "Int"   *> pure TInt)
  <|> try (rWord "Bool"  *> pure TBool)
  <|> try (TVar <$> tvar)
- <|> try ((:=>) <$> types <* symbol "=>" <*> typeType)
  <|> try (withSpan' (mkPairType <$> types))
  <|> ctorType
+
+
+mkArrow :: [Type] -> Type 
+mkArrow ts = case L.reverse ts of 
+               [t]   -> t
+               t:ts' -> L.reverse ts' :=> t 
+               _     -> error "impossible: mkArrow"
 
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier
 
 types :: Parser [Type]
-types = parens (sepBy typeType comma)
+types = parens (sepBy1 typeType comma)
 
 ctorType :: Parser Type
 ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
@@ -313,5 +338,6 @@ ctor :: Parser Ctor
 ctor = CT . fst <$> identStart upperChar
 
 mkPairType :: [Type] -> SourceSpan -> Type
+mkPairType [t]      _ = t
 mkPairType [t1, t2] _ = TPair t1 t2
 mkPairType _        l = panic "Mist only supports pairs types" l

@@ -23,7 +23,7 @@ anormal e = snd (anf 0 e)
 --------------------------------------------------------------------------------
 anf :: Int -> Expr a -> (Int, AnfExpr a)
 --------------------------------------------------------------------------------
-anf i (Skip)            = (i, Skip) 
+anf i (Skip l)          = (i, Skip l) 
 
 anf i (Number n l)      = (i, Number n l)
 
@@ -56,9 +56,9 @@ anf i (GetItem e1 f l)  = (i', stitch bs (GetItem e1' f l))
   where
     (i', bs, e1')       = imm i e1
 
-anf i (App e es l)      = (i', stitch bs (App e' es' l))
+anf i (App e1 e2 l)      = (i', stitch bs (App e1' e2' l))
   where
-    (i', bs, e':es')    = imms i (e:es)
+    (i', bs, [e1',e2']) = imms i [e1, e2]
 
 anf i (Lam xs e l)      = (i', Lam xs e' l)
   where
@@ -101,7 +101,7 @@ imms i (e:es)       = (i'', bs' ++ bs, e' : es' )
 --------------------------------------------------------------------------------
 imm :: Int -> AnfExpr a -> (Int, Binds a, ImmExpr a)
 --------------------------------------------------------------------------------
-imm i (Skip)            = (i  , [], Skip)
+imm i (Skip l)          = (i  , [], Skip l)
 
 imm i (Number n l)      = (i  , [], Number n l)
 
@@ -127,11 +127,11 @@ imm i (GetItem e1 f l)  = (i'', bs', mkId x l)
     (i'', x)            = fresh l i'
     bs'                 = (x, (GetItem v1 f l, l)) : bs
 
-imm i (App e es l)      = (i'', bs', mkId x l)
+imm i (App e1 e2 l)      = (i'', bs', mkId x l)
   where
-    (i', bs, v:vs)      = imms  i (e:es)
+    (i', bs, [v1, v2])  = imms  i [e1, e2]
     (i'', x)            = fresh l i'
-    bs'                 = (x, (App v vs l, l)) : bs
+    bs'                 = (x, (App v1 v2 l, l)) : bs
 
 imm i e@(If _ _ _  l)   = immExp i e l
 
