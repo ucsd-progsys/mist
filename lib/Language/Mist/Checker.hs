@@ -122,7 +122,7 @@ ti _ su   (Number {})      = (su, TInt)
 
 ti _ su   (Boolean {})     = (su, TBool)
 
-ti env su e@(Id x l)       = traceShow (pprint e) $ instantiate su (lookupTypeEnv (sourceSpan l) x env)
+ti env su e@(Id x l)       = traceShow False (pprint e) $ instantiate su (lookupTypeEnv (sourceSpan l) x env)
 
 -- the following cases reduce to special "function applications", handled by instApp
 ti env su (If e1 e2 e3 l)  = instApp (sourceSpan l) env su ifPoly [e1, e2, e3]
@@ -135,7 +135,7 @@ ti env su (GetItem e f l)  = instApp (sourceSpan l) env su (fieldPoly f) [e]
 
 -- Trusted signature: just add x := s to the env and use it to check `e`
 ti env su (Let x (Assume s) _ e _)
-                           = traceShow (pprint x) $ ti env' su e
+                           = traceShow False (pprint x) $ ti env' su e
   where
     env'                   = extTypeEnv (bindId x) s env
 
@@ -189,7 +189,7 @@ ti env su (Let f (Check s1) e1 e2 _)
     -- (tXs, tOut)            = splitFun sp (length xs) t
     -- sp                     = sourceSpan (bindLabel f)
 
-ti env su e@(Let x _ e1 e2 _) = traceShow (pprint e) $ ti env'' su1 e2                         -- e2 :: T2
+ti env su e@(Let x _ e1 e2 _) = traceShow False (pprint e) $ ti env'' su1 e2                         -- e2 :: T2
   where
     env''                  = extTypeEnv (bindId x) s1 env'
     (su1, t1)              = ti env su e1                            -- e1 :: T1
@@ -307,7 +307,7 @@ unifys sp su (t:ts) (t':ts') = unifys sp su' (apply su' ts) (apply su' ts')
 unifys _  su []     []       = su
 unifys sp _  _      _        = panic "unifys: dead code" sp
 
-_unify sp env su t1 t2 = traceShow ("MGU: env = " ++ show env ++ " t1 = " ++ show t1 ++ ", t2 = " ++ show t2) su'
+_unify sp env su t1 t2 = traceShow False ("MGU: env = " ++ show env ++ " t1 = " ++ show t1 ++ ", t2 = " ++ show t2) su'
   where
     su'           = unify sp su t1 t2
 
@@ -346,8 +346,8 @@ newtype TypeEnv = TypeEnv (M.Map Id Poly)
 extTypeEnv :: Id -> Poly -> TypeEnv -> TypeEnv
 extTypeEnv x s (TypeEnv env) =  TypeEnv $ M.insert x s env
   where
-    _env  = traceShow _msg _env
-    _msg  = "extTypeEnv: " ++ show x ++ " := " ++ show s
+    -- _env  = traceShow _msg _env
+    -- _msg  = "extTypeEnv: " ++ show x ++ " := " ++ show s
 
 lookupTypeEnv :: SourceSpan -> Id -> TypeEnv -> Poly
 lookupTypeEnv l x (TypeEnv env) = fromMaybe err  (M.lookup x env)

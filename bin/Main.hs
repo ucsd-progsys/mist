@@ -9,7 +9,7 @@ main = do
   f <- getSrcFile 
   r <- runMist stderr f 
   case r of 
-    Left _ -> exitFailure 
+    Left _  -> exitFailure 
     Right _ -> exitSuccess 
 
 getSrcFile :: IO Text

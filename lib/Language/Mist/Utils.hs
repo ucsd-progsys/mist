@@ -65,8 +65,9 @@ safeReadFile f = (Right <$> readFile f) `catch` handleIO f
 handleIO :: FilePath -> IOException -> IO (Either String a)
 handleIO f e = return . Left $ "Warning: Couldn't open " <> f <> ": " <> show e
 
-traceShow :: (Show a) => String -> a -> a
-traceShow msg x = trace (printf "TRACE: %s = %s" msg (show x)) x
+traceShow :: (Show a) => Bool -> String -> a -> a
+traceShow False _   x = x 
+traceShow True  msg x = trace (printf "TRACE: %s = %s" msg (show x)) x
 
 safeHead :: a -> [a] -> a
 safeHead def []    = def
