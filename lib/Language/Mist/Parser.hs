@@ -2,9 +2,10 @@ module Language.Mist.Parser ( parse, parseFile ) where
 
 import           Control.Monad (void)
 import           Text.Megaparsec hiding (parse)
+import           Data.List.NonEmpty         as NE
+import qualified Text.Megaparsec.Char.Lexer as L
+import           Text.Megaparsec.Char
 import           Text.Megaparsec.Expr
-import           Text.Megaparsec.String -- input stream is of type ‘String’
-import qualified Text.Megaparsec.Lexer as L
 import qualified Data.List as L
 import           Language.Mist.Types
 
@@ -15,19 +16,21 @@ parse = parseWith expr
 
 parseWith  :: Parser a -> FilePath -> Text -> a
 parseWith p f s = case runParser (whole p) f s of
-                    Left err -> panic (show err) (posSpan . errorPos $ err)
+                    Left err -> panic (show err) (posSpan . NE.head . errorPos $ err)
                     Right e  -> e
 
-instance Located ParseError where
-  sourceSpan = posSpan . errorPos
+-- instance Located ParseError where
+--  sourceSpan = posSpan . errorPos
 
-instance PPrint ParseError where
-  pprint = show
+-- instance PPrint ParseError where
+--   pprint = show
 
 --------------------------------------------------------------------------------
 parseFile :: FilePath -> IO Bare
 --------------------------------------------------------------------------------
 parseFile f = parse f <$> readFile f
+
+type Parser = Parsec SourcePos Text
 
 -- https://mrkkrp.github.io/megaparsec/tutorials/parsing-simple-imperative-language.html
 
@@ -71,7 +74,8 @@ lexeme p = L.lexeme sc (withSpan p)
 
 -- | 'integer' parses an integer.
 integer :: Parser (Integer, SourceSpan)
-integer = lexeme L.integer
+integer = lexeme L.decimal
+
 
 -- | `rWord`
 rWord   :: String -> Parser SourceSpan
@@ -107,7 +111,7 @@ binder = uncurry Bind <$> identifier
 
 
 stretch :: (Monoid a) => [Expr a] -> a
-stretch = mconcat . map getLabel
+stretch = mconcat . fmap getLabel
 
 withSpan' :: Parser (SourceSpan -> a) -> Parser a
 withSpan' p = do

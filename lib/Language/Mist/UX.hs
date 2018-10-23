@@ -35,10 +35,8 @@ module Language.Mist.UX
 
 import           Control.Exception
 import           Data.Typeable
-import           Data.Monoid
 import qualified Data.List as L
 import           Text.Megaparsec
-import           Text.Megaparsec.Pos
 import           Text.Printf (printf)
 import           Language.Mist.Utils
 
@@ -66,9 +64,12 @@ data SourceSpan = SS
   }
   deriving (Eq, Show)
 
+instance Semigroup SourceSpan where
+  s1 <> s2 = mappendSpan s1 s2 
+
 instance Monoid SourceSpan where
   mempty  = junkSpan
-  mappend = mappendSpan
+  -- mappend x y = x <> y 
 
 mappendSpan :: SourceSpan -> SourceSpan -> SourceSpan
 mappendSpan s1 s2
@@ -90,10 +91,10 @@ spanInfo :: SourceSpan -> (FilePath, Int, Int, Int, Int)
 spanInfo s = (f s, l1 s, c1 s, l2 s, c2 s)
   where
     f      = spanFile
-    l1     = sourceLine   . ssBegin
-    c1     = sourceColumn . ssBegin
-    l2     = sourceLine   . ssEnd
-    c2     = sourceColumn . ssEnd
+    l1     = unPos . sourceLine   . ssBegin
+    c1     = unPos . sourceColumn . ssBegin
+    l2     = unPos . sourceLine   . ssEnd
+    c2     = unPos . sourceColumn . ssEnd
 
 --------------------------------------------------------------------------------
 -- | Source Span Extraction
@@ -140,7 +141,7 @@ getSpanMulti l1 l2
 highlight :: Int -> Int -> Int -> String -> String
 highlight l c1 c2 s = unlines
   [ cursorLine l s
-  , replicate (12 + c1) ' ' <> replicate (c2 - c1) '^'
+  , replicate (12 + c1) ' ' ++ replicate (c2 - c1) '^'
   ]
 
 highlightEnd :: Int -> Int -> String -> String
@@ -155,7 +156,7 @@ cursorLine :: Int -> String -> String
 cursorLine l s = printf "%s|  %s" (lineString l) s
 
 lineString :: Int -> String
-lineString n = replicate (10 - nD) ' ' <> nS
+lineString n = replicate (10 - nD) ' ' ++ nS
   where
     nS       = show n
     nD       = length nS
