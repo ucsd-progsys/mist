@@ -5,7 +5,8 @@ A tiny language for teaching and experimenting with refinement types, in the sty
 
 ## TODO
 
-- [ ] STEAL Nano/Lexer.x, Parser.y to make grammar more Haskelly
+- [x] BUILD initial code
+- [ ] STEAL make grammar more Haskelly
 - [ ] PARSE in all Nano tests (but using Garter representation)
 - [ ] PORT all the garter tests (using Haskelly syntax)
 - [ ] PRINT all inferred (top-level) types
