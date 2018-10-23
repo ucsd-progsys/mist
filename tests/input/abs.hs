@@ -1,11 +1,13 @@
-def abs(n):
-  if (n < 0):
+abz :: Int -> Int
+abz n = 
+  if (n < 0) then
     0 - n
-  else:
+  else
     n
-in
-let t0 = print(abs(0)),
-    t1 = print(abs(5)),
-    t2 = print(abs(3 - 10))
-in
-    0
+
+top :: Int 
+top = 
+  let t0 = abz 0
+      t1 = abz 5
+  in 
+      abz (t0 - t1)
