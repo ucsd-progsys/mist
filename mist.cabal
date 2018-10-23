@@ -16,7 +16,8 @@ Library
                        Language.Mist.Types,
                        Language.Mist.Parser,
                        Language.Mist.Checker,
-                       Language.Mist.Normalizer
+                       Language.Mist.Normalizer,
+                       Language.Mist.Runner
 
   -- other-extensions:
   build-depends:       array, base,
