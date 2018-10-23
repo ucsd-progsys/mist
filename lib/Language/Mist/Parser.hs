@@ -278,16 +278,14 @@ ifExpr :: Parser Bare
 ifExpr = withSpan' $ do
   rWord "if"
   b  <- expr
-  e1 <- between colon elsecolon expr
+  e1 <- between (rWord "then") (rWord "else") expr
   e2 <- expr
   return (If b e1 e2)
-  where
-   elsecolon = rWord "else" *> colon
 
 lamExpr :: Parser Bare
 lamExpr = withSpan' $ do
   -- rWord "lambda"
-  char '\\'
+  char '\\' <* sc
   -- xs    <- parens (sepBy binder comma) <* symbol "->" 
   xs    <- sepBy binder sc <* symbol "->" 
   e     <- expr

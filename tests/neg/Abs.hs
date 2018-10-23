@@ -1,6 +1,6 @@
 abz :: Int -> Int
 abz n = 
-  if (n < 0) then
+  if n < 0 then
     0 - n
   else
     m
