@@ -7,12 +7,6 @@ module Language.Mist.Types
   -- * Re-Export SourceSpans
     module Language.Mist.UX
 
-  -- * Abstract syntax of (a small subset of) x86 assembly instructions
-  , Instruction (..)
-  , Arg (..)
-  , Reg (..)
-  , Size (..)
-
   -- * Aliases for various identifiers
   , Id
   , Tag
@@ -21,19 +15,22 @@ module Language.Mist.Types
   , Sig (..), Type (..), Poly (..), TVar (..), Ctor (..)
 
   -- * Abstract syntax of the Adder language
-  , Field (..), Bind (..), Expr (..), AnfExpr,   ImmExpr
-  , BareBind, Bare
-  , Prim1 (..)
+  , Field (..)
+  , Bind  (..)
+  , Expr  (..)
+  , Def 
+  , AnfExpr,   ImmExpr
+  , BareBind, Bare, BareDef
   , Prim2 (..)
   , isAnf
 
   -- * Smart Constructors
   , bindsExpr
-  , builtin
-  , dec
+  , defsExpr 
+  -- , dec
 
   -- * Destructors
-  , exprBinds
+  , exprDefs 
 
   -- * Labels
   , label
@@ -50,13 +47,6 @@ module Language.Mist.Types
   , envMax
   -- , insertEnv
 
-  -- * Dynamic Errors
-  , DynError (..)
-  , Ty (..)
-
-  -- * Code Labels
-  , Label (..)
-
   -- * Abstract Text Type
   , Ext (..)
   , ext
@@ -72,66 +62,7 @@ import qualified Text.PrettyPrint  as PP
 import           System.FilePath                  ((<.>))
 import           Language.Mist.UX
 
-data Reg
-  = EAX
-  | EBX
-  | ESP
-  | EBP
-  | ESI
-
-data Size
-  = DWordPtr
-  | WordPtr
-  | BytePtr
-
-data Arg
-  = Const     Int
-  | HexConst  Int
-  | Reg            Reg
-  | RegOffset Nat  Reg
-  | RegIndex  Reg  Reg
-  | Sized     Size Arg
-  | CodePtr   Label
-
-
-type Nat      = Int
-
--- | Control-Flow Labels (New)
-data Label
-  = BranchTrue Tag
-  | BranchDone Tag
-  | LamStart   Tag
-  | LamEnd     Tag
-  | DefStart   Id Tag
-  | DefEnd     Id Tag
-  | DynamicErr DynError
-  | Builtin    Text
-  deriving (Show)
-
--- | Machine (x86) Instructions
-data Instruction
-  = IMov    Arg   Arg
-  | IAdd    Arg   Arg
-  | ISub    Arg   Arg
-  | IMul    Arg   Arg
-  | IShr    Arg   Arg
-  | ISar    Arg   Arg
-  | IShl    Arg   Arg
-  | IAnd    Arg   Arg
-  | IOr     Arg   Arg
-  | IXor    Arg   Arg
-  | ILabel  Label
-  | IPush   Arg
-  | IPop    Arg
-  | ICmp    Arg   Arg
-  | IJe     Label
-  | IJne    Label
-  | IJg     Label
-  | IJl     Label
-  | IJo     Label
-  | IJmp    Label
-  | ICall   Arg
-  | IRet
+-- type Nat      = Int
 
 --------------------------------------------------------------------------------
 -- | Abstract syntax of the Adder language
@@ -142,13 +73,6 @@ type Id = Text
 
 -- | `Tag` are used to tag each `If`
 type Tag = Int
-
--- | `Prim1` are unary operations
-data Prim1
-  = Add1
-  | Sub1
-  | Print
-  deriving (Show)
 
 -- | `Prim2` are binary operations
 data Prim2
@@ -165,15 +89,15 @@ data Expr a
   = Number  !Integer                       a
   | Boolean !Bool                          a
   | Id      !Id                            a
-  | Prim1   !Prim1    !(Expr a)            a
   | Prim2   !Prim2    !(Expr a)  !(Expr a) a
   | If      !(Expr a) !(Expr a)  !(Expr a) a
-  | Let     !(Bind a) !(Expr a)  !(Expr a) a
+  | Let     !(Bind a) !Sig       !(Expr a)  !(Expr a) a
   | Tuple   !(Expr a) !(Expr a)            a
   | GetItem !(Expr a) !Field               a
   | App     !(Expr a) [Expr a]             a
   | Lam               [Bind a]   !(Expr a) a
-  | Fun     !(Bind a) !Sig        [Bind a]   !(Expr a)  a
+  -- | Fun     !(Bind a) !Sig        [Bind a]   !(Expr a)  a
+  | Skip
     deriving (Show, Functor)
 
 data Sig
@@ -193,29 +117,26 @@ data Bind a = Bind
   }
   deriving (Show, Functor)
 
--- bindId :: Bind a -> Id
--- bindId (Bind x _) = x
+type Def a = (Bind a, Sig, Expr a)
+
 
 -- | Constructing a function declaration
-dec :: Bind a -> Sig -> [Bind a] -> Expr a -> Expr a -> a -> Expr a
-dec f t xs e e' l = Let f (Fun f t xs e l) e' l
+-- dec :: Bind a -> Sig -> [Bind a] -> Expr a -> Expr a -> a -> Expr a
+-- dec f t xs e e' l = Let f (Fun f t xs e l) e' l
 
-
+defsExpr :: [Def a] -> Expr a 
+defsExpr = undefined 
 
 -- | Constructing `Expr` from let-binds
 bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
-bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x e1 e2 l) e bs
+bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
 
 -- | Destructing `Expr` into let-binds
-exprBinds :: Expr a -> ([(Bind a, Expr a)], Expr a)
-exprBinds (Let x e e' _) = ((x, e) : bs, body)
-  where
-    (bs, body)           = exprBinds e'
-exprBinds body           = ([]        , body)
-
--- | Creating jump targets for builtins
-builtin :: Text -> Arg
-builtin s = CodePtr (Builtin s)
+exprDefs :: Expr a -> ([Def a], Expr a)
+exprDefs = go 
+  where 
+    go (Let x s e e' _) = ((x, s, e) : bs, body) where  (bs, body) = go e'
+    go body             = ([]            , body)
 
 --------------------------------------------------------------------------------
 getLabel :: Expr a -> a
@@ -223,15 +144,15 @@ getLabel :: Expr a -> a
 getLabel (Number _ l)    = l
 getLabel (Boolean _ l)   = l
 getLabel (Id _ l)        = l
-getLabel (Prim1 _ _ l)   = l
 getLabel (Prim2 _ _ _ l) = l
 getLabel (If    _ _ _ l) = l
-getLabel (Let _ _ _ l)   = l
+getLabel (Let _ _ _ _ l) = l
 getLabel (App _ _ l)     = l
 getLabel (Tuple _ _ l)   = l
 getLabel (GetItem _ _ l) = l
 getLabel (Lam _ _ l)     = l
-getLabel (Fun _ _ _ _ l) = l
+-- getLabel (Fun _ _ _ _ l) = l
+getLabel Skip            = error "getLabel: Skip"
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -257,19 +178,6 @@ data Ty
 --------------------------------------------------------------------------------
 -- | Pretty Printer
 --------------------------------------------------------------------------------
-instance PPrint Ty where
-  pprint TNumber  = "number"
-  pprint TTuple   = "tuple"
-  pprint TBoolean = "boolean"
-  pprint TClosure = "closure"
-
-instance PPrint Prim1 where
-  pprint Add1   = "add1"
-  pprint Sub1   = "sub1"
-  pprint Print  = "print"
-  -- pprint IsNum  = "isNum"
-  -- pprint IsBool = "isBool"
-
 instance PPrint Prim2 where
   pprint Plus    = "+"
   pprint Minus   = "-"
@@ -293,19 +201,18 @@ instance PPrint (Expr a) where
   pprint (Number n _)    = show n
   pprint (Boolean b _)   = pprint b
   pprint (Id x _)        = x
-  pprint (Prim1 o e _)   = printf "%s(%s)"               (pprint o)   (pprint e)
   pprint (Prim2 o l r _) = printf "%s %s %s"             (pprint l)   (pprint o) (pprint r)
   pprint (If    c t e _) = printf "(if %s: %s else: %s)" (pprint c)   (pprint t) (pprint e)
-  pprint (Let _ (Fun f _ xs e _) e' _)
-                         = ppDec f xs e e'
-  pprint e@(Let {})      = printf "(let %s in %s)"       (ppBinds bs) (pprint b) where (bs, b) = exprBinds e
+  -- pprint (Let _ (Fun f _ xs e _) e' _)
+  --                        = ppDec f xs e e'
+  pprint e@(Let {})      = printf "(let %s in %s)"       (ppDefs ds) (pprint e') where (ds, e') = exprDefs e
   pprint (App e es _)    = printf "%s(%s)"               (pprint e)  (pprintMany es)
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"             (pprint e1) (pprint e2)
   pprint (GetItem e i _) = printf "%s[%s]"               (pprint e)   (pprint i)
   pprint (Lam xs e _)    = printf "lambda (%s): %s"      (pprintMany xs) (pprint e)
-  pprint (Fun f _ xs e _)  = ppDef f xs e
+  pprint (Skip)           = "skip" 
 
-
+{- 
 ppDec :: Bind a -> [Bind a] -> Expr a -> Expr a -> Text
 ppDec f xs e e'  = printf "%s\nin\n%s" (ppDef f xs e) (pprint e')
 
@@ -314,21 +221,34 @@ ppDef f xs e     = printf "def %s(%s):\n%s"
                      (pprint f)
                      (pprintMany xs)
                      (nest 4 (pprint e))
+-}
 
 -- pprintArgs :: [Id] -> Text
 -- pprintArgs xs = L.intercalate ", " xs
+
+
+
+pprintMany :: (PPrint a) => [a] -> Text
+pprintMany xs = L.intercalate ", " (map pprint xs)
+
+ppDefs :: [Def a] -> Text
+ppDefs = L.intercalate "\n " . fmap ppDef 
+
+ppDef :: Def a -> Text 
+ppDef (b, Check s , e) = ppSig ""        b s ++ ppEqn b e 
+ppDef (b, Assume s, e) = ppSig "assume " b s ++ ppEqn b e 
+ppDef (b, Infer   , e) =                        ppEqn b e 
+
+ppSig k b _s = printf "%s%s :: %s\n" k (pprint b) "TODO-SIGNATURE" -- (pprint s) 
+ppEqn b e    = printf "%s = \n" (pprint b)
+            ++ nest 2           (pprint e)
+
 
 nest       :: Int -> Text -> Text
 nest n     = unlines . map pad . lines
   where
     pad s  = blanks ++ s
     blanks = replicate n ' '
-
-pprintMany :: (PPrint a) => [a] -> Text
-pprintMany xs = L.intercalate ", " (map pprint xs)
-
-ppBinds :: [(Bind a, Expr a)] -> Text
-ppBinds bs = L.intercalate ", " [ printf "%s = %s" (pprint x) (pprint v) | (x, v) <- bs ]
 
 
 --------------------------------------------------------------------------------
@@ -338,15 +258,13 @@ label :: Expr a -> Expr (a, Tag)
 --------------------------------------------------------------------------------
 label = snd . go 0
   where
+    go i Skip              = (i, Skip) 
+
     go i (Number n l)      = labelTop i  l (Number n)
 
     go i (Boolean b l)     = labelTop i  l (Boolean b)
 
     go i (Id     x l)      = labelTop i  l (Id x)
-
-    go i (Prim1 o e1 l)    = labelTop i' l (Prim1 o e1')
-      where
-        (i', e1')          = go i e1
 
     go i (Prim2 o e1 e2 l) = labelTop i'' l (Prim2 o e1' e2')
       where
@@ -359,7 +277,7 @@ label = snd . go 0
         (i'' , e1')        = go i'  e1
         (i''', e2')        = go i'' e2
 
-    go i (Let x e b l)     = labelTop i'' l (Let x' e' b')
+    go i (Let x s e b l)   = labelTop i'' l (Let x' s e' b')
       where
         (i', [e', b'])     = L.mapAccumL go i [e, b]
         (i'', x')          = labelBind i' x
@@ -377,10 +295,10 @@ label = snd . go 0
         (i', e')           = go i e
         (i'', xs')         = L.mapAccumL labelBind i' xs
 
-    go i (Fun f t xs e l)  = labelTop i'' l (Fun f' t xs' e')
-      where
-        (i', e')           = go i e
-        (i'', f':xs')      = L.mapAccumL labelBind i' (f:xs)
+    -- go i (Fun f t xs e l)  = labelTop i'' l (Fun f' t xs' e')
+      -- where
+        -- (i', e')           = go i e
+        -- (i'', f':xs')      = L.mapAccumL labelBind i' (f:xs)
 
     go i (App e es l)      = labelTop i' l (App e' es')
       where
@@ -397,18 +315,18 @@ labelBind i (Bind x l)     = labelTop i l (Bind x)
 --------------------------------------------------------------------------------
 {-@ measure isAnf @-}
 isAnf :: Expr a -> Bool
+isAnf (Skip)           = True
 isAnf (Number  _ _)    = True
 isAnf (Boolean _ _)    = True
 isAnf (Id      _ _)    = True
-isAnf (Prim1 _ e _)    = isImm e
 isAnf (Prim2 _ e e' _) = isImm e && isImm e'
 isAnf (If c t e _)     = isImm c && isAnf t && isAnf e
-isAnf (Let _ e e' _)   = isAnf e && isAnf e'
+isAnf (Let _ _ e e' _) = isAnf e && isAnf e'
 isAnf (Tuple e e' _)   = isAnf e && isAnf e'
 isAnf (GetItem e _ _)  = isAnf e
 isAnf (App e es _)     = isAnf e  && all isAnf es
 isAnf (Lam _ e _)      = isAnf e
-isAnf (Fun _ _ _ e _)  = isAnf e
+--isAnf (Fun _ _ _ e _)  = isAnf e
 
 {-@ measure isImm @-}
 isImm :: Expr a -> Bool
@@ -429,6 +347,7 @@ type ImmExpr = Expr
 
 type Bare     = Expr SourceSpan
 type BareBind = Bind SourceSpan
+type BareDef  = Def  SourceSpan 
 
 instance Located Bare where
   sourceSpan = getLabel
@@ -527,7 +446,6 @@ prPoly (Forall [] t)  = prType t
 prPoly (Forall as t)  = PP.text "Forall" PP.<+>
                           PP.hcat (PP.punctuate PP.comma (map prTVar as))
                           PP.<> PP.text "." PP.<+> prType t
-
 
 --------------------------------------------------------------------------------
 -- | File Extensions

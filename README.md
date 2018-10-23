@@ -15,3 +15,7 @@ A tiny language for teaching and experimenting with refinement types, in the sty
 - [ ] TYPE  refinement type constraints
 - [ ] GEN   refinement type constraints 
 - [ ] SOLVE refinement type constraints (with fixpoint)
+
+## Modules
+
+- Check

@@ -20,7 +20,7 @@ module Language.Mist.UX
   , UserError
   , eMsg
   , eSpan
-  , Result
+  , Result 
 
   -- * Throwing & Handling Errors
   , mkError
@@ -141,7 +141,7 @@ getSpanMulti l1 l2
 highlight :: Int -> Int -> Int -> String -> String
 highlight l c1 c2 s = unlines
   [ cursorLine l s
-  , replicate (12 + c1) ' ' ++ replicate (c2 - c1) '^'
+  , replicate (12 + c1) ' ' ++ replicate (1 + c2 - c1) '^'
   ]
 
 highlightEnd :: Int -> Int -> String -> String
@@ -188,12 +188,14 @@ data UserError = Error
 instance Located UserError where
   sourceSpan = eSpan
 
+instance Exception UserError
+
 instance Exception [UserError]
 
 --------------------------------------------------------------------------------
 panic :: String -> SourceSpan -> a
 --------------------------------------------------------------------------------
-panic msg sp = throw [Error msg sp]
+panic msg sp = abort (Error msg sp)
 
 --------------------------------------------------------------------------------
 abort :: UserError -> b
@@ -205,7 +207,9 @@ mkError :: Text -> SourceSpan -> UserError
 --------------------------------------------------------------------------------
 mkError = Error
 
+--------------------------------------------------------------------------------
 renderErrors :: [UserError] -> IO Text
+--------------------------------------------------------------------------------
 renderErrors es = do
   errs  <- mapM renderError es
   return $ L.intercalate "\n" ("Errors found!" : errs)

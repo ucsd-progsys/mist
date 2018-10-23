@@ -1,5 +1,9 @@
+{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE TupleSections         #-}
+
 module Language.Mist.Parser ( parse, parseFile ) where
 
+import qualified Control.Exception          as Ex 
 import           Control.Monad (void)
 import           Text.Megaparsec hiding (parse)
 import           Data.List.NonEmpty         as NE
@@ -10,14 +14,23 @@ import qualified Data.List as L
 import           Language.Mist.Types
 
 --------------------------------------------------------------------------------
-parse :: FilePath -> Text -> Bare
+parse :: FilePath -> Text -> IO Bare
 --------------------------------------------------------------------------------
-parse = parseWith expr
+parse = parseWith (topExprs <* eof)
 
-parseWith  :: Parser a -> FilePath -> Text -> a
+parseWith  :: Parser a -> FilePath -> Text -> IO a
 parseWith p f s = case runParser (whole p) f s of
-                    Left err -> panic (show err) (posSpan . NE.head . errorPos $ err)
-                    Right e  -> e
+                    Left err -> Ex.throw [parseUserError err]
+                    Right e  -> return e
+
+parseUserError :: ParseError Char SourcePos -> UserError 
+parseUserError err = mkError msg sp 
+  where 
+    msg            = "parse error\n" ++ parseErrorTextPretty err 
+    sp             = posSpan . NE.head . errorPos $ err
+
+instance ShowErrorComponent SourcePos where
+  showErrorComponent = sourcePosPretty 
 
 -- instance Located ParseError where
 --  sourceSpan = posSpan . errorPos
@@ -28,7 +41,7 @@ parseWith p f s = case runParser (whole p) f s of
 --------------------------------------------------------------------------------
 parseFile :: FilePath -> IO Bare
 --------------------------------------------------------------------------------
-parseFile f = parse f <$> readFile f
+parseFile f = parse f =<< readFile f
 
 type Parser = Parsec SourcePos Text
 
@@ -40,9 +53,15 @@ whole p = sc *> p <* eof
 
 -- RJ: rename me "space consumer"
 sc :: Parser ()
-sc = L.space (void spaceChar) lineCmnt blockCmnt
-  where lineCmnt  = L.skipLineComment "//"
-        blockCmnt = L.skipBlockComment "/*" "*/"
+sc = L.space (void spaceChar) lineComment blockCmnt
+  where 
+    blockCmnt = L.skipBlockComment "{-" "-}"
+
+lineComment :: Parser ()
+lineComment = L.skipLineComment "--"
+    
+scn :: Parser ()
+scn = L.space space1 lineComment empty
 
 -- | `symbol s` parses just the string s (and trailing whitespace)
 symbol :: String -> Parser String
@@ -127,15 +146,53 @@ withSpan p = do
   p2 <- getPosition
   return (x, SS p1 p2)
 
+topExprs :: Parser Bare 
+topExprs = defsExpr <$> topDefs 
+
+topDefs :: Parser [BareDef] 
+topDefs = many topDef 
+
+topDef :: Parser BareDef 
+topDef = L.nonIndented scn (L.indentBlock scn p) 
+  where 
+    p = do 
+      f  <- binder 
+      s  <- typeSig
+      _  <- string (bindId f) <* symbol "="
+      f' <- binder <* symbol "="
+      return (L.IndentSome Nothing (mkDef f s f') expr)
+     
+mkDef f s f' es 
+  | okBind    = case es of 
+                  [e] -> return (f, s, e)
+                  _   -> fail $ "Invalid body with multiple expressions, for " ++ show (bindId f)
+  | otherwise = fail $ "Definition for " ++ show f ++ " must follow its type signature."
+  where 
+    okBind    = bindId f == bindId f' 
+
+
+{- 
+defExpr :: Parser Bare
+defExpr = withSpan' $ do
+  rWord "def"
+  f  <- binder
+  xs <- parens (sepBy binder comma)
+  t  <- typeSig <* colon
+  e1 <- expr
+  rWord "in"
+  e2 <- expr
+  return (dec f t xs e1 e2)
+-}
+
+
 expr :: Parser Bare
 expr = makeExprParser expr0 binops
 
 expr0 :: Parser Bare
-expr0 =  try primExpr
-     <|> try letExpr
+expr0 =  try letExpr
      <|> try ifExpr
      <|> try lamExpr
-     <|> try defExpr
+     -- <|> try defExpr
      <|> try getExpr
      <|> try appExpr
      <|> try tupExpr
@@ -151,11 +208,7 @@ getExpr = withSpan' (GetItem <$> funExpr <*> brackets field)
   field =  (symbol "0" *> pure Zero)
        <|> (symbol "1" *> pure One)
 
--- where
-  -- getItem eV eI = GetItem eV eI (stretch [eV, eI])
-
 appExpr :: Parser Bare
--- appExpr = App <$> funExpr <*> exprs <*> pure ()
 appExpr  = apps <$> funExpr <*> sepBy exprs sc
   where
     apps = L.foldl' (\e es -> App e es (stretch (e:es)))
@@ -195,15 +248,6 @@ constExpr
   <|> (Boolean True   <$> rWord "true")
   <|> (Boolean False  <$> rWord "false")
 
-primExpr :: Parser Bare
-primExpr = withSpan' (Prim1 <$> primOp <*> parens expr)
-
-primOp :: Parser Prim1
-primOp
-  =  try (rWord "add1"   *> pure Add1)
- <|> try (rWord "sub1"   *> pure Sub1)
- <|> (rWord "print"  *> pure Print)
-
 letExpr :: Parser Bare
 letExpr = withSpan' $ do
   rWord "let"
@@ -233,16 +277,8 @@ lamExpr = withSpan' $ do
   return (Lam xs e)
 
 
-defExpr :: Parser Bare
-defExpr = withSpan' $ do
-  rWord "def"
-  f  <- binder
-  xs <- parens (sepBy binder comma)
-  t  <- typeSig <* colon
-  e1 <- expr
-  rWord "in"
-  e2 <- expr
-  return (dec f t xs e1 e2)
+
+
 
 typeSig :: Parser Sig
 typeSig

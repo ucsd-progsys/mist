@@ -23,20 +23,18 @@ anormal e = snd (anf 0 e)
 --------------------------------------------------------------------------------
 anf :: Int -> Expr a -> (Int, AnfExpr a)
 --------------------------------------------------------------------------------
+anf i (Skip)            = (i, Skip) 
+
 anf i (Number n l)      = (i, Number n l)
 
 anf i (Boolean b l)     = (i, Boolean b l)
 
 anf i (Id     x l)      = (i, Id     x l)
 
-anf i (Let x e b l)     = (i'', Let x e' b' l)
+anf i (Let x s e b l)   = (i'', Let x s e' b' l)
   where
     (i',  e')           = anf i e
     (i'', b')           = anf i' b
-
-anf i (Prim1 o e l)     = (i', stitch bs  (Prim1 o ae l))
-  where
-    (i', bs, ae)        = imm i e
 
 anf i (Prim2 o e1 e2 l) = (i'', stitch bs'' (Prim2 o e1' e2' l))
   where
@@ -66,9 +64,9 @@ anf i (Lam xs e l)      = (i', Lam xs e' l)
   where
     (i',  e')           = anf i e
 
-anf i (Fun f t xs e l)  = (i', Fun f t xs e' l)
-  where
-    (i',  e')           = anf i e
+-- anf i (Fun f t xs e l)  = (i', Fun f t xs e' l)
+  -- where
+    -- (i',  e')           = anf i e
 
 --------------------------------------------------------------------------------
 -- | `stitch bs e` takes a "context" `bs` which is a list of temp-vars and their
@@ -103,17 +101,13 @@ imms i (e:es)       = (i'', bs' ++ bs, e' : es' )
 --------------------------------------------------------------------------------
 imm :: Int -> AnfExpr a -> (Int, Binds a, ImmExpr a)
 --------------------------------------------------------------------------------
+imm i (Skip)            = (i  , [], Skip)
+
 imm i (Number n l)      = (i  , [], Number n l)
 
 imm i (Boolean b  l)    = (i  , [], Boolean b l)
 
 imm i (Id x l)          = (i  , [], Id x l)
-
-imm i (Prim1 o e1 l)    = (i'', bs, mkId v l)
-  where
-    (i' , b1s, v1)      = imm i e1
-    (i'', v)            = fresh l i'
-    bs                  = (v, (Prim1 o v1 l, l)) : b1s
 
 imm i (Prim2 o e1 e2 l) = (i'', bs', mkId x l)
   where
@@ -141,11 +135,11 @@ imm i (App e es l)      = (i'', bs', mkId x l)
 
 imm i e@(If _ _ _  l)   = immExp i e l
 
-imm i e@(Let _ _ _ l)   = immExp i e l
+imm i e@(Let _ _ _ _ l) = immExp i e l
 
 imm i e@(Lam _ _ l)     = immExp i e l
 
-imm i e@(Fun _ _ _ _ l) = immExp i e l
+-- imm i e@(Fun _ _ _ _ l) = immExp i e l
 
 immExp :: Int -> AnfExpr a -> a -> (Int, Binds a, ImmExpr a)
 immExp i e l  = (i'', bs, mkId v l)

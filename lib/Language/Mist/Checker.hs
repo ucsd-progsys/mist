@@ -10,7 +10,8 @@
 --------------------------------------------------------------------------------
 module Language.Mist.Checker
   ( -- * Top-level Static Checker
-    check
+    wellFormed 
+  , typeCheck
 
     -- * Error Constructors
   , errUnboundVar
@@ -27,12 +28,6 @@ import           Language.Mist.Types
 import           Language.Mist.Utils
 -- import           Debug.Trace (trace)
 
---------------------------------------------------------------------------------
-check :: Bare -> Bare
---------------------------------------------------------------------------------
-check p = case wellFormed p of
-            [] -> typeCheck p
-            es -> Ex.throw es
 
 --------------------------------------------------------------------------------
 -- | `wellFormed e` returns the list of errors for an expression `e`
@@ -41,13 +36,13 @@ wellFormed :: Bare -> [UserError]
 wellFormed = go emptyEnv
   where
     gos                       = concatMap . go
+    go _    (Skip {})         = []
     go _    (Boolean {})      = []
     go _    (Number  n     l) = largeNumberErrors      n l
     go vEnv (Id      x     l) = unboundVarErrors  vEnv x l
-    go vEnv (Prim1 _ e     _) = go  vEnv e
     go vEnv (Prim2 _ e1 e2 _) = gos vEnv [e1, e2]
     go vEnv (If   e1 e2 e3 _) = gos vEnv [e1, e2, e3]
-    go vEnv (Let x e1 e2   _) = duplicateBindErrors vEnv x
+    go vEnv (Let x _ e1 e2 _) = duplicateBindErrors vEnv x
                              ++ go vEnv e1
                              ++ go (addEnv x vEnv) e2
     go vEnv (Tuple e1 e2   _) = gos vEnv [e1, e2]
@@ -55,8 +50,8 @@ wellFormed = go emptyEnv
     go vEnv (App e es      _) = gos vEnv (e:es)
     go vEnv (Lam xs e      _) = duplicateParamErrors xs
                              ++ go (addsEnv xs vEnv) e
-    go vEnv (Fun f _ xs e  _) = duplicateParamErrors xs
-                             ++ go (addsEnv (f:xs) vEnv) e
+    -- go vEnv (Fun f _ xs e  _) = duplicateParamErrors xs
+    --                          ++ go (addsEnv (f:xs) vEnv) e
 
 addsEnv :: [BareBind] -> Env -> Env
 addsEnv xs env = L.foldl' (flip addEnv) env xs
@@ -104,14 +99,11 @@ errMismatch l s s' = mkError (printf "Type error: mismatched function signature:
 errOccurs l a t    = mkError (printf "Type error: occurs check fails: %s occurs in %s" (show a) (show t)) l
 
 --------------------------------------------------------------------------------
-typeCheck :: (Located a) => Expr a -> Expr a
+typeCheck :: (Located a) => Expr a -> Type 
 --------------------------------------------------------------------------------
-typeCheck e = case show t of
-                _:_ -> e
-                _   -> error "Impossible"
-  where
-    t       = typeInfer env0 e
-    env0    = TypeEnv M.empty
+typeCheck = typeInfer env0 
+  where  
+    env0  = TypeEnv M.empty
 
 _showType :: Expr a -> Type -> IO ()
 _showType e t = putStrLn $ pprint e ++ " :: " ++ show t
@@ -130,12 +122,10 @@ ti _ su   (Number {})      = (su, TInt)
 
 ti _ su   (Boolean {})     = (su, TBool)
 
-ti env su e@(Id x l)         = traceShow (pprint e) $ instantiate su (lookupTypeEnv (sourceSpan l) x env)
+ti env su e@(Id x l)       = traceShow (pprint e) $ instantiate su (lookupTypeEnv (sourceSpan l) x env)
 
 -- the following cases reduce to special "function applications", handled by instApp
 ti env su (If e1 e2 e3 l)  = instApp (sourceSpan l) env su ifPoly [e1, e2, e3]
-
-ti env su (Prim1 p e l)    = instApp (sourceSpan l) env su (prim1Poly p) [e]
 
 ti env su (Prim2 p e e' l) = instApp (sourceSpan l) env su (prim2Poly p) [e,e']
 
@@ -143,18 +133,11 @@ ti env su (Tuple e e' l)   = instApp (sourceSpan l) env su tupPoly [e, e']
 
 ti env su (GetItem e f l)  = instApp (sourceSpan l) env su (fieldPoly f) [e]
 
--- Trusted function: just add x := s to the env and use it to check `e`
-ti env su (Let x f@(Fun _ (Assume s) _ _ _) e _)
-                           = traceShow (pprint f) $ ti env' su e
+-- Trusted signature: just add x := s to the env and use it to check `e`
+ti env su (Let x (Assume s) _ e _)
+                           = traceShow (pprint x) $ ti env' su e
   where
     env'                   = extTypeEnv (bindId x) s env
-
-ti env su e@(Let x e1 e2 _)  = traceShow (pprint e) $ ti env'' su1 e2                         -- e2 :: T2
-  where
-    env''                  = extTypeEnv (bindId x) s1 env'
-    (su1, t1)              = ti env su e1                            -- e1 :: T1
-    env'                   = apply su1 env
-    s1                     = generalize env' t1
 
 ti env su (App eF eArgs l) = tiApp (sourceSpan l) sF (apply sF env) tF eArgs
   where
@@ -177,24 +160,42 @@ ti env su (Lam xs body l)  = (su3, apply su3 (tXs :=> tOut))
     su3                    = unify sp su2 tBody (apply su2 tOut)
     sp                     = sourceSpan l
 
--- HIDE
-ti env su (Fun f Infer xs e _)
-                           = tiFun sp env xs e su' (Just f) tXs tOut
-  where
-    (su', tXs :=> tOut)    = freshFun su (length xs)
-    sp                     = sourceSpan (bindLabel f)
+-- OLD-FUN ti env su (Fun f Infer xs e _)
+                           -- OLD-FUN = tiFun sp env xs e su' (Just f) tXs tOut
+  -- OLD-FUN where
+    -- OLD-FUN (su', tXs :=> tOut)    = freshFun su (length xs)
+    -- OLD-FUN sp                     = sourceSpan (bindLabel f)
 
 -- HIDE : HARD
-ti env su (Fun f (Check s) xs e _)
+ti env su (Let f (Check s) e1 _e2 _) 
   | ok                     = (su'', t')
   | otherwise              = abort (errMismatch sp s s')
-  where
+  where 
     ok                     = eqPoly (generalize env t) (generalize env t')
     s'                     = generalize env t'
-    (su'', t')             = tiFun sp env xs e su' (Just f) tXs tOut
+    (su'', t')             = tiFun sp env [] e1 su' (Just f) tXs tOut
     (su' , t)              = instantiate su s
-    (tXs, tOut)            = splitFun sp (length xs) t
+    (tXs, tOut)            = splitFun sp (undefined {- length xs -}) t
     sp                     = sourceSpan (bindLabel f)
+
+-- ti env su (Fun f (Check s) xs e _)
+  -- | ok                     = (su'', t')
+  -- | otherwise              = abort (errMismatch sp s s')
+  -- where
+    -- ok                     = eqPoly (generalize env t) (generalize env t')
+    -- s'                     = generalize env t'
+    -- (su'', t')             = tiFun sp env xs e su' (Just f) tXs tOut
+    -- (su' , t)              = instantiate su s
+    -- (tXs, tOut)            = splitFun sp (length xs) t
+    -- sp                     = sourceSpan (bindLabel f)
+
+ti env su e@(Let x _ e1 e2 _) = traceShow (pprint e) $ ti env'' su1 e2                         -- e2 :: T2
+  where
+    env''                  = extTypeEnv (bindId x) s1 env'
+    (su1, t1)              = ti env su e1                            -- e1 :: T1
+    env'                   = apply su1 env
+    s1                     = generalize env' t1
+
 
 -- DEAD CODE
 ti _ _ e                   = panic "ti: dead code" (sourceSpan (getLabel e))
@@ -266,11 +267,6 @@ ifPoly   = Forall ["a"]      ([TBool, "a", "a"] :=> "a")
 fieldPoly :: Field -> Poly
 fieldPoly Zero = Forall ["a", "b"] ([TPair "a" "b"] :=> "a")
 fieldPoly One  = Forall ["a", "b"] ([TPair "a" "b"] :=> "b")
-
-prim1Poly :: Prim1 -> Poly
-prim1Poly Add1    = Forall [   ] ([TInt] :=> TInt)
-prim1Poly Sub1    = Forall [   ] ([TInt] :=> TInt)
-prim1Poly Print   = Forall ["a"] ([ "a"] :=> "a")
 
 -- HIDE
 prim2Poly :: Prim2 -> Poly
