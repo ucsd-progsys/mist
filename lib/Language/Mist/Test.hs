@@ -4,6 +4,9 @@
 
 module Language.Mist.Test (runTests) where
 
+import Control.Monad (liftM3)
+import Data.Bool (bool)
+
 import System.Directory
 import System.Exit
 import System.FilePath
@@ -16,7 +19,7 @@ import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.Runners
 import Test.Tasty.Runners.AntXML
 
-import Language.Mist.Runner 
+import Language.Mist.Runner
 
 runTests :: IO ()
 runTests = run =<< group "Tests" [unitTests]
@@ -50,7 +53,7 @@ combineReporters (TestReporter opts1 run1) (TestReporter opts2 run2)
       return $ \smap -> f1 smap >> f2 smap
 combineReporters _ _ = error "combineReporters needs TestReporters"
 
-unitTests = group "Unit" 
+unitTests = group "Unit"
   [ testGroup "pos" <$> dirTests "tests/pos"    ExitSuccess
   , testGroup "neg" <$> dirTests "tests/neg"    (ExitFailure 1)
   ]
@@ -72,13 +75,13 @@ mkTest :: ExitCode -> FilePath -> FilePath -> TestTree
 mkTest code dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
   withFile log WriteMode $ \h -> do
-    ec <- runMist h test 
+    ec <- runMist h test
     assertEqual "Wrong exit code" code (resultExitCode ec)
   where
     test = dir </> file
     log  = let (d, f) = splitFileName file in dir </> d </> ".liquid" </> f <.> "log"
 
-{- 
+{-
   mkTest testCmd code dir file
   = testCase file $
       if test `elem` knownToFail
@@ -98,9 +101,9 @@ mkTest code dir file = testCase file $ do
 
 
 
--- resultExitCode :: Result -> ExitCode 
+-- resultExitCode :: Result -> ExitCode
 resultExitCode (Left _)  = ExitFailure 1
-resultExitCode (Right _) = ExitSuccess 
+resultExitCode (Right _) = ExitSuccess
 
 ---------------------------------------------------------------------------
 -- type TestCmd = FilePath -> FilePath -> FilePath -> String
@@ -114,23 +117,9 @@ group n xs = testGroup n <$> sequence xs
 ----------------------------------------------------------------------------------------
 walkDirectory :: FilePath -> IO [FilePath]
 ----------------------------------------------------------------------------------------
-walkDirectory root
-  = do (ds,fs) <- partitionM doesDirectoryExist . candidates =<< (getDirectoryContents root `catchIOError` const (return []))
-       (fs++) <$> concatMapM walkDirectory ds
+walkDirectory root =
+  fmap concat . traverse collect . candidates
+    =<< (getDirectoryContents root `catchIOError` const (return []))
   where
     candidates fs = [root </> f | f <- fs, not (isExtSeparator (head f))]
-
-partitionM :: Monad m => (a -> m Bool) -> [a] -> m ([a],[a])
-partitionM f = go [] []
-  where
-    go ls rs []     = return (ls,rs)
-    go ls rs (x:xs) = do b <- f x
-                         if b then go (x:ls) rs xs
-                              else go ls (x:rs) xs
-
--- isDirectory :: FilePath -> IO Bool
--- isDirectory = fmap Posix.isDirectory . Posix.getFileStatus
-
-concatMapM :: Applicative m => (a -> m [b]) -> [a] -> m [b]
-concatMapM _ []     = pure []
-concatMapM f (x:xs) = (++) <$> f x <*> concatMapM f xs
+    collect f = liftM3 bool (pure [f]) (walkDirectory f) (doesDirectoryExist f)
