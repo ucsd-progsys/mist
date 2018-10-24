@@ -207,10 +207,10 @@ expr0 =  try letExpr
      <|> try lamExpr
      -- <|> try defExpr
     -- <|> try getExpr
-     <|> try (mkApps <$> parens (sepBy1 expr0 sc)) 
-    -- <|> try tupExpr
      <|> try constExpr
-     <|> idExpr
+    -- <|> try tupExpr
+     <|> try idExpr
+     <|> try (mkApps <$> parens (sepBy1 expr sc)) 
 
 exprs :: Parser [Bare]
 exprs = parens (sepBy expr comma)
