@@ -18,4 +18,13 @@ A tiny language for teaching and experimenting with refinement types, in the sty
 
 ## Modules
 
-- Check
+- `Language.Mist.Utils.Misc` 
+- `Language.Mist.Utils.UX` 
+- `Language.Mist.Utils.Test` 
+- `Language.Mist.Basic.Types` 
+- `Language.Mist.Basic.ANF` 
+- `Language.Mist.Basic.WellFormed` 
+- `Language.Mist.Basic.Check` 
+- `Language.Mist.Liquid.Types` 
+- `Language.Mist.Liquid.Check` 
+
