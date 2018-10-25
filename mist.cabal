@@ -17,8 +17,8 @@ Library
                        Language.Mist.Parser,
                        Language.Mist.Checker,
                        Language.Mist.Normalizer,
-                       Language.Mist.Runner,
-                       Language.Mist.Test
+                       Language.Mist.Test,
+                       Language.Mist.Runner
                       
 
   -- other-extensions:
