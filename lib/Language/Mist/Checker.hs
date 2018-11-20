@@ -36,7 +36,7 @@ wellFormed :: Bare -> [UserError]
 wellFormed = go emptyEnv
   where
     gos                       = concatMap . go
-    go _    (Skip {})         = []
+    go _    (Unit {})         = []
     go _    (Boolean {})      = []
     go _    (Number  n     l) = largeNumberErrors      n l
     go vEnv (Id      x     l) = unboundVarErrors  vEnv x l
@@ -167,13 +167,13 @@ ti env su (Lam xs body l)  = (su3, apply su3 (tXs :=> tOut))
     -- OLD-FUN sp                     = sourceSpan (bindLabel f)
 
 -- HIDE : HARD
-ti env su (Let f (Check s1) e1 e2 _) 
+ti env su (Let f (Check s1) e1 e2 _)
   | ok                     = ti env' su'' e2
   | otherwise              = abort (errMismatch sp s1 s1')
   where 
     ok                     = eqPoly s1 s1'
     s1'                    = generalize env (apply su'' t1')
-    (su'', t1')            = ti env' su' e1 
+    (su'', t1')            = ti env' su' e1
     env'                   = extTypeEnv (bindId f) s1 env 
     (su' , t)              = instantiate su s1
     sp                     = sourceSpan (bindLabel f)
@@ -197,7 +197,7 @@ ti env su e@(Let x _ e1 e2 _) = traceShow False (pprint e) $ ti env'' su1 e2    
     s1                     = generalize env' t1
 
 -- DEAD CODE
-ti _ su (Skip _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (getLabel e))
+ti _ su (Unit _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (getLabel e))
 
 
 splitFun :: SourceSpan -> Int -> Type -> ([Type], Type)

@@ -66,7 +66,7 @@ import           Language.Mist.UX
 -- type Nat      = Int
 
 --------------------------------------------------------------------------------
--- | Abstract syntax of the Adder language
+-- | Abstract syntax of Mist
 --------------------------------------------------------------------------------
 
 -- | `Id` are program variables
@@ -97,8 +97,7 @@ data Expr a
   | GetItem !(Expr a) !Field               a
   | App     !(Expr a) !(Expr a)            a
   | Lam               [Bind a]   !(Expr a) a
-  -- | Fun     !(Bind a) !Sig        [Bind a]   !(Expr a)  a
-  | Skip                                   a
+  | Unit                                   a
     deriving (Show, Functor)
 
 data Sig
@@ -128,8 +127,8 @@ type Def a = (Bind a, Sig, Expr a)
 defsExpr :: [Def a] -> Expr a 
 defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs  
   where 
-    go l []               = Skip l
-    go _ ((b, s, e) : ds) = Let b s e (go l ds) l where l = bindLabel b 
+    go l []               = Unit l
+    go _ ((b, s, e) : ds) = Let b s e (go l ds) l where l = bindLabel b
 
 -- | Constructing `Expr` from let-binds
 bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
@@ -156,7 +155,7 @@ getLabel (Tuple _ _ l)   = l
 getLabel (GetItem _ _ l) = l
 getLabel (Lam _ _ l)     = l
 -- getLabel (Fun _ _ _ _ l) = l
-getLabel (Skip  l)       = l 
+getLabel (Unit  l)       = l 
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -212,7 +211,7 @@ instance PPrint (Expr a) where
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
-  pprint (Skip _)        = "skip" 
+  pprint (Unit _)        = "skip" 
 
 ppMany :: (PPrint a) => Text -> [a] -> Text 
 ppMany sep = L.intercalate sep . fmap pprint 
@@ -243,7 +242,7 @@ label :: Expr a -> Expr (a, Tag)
 --------------------------------------------------------------------------------
 label = snd . go 0
   where
-    go i (Skip l)          = labelTop i l  Skip 
+    go i (Unit l)          = labelTop i l  Unit 
 
     go i (Number n l)      = labelTop i  l (Number n)
 
@@ -300,7 +299,7 @@ labelBind i (Bind x l)     = labelTop i l (Bind x)
 --------------------------------------------------------------------------------
 {-@ measure isAnf @-}
 isAnf :: Expr a -> Bool
-isAnf (Skip _)         = True
+isAnf (Unit _)         = True
 isAnf (Number  _ _)    = True
 isAnf (Boolean _ _)    = True
 isAnf (Id      _ _)    = True

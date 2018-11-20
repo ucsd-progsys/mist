@@ -61,9 +61,6 @@ sc = L.space (void spaceChar) lineComment blockCmnt
 
 lineComment :: Parser ()
 lineComment = L.skipLineComment "--"
-    
-scn :: Parser ()
-scn = L.space space1 lineComment empty
 
 -- | `symbol s` parses just the string s (and trailing whitespace)
 symbol :: String -> Parser String
