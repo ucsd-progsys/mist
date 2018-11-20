@@ -24,6 +24,8 @@ module Language.Mist.Types
   , Prim2 (..)
   , isAnf
 
+  , Core  (..)
+
   -- * Smart Constructors
   , bindsExpr
   , defsExpr 
@@ -100,6 +102,23 @@ data Expr a
   | Unit                                   a
     deriving (Show, Functor)
 
+-- | Core are expressions with explicit TAbs and TApp
+data Core a
+  = CNumber  !Integer                       a
+  | CBoolean !Bool                          a
+  | CId      !Id                            a
+  | CPrim2   !Prim2    !(Core a)  !(Core a) a
+  | CIf      !(Core a) !(Core a)  !(Core a) a
+  | CLet     !(Bind a) !Sig       !(Core a)  !(Core a) a
+  | CTuple   !(Core a) !(Core a)            a
+  | CGetItem !(Core a) !Field               a
+  | CApp     !(Core a) !(Core a)            a
+  | CLam               [Bind a]   !(Core a) a
+  | CUnit                                   a
+  | CTApp    !(Core a) !Type
+  | CTAbs    [TVar] !(Core a)
+    deriving (Show, Functor)
+
 data Sig
   = Infer
   | Check  Poly
@@ -124,8 +143,9 @@ type Def a = (Bind a, Sig, Expr a)
 -- dec :: Bind a -> Sig -> [Bind a] -> Expr a -> Expr a -> a -> Expr a
 -- dec f t xs e e' l = Let f (Fun f t xs e l) e' l
 
-defsExpr :: [Def a] -> Expr a 
-defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs  
+defsExpr :: Show a => [Def a] -> Expr a
+defsExpr [] = error "list of defintions is empty"
+defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs
   where 
     go l []               = Unit l
     go _ ((b, s, e) : ds) = Let b s e (go l ds) l where l = bindLabel b

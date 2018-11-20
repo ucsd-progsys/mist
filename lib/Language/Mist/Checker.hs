@@ -12,6 +12,8 @@ module Language.Mist.Checker
   ( -- * Top-level Static Checker
     wellFormed 
   , typeCheck
+    -- * add type annoations
+  , ann
 
     -- * Error Constructors
   , errUnboundVar
@@ -97,6 +99,12 @@ errUnify l t1 t2   = mkError (printf "Type error: cannot unify %s and %s" (show 
 errSignature l t   = mkError (printf "Type error: malformed function signature %s" (show t)) l
 errMismatch l s s' = mkError (printf "Type error: mismatched function signature: specified %s but inferred %s" (show s) (show s')) l
 errOccurs l a t    = mkError (printf "Type error: occurs check fails: %s occurs in %s" (show a) (show t)) l
+
+
+--------------------------------------------------------------------------------
+ann :: Expr a -> Core (Poly, a)
+--------------------------------------------------------------------------------
+ann = undefined
 
 --------------------------------------------------------------------------------
 typeCheck :: (Located a) => Expr a -> Type 
