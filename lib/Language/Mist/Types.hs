@@ -12,6 +12,7 @@ module Language.Mist.Types
 
   -- * Types and Polys
   , Sig (..), Type (..), Poly (..), TVar (..), Ctor (..)
+  , RType (..), RPoly (..)
 
   -- * Abstract syntax of Mist
   , Expr  (..)
@@ -92,19 +93,19 @@ data Expr a
 
 -- | Core are expressions with explicit TAbs and TApp
 data Core a
-  = CNumber  !Integer                       a
-  | CBoolean !Bool                          a
-  | CId      !Id                            a
-  | CPrim2   !Prim2    !(Core a)  !(Core a) a
-  | CIf      !(Core a) !(Core a)  !(Core a) a
-  | CLet     !(Bind a) !Sig       !(Core a)  !(Core a) a
-  | CTuple   !(Core a) !(Core a)            a
-  | CGetItem !(Core a) !Field               a
-  | CApp     !(Core a) !(Core a)            a
-  | CLam               [Bind a]   !(Core a) a
-  | CUnit                                   a
-  | CTApp    !(Core a) !Type
-  | CTAbs    [TVar] !(Core a)
+  = CNumber  !(RType a) !Integer                       a
+  | CBoolean !(RType a) !Bool                          a
+  | CId      !(RType a) !Id                            a
+  | CPrim2   !(RType a) !Prim2    !(Core a)  !(Core a) a
+  | CIf      !(RType a) !(Core a) !(Core a)  !(Core a) a
+  | CLet     !(RType a) !(Bind a) !Sig       !(Core a)  !(Core a) a
+  | CTuple   !(RType a) !(Core a) !(Core a)            a
+  | CGetItem !(RType a) !(Core a) !Field               a
+  | CApp     !(RType a) !(Core a) !(Core a)            a
+  | CLam     !(RType a)           [Bind a]   !(Core a) a
+  | CUnit    !(RType a)                                a
+  | CTApp    !(RType a) !(Core a) !Type
+  | CTAbs    !(RType a) [TVar] !(Core a)
     deriving (Show, Functor)
 
 data Sig
@@ -312,6 +313,25 @@ fromListEnv bs = Env bs n
 --------------------------------------------------------------------------------
 -- | Types, Environments -------------------------------------------------------
 --------------------------------------------------------------------------------
+
+-- | Refinement types
+-- | - refinements are expressions of type Bool
+-- |
+-- | ```
+-- | τ ::= { v:τ | r }   -- a refinement on an RType
+-- |     | x:τ -> τ      -- a pi type
+-- |     | b             -- an unrefined type
+-- | ```
+-- |
+-- | This allows us to bind functions as in LH `--higherorder`
+-- |   {f : { v:_ | v < 0 } -> { v:_ | v > 0} | f 0 = 0}
+
+data RType a
+  = RBase Type
+  | RFun Id !(RType a) !(RType a)
+  | RRTy Id !(RType a) !(Core a)
+  deriving (Show, Functor)
+
 data Type =  TVar TVar          -- a
           |  TInt               -- Int
           |  TBool              -- Bool
@@ -325,6 +345,8 @@ newtype Ctor = CT String deriving (Eq, Ord)
 newtype TVar = TV String deriving (Eq, Ord)
 
 data Poly  =  Forall [TVar] Type       -- forall a. t
+
+data RPoly a =  RForall [TVar] (RType a)
 
 instance Show Ctor where
   showsPrec _ c = shows (prCtor c)
