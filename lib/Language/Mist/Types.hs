@@ -9,34 +9,35 @@ module Language.Mist.Types
 
   -- * Aliases for various identifiers
   , Id
-  , Tag
 
   -- * Types and Polys
   , Sig (..), Type (..), Poly (..), TVar (..), Ctor (..)
 
-  -- * Abstract syntax of the Adder language
-  , Field (..)
-  , Bind  (..)
+  -- * Abstract syntax of Mist
   , Expr  (..)
-  , Def 
-  , AnfExpr,   ImmExpr
-  , BareBind, Bare, BareDef
-  , Prim2 (..)
-  , isAnf
+  , Bind  (..)
+  , Def
 
+  , BareBind, Bare, BareDef
+
+  , AnfExpr,   ImmExpr
   , Core  (..)
+
+  , Field (..)
+  , Prim2 (..)
+
+  , isAnf
+  , extract
+
+
 
   -- * Smart Constructors
   , bindsExpr
-  , defsExpr 
-  -- , dec
+  , defsExpr
 
   -- * Destructors
-  , exprDefs 
+  , exprDefs
 
-  -- * Labels
-  , label
-  , getLabel
 
     -- * Environments
   , Env
@@ -47,13 +48,6 @@ module Language.Mist.Types
   , addEnv
   , fromListEnv
   , envMax
-  -- , insertEnv
-
-  -- * Abstract Text Type
-  , Ext (..)
-  , ext
-
-  
   ) where
 
 import           GHC.Exts( IsString(..) )
@@ -62,10 +56,7 @@ import qualified Data.List        as L
 import           Data.Maybe                       (isJust)
 import           Text.Printf
 import qualified Text.PrettyPrint  as PP
-import           System.FilePath                  ((<.>))
 import           Language.Mist.UX
-
--- type Nat      = Int
 
 --------------------------------------------------------------------------------
 -- | Abstract syntax of Mist
@@ -73,9 +64,6 @@ import           Language.Mist.UX
 
 -- | `Id` are program variables
 type Id = Text
-
--- | `Tag` are used to tag each `If`
-type Tag = Int
 
 -- | `Prim2` are binary operations
 data Prim2
@@ -162,20 +150,19 @@ exprDefs = go
     go body             = ([]            , body)
 
 --------------------------------------------------------------------------------
-getLabel :: Expr a -> a
+extract :: Expr a -> a
 --------------------------------------------------------------------------------
-getLabel (Number _ l)    = l
-getLabel (Boolean _ l)   = l
-getLabel (Id _ l)        = l
-getLabel (Prim2 _ _ _ l) = l
-getLabel (If    _ _ _ l) = l
-getLabel (Let _ _ _ _ l) = l
-getLabel (App _ _ l)     = l
-getLabel (Tuple _ _ l)   = l
-getLabel (GetItem _ _ l) = l
-getLabel (Lam _ _ l)     = l
--- getLabel (Fun _ _ _ _ l) = l
-getLabel (Unit  l)       = l 
+extract (Number _ l)    = l
+extract (Boolean _ l)   = l
+extract (Id _ l)        = l
+extract (Prim2 _ _ _ l) = l
+extract (If    _ _ _ l) = l
+extract (Let _ _ _ _ l) = l
+extract (App _ _ l)     = l
+extract (Tuple _ _ l)   = l
+extract (GetItem _ _ l) = l
+extract (Lam _ _ l)     = l
+extract (Unit  l)       = l 
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -183,19 +170,10 @@ getLabel (Unit  l)       = l
 
 -- | DynError correspond to different kind of dynamic/run-time errors
 data DynError
-  = TypeError Ty
-  | ArithOverflow
+  = ArithOverflow
   | IndexLow
   | IndexHigh
   | ArityError
-  deriving (Show)
-
--- | Ty correspond to two kinds of values
-data Ty
-  = TNumber
-  | TBoolean
-  | TTuple
-  | TClosure
   deriving (Show)
 
 --------------------------------------------------------------------------------
@@ -254,66 +232,6 @@ nest n     = unlines . map pad . lines
     pad s  = blanks ++ s
     blanks = replicate n ' '
 
-
---------------------------------------------------------------------------------
--- | Transformation to ensure each sub-expression gets a distinct tag
---------------------------------------------------------------------------------
-label :: Expr a -> Expr (a, Tag)
---------------------------------------------------------------------------------
-label = snd . go 0
-  where
-    go i (Unit l)          = labelTop i l  Unit 
-
-    go i (Number n l)      = labelTop i  l (Number n)
-
-    go i (Boolean b l)     = labelTop i  l (Boolean b)
-
-    go i (Id     x l)      = labelTop i  l (Id x)
-
-    go i (Prim2 o e1 e2 l) = labelTop i'' l (Prim2 o e1' e2')
-      where
-        (i',  e1')         = go i  e1
-        (i'', e2')         = go i' e2
-
-    go i (If c e1 e2 l)    = labelTop i''' l (If c' e1' e2')
-      where
-        (i'  , c' )        = go i   c
-        (i'' , e1')        = go i'  e1
-        (i''', e2')        = go i'' e2
-
-    go i (Let x s e b l)   = labelTop i'' l (Let x' s e' b')
-      where
-        (i', [e', b'])     = L.mapAccumL go i [e, b]
-        (i'', x')          = labelBind i' x
-
-    go i (Tuple e1 e2 l)   = labelTop i' l (Tuple e1' e2')
-      where
-        (i', [e1', e2'])   = L.mapAccumL go i [e1, e2]
-
-    go i (GetItem e1 f l) = labelTop i' l (GetItem e1' f)
-      where
-        (i', e1')          = go i e1
-
-    go i (Lam xs e l)      = labelTop i'' l (Lam xs' e')
-      where
-        (i', e')           = go i e
-        (i'', xs')         = L.mapAccumL labelBind i' xs
-
-    -- go i (Fun f t xs e l)  = labelTop i'' l (Fun f' t xs' e')
-      -- where
-        -- (i', e')           = go i e
-        -- (i'', f':xs')      = L.mapAccumL labelBind i' (f:xs)
-
-    go i (App e1 e2 l)     = labelTop i' l (App e1' e2')
-      where
-        (i', [e1', e2'])   = L.mapAccumL go i [e1, e2]
-
-labelTop :: Tag -> a -> ((a, Tag) -> b) -> (Tag, b)
-labelTop i l c             = (i + 1, c (l, i))
-
-labelBind :: Tag -> Bind a -> (Tag, Bind (a, Tag))
-labelBind i (Bind x l)     = labelTop i l (Bind x)
-
 --------------------------------------------------------------------------------
 -- | `isAnf e` is True if `e` is an A-Normal Form
 --------------------------------------------------------------------------------
@@ -330,7 +248,6 @@ isAnf (Tuple e e' _)   = isAnf e && isAnf e'
 isAnf (GetItem e _ _)  = isAnf e
 isAnf (App e e' _)     = isAnf e  && isAnf e'
 isAnf (Lam _ e _)      = isAnf e
---isAnf (Fun _ _ _ e _)  = isAnf e
 
 {-@ measure isImm @-}
 isImm :: Expr a -> Bool
@@ -354,7 +271,7 @@ type BareBind = Bind SourceSpan
 type BareDef  = Def  SourceSpan 
 
 instance Located Bare where
-  sourceSpan = getLabel
+  sourceSpan = extract
 
 instance Located BareBind where
   sourceSpan (Bind _ l) = l
@@ -407,7 +324,7 @@ newtype Ctor = CT String deriving (Eq, Ord)
 
 newtype TVar = TV String deriving (Eq, Ord)
 
-data Poly  =  Forall [TVar] Type       -- forall a. a -> a -> Bool
+data Poly  =  Forall [TVar] Type       -- forall a. t
 
 instance Show Ctor where
   showsPrec _ c = shows (prCtor c)
@@ -454,22 +371,3 @@ prPoly (Forall as t)  = PP.text "Forall" PP.<+>
                           PP.hcat (PP.punctuate PP.comma (map prTVar as))
                           PP.<> PP.text "." PP.<+> prType t
 
---------------------------------------------------------------------------------
--- | File Extensions
---------------------------------------------------------------------------------
-
-data Ext = Src    -- ^ source
-         | Asm    -- ^ ascii  assembly
-         | Exe    -- ^ x86    binary
-         | Res    -- ^ output of execution
-         | Log    -- ^ compile and execution log
-
-instance Show Ext where
-  show Src = "gtr"
-  show Asm = "s"
-  show Exe = "run"
-  show Res = "result"
-  show Log = "log"
-
-ext :: FilePath -> Ext -> FilePath
-ext f e = f <.> show e

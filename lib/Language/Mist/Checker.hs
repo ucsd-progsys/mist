@@ -12,6 +12,7 @@ module Language.Mist.Checker
   ( -- * Top-level Static Checker
     wellFormed 
   , typeCheck
+
     -- * add type annoations
   , ann
 
@@ -28,7 +29,6 @@ import qualified Control.Exception as Ex
 import           Text.Printf        (printf)
 import           Language.Mist.Types
 import           Language.Mist.Utils
--- import           Debug.Trace (trace)
 
 
 --------------------------------------------------------------------------------
@@ -52,8 +52,6 @@ wellFormed = go emptyEnv
     go vEnv (App e1 e2     _) = gos vEnv [e1, e2]
     go vEnv (Lam xs e      _) = duplicateParamErrors xs
                              ++ go (addsEnv xs vEnv) e
-    -- go vEnv (Fun f _ xs e  _) = duplicateParamErrors xs
-    --                          ++ go (addsEnv (f:xs) vEnv) e
 
 addsEnv :: [BareBind] -> Env -> Env
 addsEnv xs env = L.foldl' (flip addEnv) env xs
@@ -102,8 +100,12 @@ errOccurs l a t    = mkError (printf "Type error: occurs check fails: %s occurs 
 
 
 --------------------------------------------------------------------------------
-ann :: Expr a -> Core (Poly, a)
+-- | Elaborates a surface Expr to a Core expression
+-- | - adds type annotations
+-- | - adds explicit type application
+-- | - adds explicit type abstraction
 --------------------------------------------------------------------------------
+ann :: Expr a -> Core (Poly, a)
 ann = undefined
 
 --------------------------------------------------------------------------------
@@ -205,7 +207,7 @@ ti env su e@(Let x _ e1 e2 _) = traceShow False (pprint e) $ ti env'' su1 e2    
     s1                     = generalize env' t1
 
 -- DEAD CODE
-ti _ su (Unit _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (getLabel e))
+ti _ su (Unit _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (extract e))
 
 
 splitFun :: SourceSpan -> Int -> Type -> ([Type], Type)

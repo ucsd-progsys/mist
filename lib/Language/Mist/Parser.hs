@@ -129,7 +129,7 @@ binder = uncurry Bind <$> identifier
 
 
 stretch :: (Monoid a) => [Expr a] -> a
-stretch = mconcat . fmap getLabel
+stretch = mconcat . fmap extract
 
 withSpan' :: Parser (SourceSpan -> a) -> Parser a
 withSpan' p = do

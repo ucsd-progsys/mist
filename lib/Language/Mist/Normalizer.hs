@@ -75,7 +75,7 @@ anf i (Lam xs e l)      = (i', Lam xs e' l)
 --------------------------------------------------------------------------------
 stitch :: Binds a -> AnfExpr a -> AnfExpr a
 --------------------------------------------------------------------------------
-stitch bs e = bindsExpr [ (x, e) | (x, (e, _)) <- reverse bs] e (getLabel e)
+stitch bs e = bindsExpr [ (x, e) | (x, (e, _)) <- reverse bs] e (extract e)
 
 --------------------------------------------------------------------------------
 -- | `imms i es` takes as input a "start" counter `i` and expressions `es`, and
