@@ -319,15 +319,15 @@ fromListEnv bs = Env bs n
 -- |
 -- | ```
 -- | τ ::= { v:τ | r }   -- a refinement on an RType
+-- |     | { v:b | r }   -- a refinement on a base Type
 -- |     | x:τ -> τ      -- a pi type
--- |     | b             -- an unrefined type
 -- | ```
 -- |
 -- | This allows us to bind functions as in LH `--higherorder`
 -- |   {f : { v:_ | v < 0 } -> { v:_ | v > 0} | f 0 = 0}
 
 data RType a
-  = RBase Type
+  = RBase Id Type !(Core a)
   | RFun Id !(RType a) !(RType a)
   | RRTy Id !(RType a) !(Core a)
   deriving (Show, Functor)
