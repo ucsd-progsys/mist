@@ -19,7 +19,7 @@ module Language.Mist.Types
   , Bind  (..)
   , Def
 
-  , BareBind, Bare, BareDef
+  , BareBind, BareType, BarePoly, Bare, BareDef
 
   , AnfExpr,   ImmExpr
   , Core  (..)
@@ -111,8 +111,8 @@ data Core a
 
 data Sig
   = Infer
-  | Check  (RPoly ()) 
-  | Assume (RPoly ())
+  | Check  BarePoly
+  | Assume BarePoly
     deriving (Show)
 
 data Field
@@ -269,8 +269,10 @@ type ImmExpr = Expr
 --------------------------------------------------------------------------------
 
 type Bare     = Expr SourceSpan
+type BareType = RType SourceSpan
+type BarePoly = RPoly SourceSpan
 type BareBind = Bind SourceSpan
-type BareDef  = Def  SourceSpan 
+type BareDef  = Def  SourceSpan
 
 instance Located Bare where
   sourceSpan = extract

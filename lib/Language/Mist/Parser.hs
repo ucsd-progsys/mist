@@ -295,7 +295,7 @@ typeSig
   <|> try (Check  <$> (dcolon     *> scheme))
   <|> pure Infer
 
-scheme :: Parser (RPoly ())
+scheme :: Parser (BarePoly)
 scheme
   =  try (RForall    <$> (rWord "forall" *> sepBy tvar comma <* symbol ".") <*> typeRType)
  <|>     (RForall [] <$> typeRType)
@@ -303,13 +303,35 @@ scheme
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
 
-typeRType :: Parser (RType ())
-typeRType = mkRArrow <$> fmap (\t -> RBase "" t (Boolean True ())) <$> (sepBy1 baseType (symbol "->"))
+typeRType :: Parser (BareType)
+typeRType = mkRArrow <$> fmap (\t -> RBase "" t (Boolean True mempty)) <$> (sepBy1 baseType (symbol "->"))
+
+{- | [NOTE:TTYPE-PARSE] Fundamentally, a type is of the form
+
+      comp -> comp -> ... -> comp
+
+So
+
+  rt = comp
+     | comp '->' rt
+
+  comp = circle
+       | '(' rt ')'
+
+  circle = { v : t | r }
+         | t
+
+Each 'comp' should have a variable to refer to it,
+either a parser-assigned one or given explicitly. e.g.
+
+  xs : [Int]
 
 
+compP :: Parser ParamComp
+compP = circleP <* whiteSpace <|> parens typeRType <?> "compP"
 
--- compP :: Parser ParamComp
--- compP = circleP <* whiteSpace <|> parens typeRType <?> "compP"
+circleP = 
+-}
 
 -- parseFun c@(PC sb t1) b  =
 --       ((do
@@ -330,10 +352,6 @@ typeRType = mkRArrow <$> fmap (\t -> RBase "" t (Boolean True ())) <$> (sepBy1 b
 -- <|> return c)
 
 
-
-
-
-
 --  <|> try ((:=>) <$> types <* symbol "->" <*> typeType)
 
 baseType :: Parser Type
@@ -351,7 +369,7 @@ mkArrow ts = case L.reverse ts of
                t:ts' -> L.reverse ts' :=> t
                _     -> error "impossible: mkArrow"
 
-mkRArrow :: [RType ()] -> RType ()
+mkRArrow :: [BareType] -> BareType
 mkRArrow ts = case L.reverse ts of
   [t] -> t
   t:ts' -> foldr (\t funAcc -> RFun undefined t funAcc) t ts'
