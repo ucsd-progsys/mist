@@ -304,7 +304,7 @@ typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
 
 typeRType :: Parser (RType ())
-typeRType = mkRArrow <$> fmap (\t -> RBase undefined t undefined) <$> (sepBy1 baseType (symbol "->"))
+typeRType = mkRArrow <$> fmap (\t -> RBase "" t (Boolean True ())) <$> (sepBy1 baseType (symbol "->"))
 
 
 
@@ -361,9 +361,6 @@ tvar = TV . fst <$> identifier
 
 types :: Parser [Type]
 types = parens (sepBy1 typeType comma)
-
-rtypes :: Parser [RType ()]
-rtypes = undefined
 
 ctorType :: Parser Type
 ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
