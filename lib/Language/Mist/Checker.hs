@@ -147,7 +147,7 @@ ti env su (GetItem e f l)  = instApp (sourceSpan l) env su (fieldPoly f) [e]
 ti env su (Let x (Assume s) _ e _)
                            = traceShow False (pprint x) $ ti env' su e
   where
-    env'                   = extTypeEnv (bindId x) s env
+    env'                   = extTypeEnv (bindId x) (eraseRPoly s) env
 
 ti env su (App eF eArg l)  = tiApp (sourceSpan l) sF (apply sF env) tF [eArg]
   where
@@ -177,7 +177,7 @@ ti env su (Lam xs body l)  = (su3, apply su3 (tXs :=> tOut))
     -- OLD-FUN sp                     = sourceSpan (bindLabel f)
 
 -- HIDE : HARD
-ti env su (Let f (Check s1) e1 e2 _)
+ti env su (Let f (Check rs1) e1 e2 _)
   | ok                     = ti env' su'' e2
   | otherwise              = abort (errMismatch sp s1 s1')
   where 
@@ -187,6 +187,7 @@ ti env su (Let f (Check s1) e1 e2 _)
     env'                   = extTypeEnv (bindId f) s1 env 
     (su' , t)              = instantiate su s1
     sp                     = sourceSpan (bindLabel f)
+    s1                     = eraseRPoly rs1
 
 -- ti env su (Fun f (Check s) xs e _)
   -- | ok                     = (su'', t')

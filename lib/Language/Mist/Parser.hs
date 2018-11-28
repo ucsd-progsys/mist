@@ -4,8 +4,8 @@
 
 module Language.Mist.Parser ( parse, parseFile ) where
 
-import qualified Text.Printf as Printf 
-import qualified Control.Exception          as Ex 
+import qualified Text.Printf as Printf
+import qualified Control.Exception          as Ex
 import           Control.Monad (void)
 import           Text.Megaparsec hiding (parse)
 import           Data.List.NonEmpty         as NE
@@ -25,14 +25,14 @@ parseWith p f s = case runParser (whole p) f s of
                     Left err -> Ex.throw [parseUserError err]
                     Right e  -> return e
 
-parseUserError :: ParseError Char SourcePos -> UserError 
-parseUserError err = mkError msg sp 
-  where 
-    msg            = "parse error\n" ++ parseErrorTextPretty err 
+parseUserError :: ParseError Char SourcePos -> UserError
+parseUserError err = mkError msg sp
+  where
+    msg            = "parse error\n" ++ parseErrorTextPretty err
     sp             = posSpan . NE.head . errorPos $ err
 
 instance ShowErrorComponent SourcePos where
-  showErrorComponent = sourcePosPretty 
+  showErrorComponent = sourcePosPretty
 
 -- instance Located ParseError where
 --  sourceSpan = posSpan . errorPos
@@ -56,7 +56,7 @@ whole p = sc *> p <* eof
 -- RJ: rename me "space consumer"
 sc :: Parser ()
 sc = L.space (void spaceChar) lineComment blockCmnt
-  where 
+  where
     blockCmnt = L.skipBlockComment "{-" "-}"
 
 lineComment :: Parser ()
@@ -145,43 +145,43 @@ withSpan p = do
   p2 <- getPosition
   return (x, SS p1 p2)
 
-topExprs :: Parser Bare 
-topExprs = defsExpr <$> topDefs 
+topExprs :: Parser Bare
+topExprs = defsExpr <$> topDefs
 
-topDefs :: Parser [BareDef] 
-topDefs = many topDef 
+topDefs :: Parser [BareDef]
+topDefs = many topDef
 
-topDef :: Parser BareDef 
-topDef = do 
-  f  <- binder 
+topDef :: Parser BareDef
+topDef = do
+  f  <- binder
   s  <- typeSig
   f' <- binder <* symbol "="
-  e  <- expr 
-  return (f, s, e) -- (mkDef f s f' [e]) 
- 
-{- 
-topDef :: Parser BareDef 
-topDef = L.nonIndented scn (L.indentBlock scn p) 
-  where 
-    p = do 
-      f  <- binder 
+  e  <- expr
+  return (f, s, e) -- (mkDef f s f' [e])
+
+{-
+topDef :: Parser BareDef
+topDef = L.nonIndented scn (L.indentBlock scn p)
+  where
+    p = do
+      f  <- binder
       s  <- typeSig
       f' <- binder <* symbol "="
       return (L.IndentMany Nothing (mkDef f s f') expr)
-    
--}      
 
-mkDef f s f' es 
-  | okBind    = case es of 
+-}
+
+mkDef f s f' es
+  | okBind    = case es of
                   [e] -> return (f, s, e)
-                  es  -> fail $ Printf.printf "Invalid body with multiple expressions %s for %s " 
+                  es  -> fail $ Printf.printf "Invalid body with multiple expressions %s for %s "
                                   (pprintMany es) (pprint f) --show (bindId f)
   | otherwise = fail $ "Definition for " ++ show f ++ " must follow its type signature."
-  where 
-    okBind    = bindId f == bindId f' 
+  where
+    okBind    = bindId f == bindId f'
 
 
-{- 
+{-
 defExpr :: Parser Bare
 defExpr = withSpan' $ do
   rWord "def"
@@ -207,7 +207,7 @@ expr0 =  try letExpr
      <|> try constExpr
     -- <|> try tupExpr
      <|> try idExpr
-     <|> try (mkApps <$> parens (sepBy1 expr sc)) 
+     <|> try (mkApps <$> parens (sepBy1 expr sc))
 
 exprs :: Parser [Bare]
 exprs = parens (sepBy expr comma)
@@ -222,7 +222,7 @@ getExpr = withSpan' (GetItem <$> funExpr <*> brackets field)
 -- appExpr  = apps <$> funExpr <*> sepBy exprs sc
 
 mkApps :: [Bare] -> Bare
-mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2])) 
+mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2]))
 
 
 funExpr :: Parser Bare
@@ -283,8 +283,8 @@ lamExpr :: Parser Bare
 lamExpr = withSpan' $ do
   -- rWord "lambda"
   char '\\' <* sc
-  -- xs    <- parens (sepBy binder comma) <* symbol "->" 
-  xs    <- sepBy binder sc <* symbol "->" 
+  -- xs    <- parens (sepBy binder comma) <* symbol "->"
+  xs    <- sepBy binder sc <* symbol "->"
   e     <- expr
   return (Lam xs e)
 
@@ -295,18 +295,49 @@ typeSig
   <|> try (Check  <$> (dcolon     *> scheme))
   <|> pure Infer
 
-scheme :: Parser Poly
+scheme :: Parser (RPoly ())
 scheme
-  =  try (Forall    <$> (rWord "forall" *> sepBy tvar comma <* symbol ".") <*> typeType)
- <|>     (Forall [] <$> typeType)
+  =  try (RForall    <$> (rWord "forall" *> sepBy tvar comma <* symbol ".") <*> typeRType)
+ <|>     (RForall [] <$> typeRType)
 
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
 
+typeRType :: Parser (RType ())
+typeRType = mkRArrow <$> fmap (\t -> RBase undefined t undefined) <$> (sepBy1 baseType (symbol "->"))
+
+
+
+-- compP :: Parser ParamComp
+-- compP = circleP <* whiteSpace <|> parens typeRType <?> "compP"
+
+-- parseFun c@(PC sb t1) b  =
+--       ((do
+--             reservedOp "->"
+--             PC _ t2 <- btP
+--             return (PC sb (rFun b t1 t2)))
+--         <|>
+--          (do
+--             reservedOp "~>"
+--             PC _ t2 <- btP
+--             return (PC sb (rImpF b t1 t2)))
+--         <|>
+--          (do
+--             reservedOp "=>"
+--             PC _ t2 <- btP
+--             -- TODO:AZ return an error if s == PcExplicit
+--             return $ PC sb $ foldr (rFun dummySymbol) t2 (getClasses t1))
+-- <|> return c)
+
+
+
+
+
+
 --  <|> try ((:=>) <$> types <* symbol "->" <*> typeType)
 
-baseType :: Parser Type 
-baseType 
+baseType :: Parser Type
+baseType
   =  try (rWord "Int"   *> pure TInt)
  <|> try (rWord "Bool"  *> pure TBool)
  <|> try (TVar <$> tvar)
@@ -314,17 +345,25 @@ baseType
  <|> ctorType
 
 
-mkArrow :: [Type] -> Type 
-mkArrow ts = case L.reverse ts of 
+mkArrow :: [Type] -> Type
+mkArrow ts = case L.reverse ts of
                [t]   -> t
-               t:ts' -> L.reverse ts' :=> t 
+               t:ts' -> L.reverse ts' :=> t
                _     -> error "impossible: mkArrow"
+
+mkRArrow :: [RType ()] -> RType ()
+mkRArrow ts = case L.reverse ts of
+  [t] -> t
+  t:ts' -> foldr (\t funAcc -> RFun undefined t funAcc) t ts'
 
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier
 
 types :: Parser [Type]
 types = parens (sepBy1 typeType comma)
+
+rtypes :: Parser [RType ()]
+rtypes = undefined
 
 ctorType :: Parser Type
 ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)

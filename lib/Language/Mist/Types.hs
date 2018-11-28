@@ -31,7 +31,6 @@ module Language.Mist.Types
   , extract
 
 
-
   -- * Smart Constructors
   , bindsExpr
   , defsExpr
@@ -39,6 +38,8 @@ module Language.Mist.Types
   -- * Destructors
   , exprDefs
 
+  , eraseRPoly
+  , eraseRType
 
     -- * Environments
   , Env
@@ -110,8 +111,8 @@ data Core a
 
 data Sig
   = Infer
-  | Check  Poly
-  | Assume Poly
+  | Check  (RPoly ()) 
+  | Assume (RPoly ())
     deriving (Show)
 
 data Field
@@ -335,7 +336,7 @@ data RType a
 data Type =  TVar TVar          -- a
           |  TInt               -- Int
           |  TBool              -- Bool
-          |  [Type] :=> Type    -- (t1,...,tn) => t2
+          |  [Type] :=> Type    -- (t1,...,tn) => t2               TODO: make currying the only option
           |  TPair Type Type    -- (t0, t1)
           |  TCtor Ctor [Type]  -- Ctor [t1,...,tn]
           deriving (Eq, Ord)
@@ -346,7 +347,15 @@ newtype TVar = TV String deriving (Eq, Ord)
 
 data Poly  =  Forall [TVar] Type       -- forall a. t
 
-data RPoly a =  RForall [TVar] (RType a)
+data RPoly a =  RForall [TVar] (RType a) deriving (Show, Functor)
+
+eraseRPoly :: RPoly a -> Poly
+eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
+
+eraseRType :: RType a -> Type
+eraseRType (RBase _ t _) = t
+eraseRType (RFun _ t1 t2) = [(eraseRType t1)] :=> (eraseRType t2)
+eraseRType (RRTy _ t _) = eraseRType t
 
 instance Show Ctor where
   showsPrec _ c = shows (prCtor c)
