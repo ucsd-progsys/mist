@@ -79,34 +79,38 @@ data Prim2
 
 -- | Expr are single expressions
 data Expr a
-  = Number  !Integer                       a
-  | Boolean !Bool                          a
-  | Id      !Id                            a
-  | Prim2   !Prim2    !(Expr a)  !(Expr a) a
-  | If      !(Expr a) !(Expr a)  !(Expr a) a
-  | Let     !(Bind a) !Sig       !(Expr a)  !(Expr a) a
-  | Tuple   !(Expr a) !(Expr a)            a
-  | GetItem !(Expr a) !Field               a
-  | App     !(Expr a) !(Expr a)            a
-  | Lam               [Bind a]   !(Expr a) a
-  | Unit                                   a
+  = Number  !Integer                                a
+  | Boolean !Bool                                   a
+  | Id      !Id                                     a
+  | Prim2   !Prim2    !(Expr a) !(Expr a)           a
+  | If      !(Expr a) !(Expr a) !(Expr a)           a
+  | Let     !(Bind a) !Sig      !(Expr a) !(Expr a) a
+  | Tuple   !(Expr a) !(Expr a)                     a
+  | GetItem !(Expr a) !Field                        a
+  | App     !(Expr a) !(Expr a)                     a
+  | Lam     [Bind a]  !(Expr a)                     a
+  | Unit                                            a
     deriving (Show, Functor)
 
 -- | Core are expressions with explicit TAbs and TApp
+-- | and every binding annotated.
+-- |
+-- | CPrim is a primitive value. This can include things like
+-- |  - unit : 1
+-- |  - p1 : ∀A, B. A × B -> A
+-- |  - + : Number -> Number -> Number
 data Core a
-  = CNumber  !(RType a) !Integer                       a
-  | CBoolean !(RType a) !Bool                          a
-  | CId      !(RType a) !Id                            a
-  | CPrim2   !(RType a) !Prim2    !(Core a)  !(Core a) a
-  | CIf      !(RType a) !(Core a) !(Core a)  !(Core a) a
-  | CLet     !(RType a) !(Bind a) !Sig       !(Core a)  !(Core a) a
-  | CTuple   !(RType a) !(Core a) !(Core a)            a
-  | CGetItem !(RType a) !(Core a) !Field               a
-  | CApp     !(RType a) !(Core a) !(Core a)            a
-  | CLam     !(RType a)           [Bind a]   !(Core a) a
-  | CUnit    !(RType a)                                a
-  | CTApp    !(RType a) !(Core a) !Type
-  | CTAbs    !(RType a) [TVar] !(Core a)
+  = CNumber  !Integer a
+  | CBoolean !Bool a
+  | CId      !Id                             a
+  | CPrim    !Id                             a
+  | CIf      !(Core a)  !(Core a) !(Core a)  a
+  | CLet     !(CBind a) !(Core a) !(Core a)  a
+  | CTuple   !(Core a)  !(Core a)            a
+  | CApp     !(Core a)  !(Core a)            a
+  | CLam     [CBind a]  !(Core a)            a
+  | CTApp    !(Core a)  !Type                a      -- TODO: should the type instantiation be a Type or an RType?
+  | CTAbs    [TVar]     !(Core a)            a
     deriving (Show, Functor)
 
 data Sig
@@ -123,6 +127,13 @@ data Field
 data Bind a = Bind
   { bindId    :: !Id
   , bindLabel :: a
+  }
+  deriving (Show, Functor)
+
+data CBind a = CBind
+  { cBindId :: !Id
+  , cBindType :: !(RPoly a)
+  , cBindLabel :: a
   }
   deriving (Show, Functor)
 
@@ -347,7 +358,7 @@ newtype Ctor = CT String deriving (Eq, Ord)
 
 newtype TVar = TV String deriving (Eq, Ord)
 
-data Poly  =  Forall [TVar] Type       -- forall a. t
+data Poly = Forall [TVar] Type       -- forall a. t
 
 data RPoly a =  RForall [TVar] (RType a) deriving (Show, Functor)
 
