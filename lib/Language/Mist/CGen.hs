@@ -1,56 +1,64 @@
-{-# LANGUAGE DeriveAnyClass #-}
 module Language.Mist.CGen ( generateConstraints ) where
-
-import Language.Mist.Types
-import Control.Monad.State.Strict
+-- TODO: Do we need to run a Uniqify pass before we run this module?
+import           Language.Mist.Types
+import           Control.Monad.State.Strict
 
 data SubC a = SubC [(Id, RPoly a)] (RPoly a) (RPoly a)
 
 data CGInfo a = CGInfo { subCs :: [SubC a] }
 type CG a = State (CGInfo a)
+type CGEnv a = [(Id, RPoly a)]
 
 instance Semigroup (CGInfo a) where
   CGInfo a <> CGInfo b = CGInfo (a <> b)
 instance Monoid (CGInfo a) where
   mempty = CGInfo mempty
 
-subC γ t t' = CGInfo { subCs = [ SubC γ t t' ] }
+addC :: CGEnv a -> RPoly a -> RPoly a -> CG a ()
+addC γ t t' = modify (<> subC γ t t')
+subC γ t t' = CGInfo { subCs = [SubC γ t t'] }
 
-generateConstraints = generateConstraints' []
+addBinds = flip (foldr addB)
+addB (CBind x t _) γ = (x, t) : γ
 
-generateConstraints' :: [(Id, RPoly a)] -> Core a -> CG a ()
-generateConstraints' γ (CLet (CBind b s _) e1 e2 _)
-  = check γ s e1 >> generateConstraints' ((b,s):γ) e2
-generateConstraints' _ (CPrim "()" _)
-  = pure mempty
-generateConstraints' _ _
- = error "generateConstraints"
-
-check :: [(Id, RPoly a)] -> RPoly a -> Core a -> CG a ()
-check γ t (CLet (CBind b s _) e1 e2 _)
-  = do check γ s e1
-       te <- synth ((b,s):γ) e2
-       modify (<> subC ((b,s):γ) te t)
-
-check γ t (CTAbs a e _) = undefined
-check γ t (CLam  x e _) = undefined
-
-check γ t e
-  = do te <- synth γ e
-       modify (<> subC γ te t)
+generateConstraints :: Core a -> CGInfo a
+generateConstraints = flip execState mempty . synth []
 
 synth :: [(Id, RPoly a)] -> Core a -> CG a (RPoly a)
-synth γ (CNumber i l) = undefined
+synth _ e@CNumber{}  = pure $ prim e
+synth _ e@CBoolean{} = pure $ prim e
+synth _ e@CPrim{}    = pure $ prim e
+synth γ (CId x _   ) = pure $ single γ x
+
+synth γ (CApp f y _) = do
+  RForall [] (RFun x t t') <- synth γ f
+  addC γ (single γ y) (RForall [] t)
+  pure $ subst y x t'
+
+synth γ (CTAbs as e _) = do
+  RForall as' t <- synth γ e
+  pure $ RForall (as' ++ as) t
+
+synth γ (CTApp e tau _) = do
+  RForall (a : as) t <- synth γ e
+  pure $ RForall as $ subst tau a t
+
+  -- Fake ADT stuff
+synth _γ (CTuple _e1 _e2 _) = undefined
+synth _γ (CIf _b _e1 _e2 _) = undefined
+
+-- "Bidirectional" "portal" that's made redudant by the fact that we insert
+-- all the KVARs at parse time
+synth γ (CLam xs e _)
+  = bindsRType xs <$>
+    synth (addBinds xs γ) e
+synth γ  (CLet b@(CBind _ t1 _) e1 e2 _)
+  = synth γ e1 >>=
+    flip (addC γ) t1 >>
+    synth (addB b γ) e2
+
+prim _e = undefined
   -- need to pass around a fresh variable supply...
-  -- = (mempty, RForall [] $ RBase (Bind "" l) TInt (Prim2 Equal
-synth γ (CBoolean b _) = undefined
-synth γ (CId x _) = undefined
-synth γ (CPrim x _) = undefined
-synth γ (CIf b e1 e2 _) = undefined
-synth γ (CLet x e1 e2 _) = undefined
-synth γ (CTuple e1 e2 _) = undefined
-synth γ (CApp f x _) = undefined
-  -- better make sure we're in ANF...
-synth γ (CLam x e _) = undefined
-synth γ (CTApp e t _) = undefined
-synth γ (CTAbs as e _) = undefined
+  -- RForall [] $ RBase (Bind "" l) TInt (Prim2 Equal
+single _γ _e = undefined
+subst = undefined

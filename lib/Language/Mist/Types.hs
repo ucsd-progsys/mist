@@ -35,6 +35,7 @@ module Language.Mist.Types
   -- * Smart Constructors
   , bindsExpr
   , defsExpr
+  , bindsRType
 
   -- * Destructors
   , exprDefs
@@ -90,6 +91,7 @@ data Expr a
   | GetItem !(Expr a) !Field                        a
   | App     !(Expr a) !(Expr a)                     a
   | Lam     [Bind a]  !(Expr a)                     a
+  -- | KVar    !KVar     ![Id]                         a
   | Unit                                            a
     deriving (Show, Functor)
 
@@ -108,7 +110,7 @@ data Core a
   | CIf      !(Core a)  !(Core a) !(Core a)  a
   | CLet     !(CBind a) !(Core a) !(Core a)  a
   | CTuple   !(Core a)  !(Core a)            a
-  | CApp     !(Core a)  !(Core a)            a
+  | CApp     !(Core a)  !Id                  a
   | CLam     [CBind a]  !(Core a)            a
   | CTApp    !(Core a)  !Type                a      -- TODO: should the type instantiation be a Type or an RType?
   | CTAbs    [TVar]     !(Core a)            a
@@ -155,6 +157,14 @@ defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs
 -- | Constructing `Expr` from let-binds
 bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
 bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
+
+-- | Constructing `RPoly` from let-binds
+bindsRType :: [CBind a] -> RPoly a -> RPoly a
+bindsRType bs t = foldr mkPiCB t bs
+
+mkPiCB :: CBind a -> RPoly a -> RPoly a
+mkPiCB (CBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
+  where RForall [] tmono = t
 
 -- | Destructing `Expr` into let-binds
 exprDefs :: Expr a -> ([Def a], Expr a)
