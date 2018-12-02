@@ -7,7 +7,8 @@ module Language.Mist.Parser ( parse, parseFile ) where
 import qualified Text.Printf as Printf
 import qualified Control.Exception          as Ex
 import           Control.Monad (void)
-import           Text.Megaparsec hiding (parse)
+import           Control.Monad.State.Strict
+import           Text.Megaparsec hiding (parse, State)
 import           Data.List.NonEmpty         as NE
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Megaparsec.Char
@@ -21,7 +22,7 @@ parse :: FilePath -> Text -> IO Bare
 parse = parseWith (topExprs <* eof)
 
 parseWith  :: Parser a -> FilePath -> Text -> IO a
-parseWith p f s = case runParser (whole p) f s of
+parseWith p f s = case flip evalState 0 $ runParserT (whole p) f s of
                     Left err -> Ex.throw [parseUserError err]
                     Right e  -> return e
 
@@ -45,7 +46,7 @@ parseFile :: FilePath -> IO Bare
 --------------------------------------------------------------------------------
 parseFile f = parse f =<< readFile f
 
-type Parser = Parsec SourcePos Text
+type Parser = ParsecT SourcePos Text (State Integer)
 
 -- https://mrkkrp.github.io/megaparsec/tutorials/parsing-simple-imperative-language.html
 

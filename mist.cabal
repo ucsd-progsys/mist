@@ -36,7 +36,8 @@ Library
                        tasty-rerun, 
                        tasty-ant-xml,
                        process, 
-                       text
+                       text,
+                       mtl
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
