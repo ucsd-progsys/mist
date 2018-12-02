@@ -308,8 +308,15 @@ typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
 
 typeRType :: Parser BareType
-typeRType = rbase <|>
-  RBase <$> freshBinder <*> typeType <*> pure (Boolean True mempty)
+typeRType = try rfun <|> rbase <|> unrefined
+
+rfun :: Parser BareType
+rfun = do id <- (binder <* colon) <|> freshBinder
+          tin <- (rbase <|> parens typeRType) <* (symbol "->")
+          RFun id tin <$> typeRType
+
+unrefined :: Parser BareType
+unrefined = RBase <$> freshBinder <*> typeType <*> pure (Boolean True mempty)
 
 rbase :: Parser BareType
 rbase = braces $ RBase
