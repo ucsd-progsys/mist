@@ -94,7 +94,6 @@ errLargeNum   l n  = mkError (printf "Number '%d' is too large" n) l
 errUnboundVar l x  = mkError (printf "Unbound variable '%s'" x) l
 errUnboundFun l f  = mkError (printf "Function '%s' is not defined" f) l
 errUnify l t1 t2   = mkError (printf "Type error: cannot unify %s and %s" (show t1) (show t2)) l
-errSignature l t   = mkError (printf "Type error: malformed function signature %s" (show t)) l
 errMismatch l s s' = mkError (printf "Type error: mismatched function signature: specified %s but inferred %s" (show s) (show s')) l
 errOccurs l a t    = mkError (printf "Type error: occurs check fails: %s occurs in %s" (show a) (show t)) l
 
@@ -185,7 +184,7 @@ ti env su (Let f (Check rs1) e1 e2 _)
     s1'                    = generalize env (apply su'' t1')
     (su'', t1')            = ti env' su' e1
     env'                   = extTypeEnv (bindId f) s1 env 
-    (su' , t)              = instantiate su s1
+    (su' , _t)             = instantiate su s1
     sp                     = sourceSpan (bindLabel f)
     s1                     = eraseRPoly rs1
 
@@ -210,12 +209,6 @@ ti env su e@(Let x _ e1 e2 _) = traceShow False (pprint e) $ ti env'' su1 e2    
 -- DEAD CODE
 ti _ su (Unit _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (extract e))
 
-
-splitFun :: SourceSpan -> Int -> Type -> ([Type], Type)
-splitFun _ n (tXs :=> tOut)
-  | length tXs == n             = (tXs, tOut)
-splitFun sp _ t                 = abort (errSignature sp t)
-
 freshFun :: Subst -> Int -> (Subst, Type)
 freshFun su arity    = (su', tXs :=> tOut)
   where
@@ -228,29 +221,8 @@ eqPoly (Forall as s) (Forall bs t)
   where
     su                     = mkSubst [(a, TVar b) | (a, b) <- zip as bs]
 
---------------------------------------------------------------------------------
--- DELETE
---------------------------------------------------------------------------------
-tiFun :: (Located a) => SourceSpan
-                     -> TypeEnv
-                     -> [Bind a] -> Expr a
-                     -> Subst -> Maybe (Bind a) -> [Type] -> Type
-                     -> (Subst, Type)
---------------------------------------------------------------------------------
-tiFun sp env xs e su mF tXs tOut
-                           = (su'', apply su'' tF)
-  where
-    env'                   = extTypesEnv env (funBind mF tF ++ zip xs tXs)
-    (su', tBody)           = ti env' su e
-    su''                   = unify sp su' tBody (apply su' tOut)
-    tF                     = tXs :=> tOut
-
 extTypesEnv :: TypeEnv -> [(Bind a, Type)] -> TypeEnv
 extTypesEnv = foldr (\(x, t) -> extTypeEnv (bindId x) (Forall [] t))
-
-funBind :: Maybe (Bind a) -> Type -> [(Bind a, Type)]
-funBind (Just f) tF = [(f, tF)]
-funBind _        _  = []
 
 -----------------------------------------------------------------------------------------------
 instApp :: (Located a) => SourceSpan -> TypeEnv -> Subst -> Poly -> [Expr a] -> (Subst, Type)

@@ -4,7 +4,6 @@
 
 module Language.Mist.Parser ( parse, parseFile ) where
 
-import qualified Text.Printf as Printf
 import qualified Control.Exception          as Ex
 import           Control.Monad (void)
 import           Control.Monad.State.Strict
@@ -165,45 +164,9 @@ topDef :: Parser BareDef
 topDef = do
   f  <- binder
   s  <- typeSig
-  f' <- binder <* symbol "="
+  _f' <- binder <* symbol "="
   e  <- expr
   return (f, s, e) -- (mkDef f s f' [e])
-
-{-
-topDef :: Parser BareDef
-topDef = L.nonIndented scn (L.indentBlock scn p)
-  where
-    p = do
-      f  <- binder
-      s  <- typeSig
-      f' <- binder <* symbol "="
-      return (L.IndentMany Nothing (mkDef f s f') expr)
-
--}
-
-mkDef f s f' es
-  | okBind    = case es of
-                  [e] -> return (f, s, e)
-                  es  -> fail $ Printf.printf "Invalid body with multiple expressions %s for %s "
-                                  (pprintMany es) (pprint f) --show (bindId f)
-  | otherwise = fail $ "Definition for " ++ show f ++ " must follow its type signature."
-  where
-    okBind    = bindId f == bindId f'
-
-
-{-
-defExpr :: Parser Bare
-defExpr = withSpan' $ do
-  rWord "def"
-  f  <- binder
-  xs <- parens (sepBy binder comma)
-  t  <- typeSig <* colon
-  e1 <- expr
-  rWord "in"
-  e2 <- expr
-  return (dec f t xs e1 e2)
--}
-
 
 expr :: Parser Bare
 expr = makeExprParser expr0 binops
@@ -212,33 +175,12 @@ expr0 :: Parser Bare
 expr0 =  try letExpr
      <|> try ifExpr
      <|> try lamExpr
-     -- <|> try defExpr
-    -- <|> try getExpr
      <|> try constExpr
-    -- <|> try tupExpr
      <|> try idExpr
      <|> try (mkApps <$> parens (sepBy1 expr sc))
 
-exprs :: Parser [Bare]
-exprs = parens (sepBy expr comma)
-
--- appExpr :: Parser Bare
--- appExpr  = apps <$> funExpr <*> sepBy exprs sc
-
 mkApps :: [Bare] -> Bare
 mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2]))
-
-
-funExpr :: Parser Bare
-funExpr = try idExpr <|> tupExpr
-
-tupExpr :: Parser Bare
-tupExpr = withSpan' (mkTuple <$> exprs)
-
-mkTuple :: [Bare] -> SourceSpan -> Bare
-mkTuple [e] _      = e
-mkTuple [e1, e2] l = Tuple e1 e2 l
-mkTuple _  l       = panic "Mist only supports pairs!" l
 
 binops :: [[Operator Parser Bare]]
 binops =
@@ -307,24 +249,7 @@ scheme
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
 
-typeRType :: Parser BareType
-typeRType = try rfun <|> rbase <|> unrefined
-
-rfun :: Parser BareType
-rfun = do id <- (binder <* colon) <|> freshBinder
-          tin <- (rbase <|> parens typeRType) <* (symbol "->")
-          RFun id tin <$> typeRType
-
-unrefined :: Parser BareType
-unrefined = RBase <$> freshBinder <*> typeType <*> pure (Boolean True mempty)
-
-rbase :: Parser BareType
-rbase = braces $ RBase
-    <$> binder <* colon
-    <*> typeType <* suchthat
-    <*> expr
-
-{- | [NOTE:TTYPE-PARSE] Fundamentally, a type is of the form
+{- | [NOTE:RTYPE-PARSE] Fundamentally, a type is of the form
 
       comp -> comp -> ... -> comp
 
@@ -344,33 +269,24 @@ either a parser-assigned one or given explicitly. e.g.
 
   xs : [Int]
 
-
-compP :: Parser ParamComp
-compP = circleP <* whiteSpace <|> parens typeRType <?> "compP"
-
-circleP =
 -}
 
--- parseFun c@(PC sb t1) b  =
---       ((do
---             reservedOp "->"
---             PC _ t2 <- btP
---             return (PC sb (rFun b t1 t2)))
---         <|>
---          (do
---             reservedOp "~>"
---             PC _ t2 <- btP
---             return (PC sb (rImpF b t1 t2)))
---         <|>
---          (do
---             reservedOp "=>"
---             PC _ t2 <- btP
---             -- TODO:AZ return an error if s == PcExplicit
---             return $ PC sb $ foldr (rFun dummySymbol) t2 (getClasses t1))
--- <|> return c)
+typeRType :: Parser BareType
+typeRType = try rfun <|> rbase <|> unrefined
 
+rfun :: Parser BareType
+rfun = do id <- (binder <* colon) <|> freshBinder
+          tin <- (rbase <|> parens typeRType) <* (symbol "->")
+          RFun id tin <$> typeRType
 
---  <|> try ((:=>) <$> types <* symbol "->" <*> typeType)
+unrefined :: Parser BareType
+unrefined = RBase <$> freshBinder <*> typeType <*> pure (Boolean True mempty)
+
+rbase :: Parser BareType
+rbase = braces $ RBase
+    <$> binder <* colon
+    <*> typeType <* suchthat
+    <*> expr
 
 baseType :: Parser Type
 baseType
@@ -379,7 +295,6 @@ baseType
  <|> try (TVar <$> tvar)
  <|> try (withSpan' (mkPairType <$> types))
  <|> ctorType
-
 
 mkArrow :: [Type] -> Type
 mkArrow ts = case L.reverse ts of
