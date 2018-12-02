@@ -341,9 +341,9 @@ fromListEnv bs = Env bs n
 -- |   {f : { v:_ | v < 0 } -> { v:_ | v > 0} | f 0 = 0}
 
 data RType a
-  = RBase Id Type !(Expr a)
-  | RFun Id !(RType a) !(RType a)
-  | RRTy Id !(RType a) !(Expr a)
+  = RBase !(Bind a) Type !(Expr a)
+  | RFun !(Bind a) !(RType a) !(RType a)
+  | RRTy !(Bind a) !(RType a) !(Expr a)
   deriving (Show, Functor)
 
 data Type =  TVar TVar          -- a

@@ -76,13 +76,20 @@ dcolon = symbol "::"
 colon :: Parser String
 colon = symbol ":"
 
+suchthat :: Parser String
+suchthat = symbol "|"
+
 -- | 'parens' parses something between parenthesis.
 parens :: Parser a -> Parser a
 parens = betweenS "(" ")"
 
--- | 'brackets' parses something between parenthesis.
+-- | 'brackets' parses something between square brackets
 brackets :: Parser a -> Parser a
 brackets = betweenS "[" "]"
+
+-- | 'braces' parses something between braces
+braces :: Parser a -> Parser a
+braces = betweenS "{" "}"
 
 betweenS :: String -> String -> Parser a -> Parser a
 betweenS l r = between (symbol l) (symbol r)
@@ -128,6 +135,8 @@ identStart start = lexeme (p >>= check)
 binder :: Parser BareBind
 binder = uncurry Bind <$> identifier
 
+freshBinder :: Parser BareBind
+freshBinder = uncurry Bind <$> (lexeme $ ("fresh" ++) . show <$> lift get)
 
 stretch :: (Monoid a) => [Expr a] -> a
 stretch = mconcat . fmap extract
@@ -212,12 +221,6 @@ expr0 =  try letExpr
 
 exprs :: Parser [Bare]
 exprs = parens (sepBy expr comma)
-
-getExpr :: Parser Bare
-getExpr = withSpan' (GetItem <$> funExpr <*> brackets field)
-  where
-  field =  (symbol "0" *> pure Zero)
-       <|> (symbol "1" *> pure One)
 
 -- appExpr :: Parser Bare
 -- appExpr  = apps <$> funExpr <*> sepBy exprs sc
@@ -304,8 +307,15 @@ scheme
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
 
-typeRType :: Parser (BareType)
-typeRType = mkRArrow <$> fmap (\t -> RBase "" t (Boolean True mempty)) <$> (sepBy1 baseType (symbol "->"))
+typeRType :: Parser BareType
+typeRType = rbase <|>
+  RBase <$> freshBinder <*> typeType <*> pure (Boolean True mempty)
+
+rbase :: Parser BareType
+rbase = braces $ RBase
+    <$> binder <* colon
+    <*> typeType <* suchthat
+    <*> expr
 
 {- | [NOTE:TTYPE-PARSE] Fundamentally, a type is of the form
 
@@ -331,7 +341,7 @@ either a parser-assigned one or given explicitly. e.g.
 compP :: Parser ParamComp
 compP = circleP <* whiteSpace <|> parens typeRType <?> "compP"
 
-circleP = 
+circleP =
 -}
 
 -- parseFun c@(PC sb t1) b  =
@@ -369,11 +379,6 @@ mkArrow ts = case L.reverse ts of
                [t]   -> t
                t:ts' -> L.reverse ts' :=> t
                _     -> error "impossible: mkArrow"
-
-mkRArrow :: [BareType] -> BareType
-mkRArrow ts = case L.reverse ts of
-  [t] -> t
-  t:ts' -> foldr (\t funAcc -> RFun undefined t funAcc) t ts'
 
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier
