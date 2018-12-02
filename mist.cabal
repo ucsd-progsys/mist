@@ -16,10 +16,10 @@ Library
                        Language.Mist.Types,
                        Language.Mist.Parser,
                        Language.Mist.Checker,
+                       Language.Mist.CGen,
                        Language.Mist.Normalizer,
                        Language.Mist.Runner,
                        Language.Mist.Test
-                      
 
   -- other-extensions:
   build-depends:       array, base,

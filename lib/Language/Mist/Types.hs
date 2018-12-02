@@ -23,6 +23,7 @@ module Language.Mist.Types
 
   , AnfExpr,   ImmExpr
   , Core  (..)
+  , CBind  (..)
 
   , Field (..)
   , Prim2 (..)
@@ -96,8 +97,8 @@ data Expr a
 -- | and every binding annotated.
 -- |
 -- | CPrim is a primitive value. This can include things like
--- |  - unit : 1
--- |  - p1 : ∀A, B. A × B -> A
+-- |  - () : 1
+-- |  - π1 : ∀A, B. A × B -> A
 -- |  - + : Number -> Number -> Number
 data Core a
   = CNumber  !Integer a
