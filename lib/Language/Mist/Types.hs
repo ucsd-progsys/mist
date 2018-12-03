@@ -23,7 +23,7 @@ module Language.Mist.Types
 
   , AnfExpr,   ImmExpr
   , Core  (..)
-  , CBind  (..)
+  , AnnBind  (..)
 
   , Field (..)
   , Prim2 (..)
@@ -103,17 +103,17 @@ data Expr a
 -- |  - π1 : ∀A, B. A × B -> A
 -- |  - + : Number -> Number -> Number
 data Core a
-  = CNumber  !Integer a
-  | CBoolean !Bool a
-  | CId      !Id                             a
-  | CPrim    !Id                             a
-  | CIf      !(Core a)  !(Core a) !(Core a)  a
-  | CLet     !(CBind a) !(Core a) !(Core a)  a
-  | CTuple   !(Core a)  !(Core a)            a
-  | CApp     !(Core a)  !Id                  a
-  | CLam     [CBind a]  !(Core a)            a
-  | CTApp    !(Core a)  !Type                a      -- TODO: should the type instantiation be a Type or an RType?
-  | CTAbs    [TVar]     !(Core a)            a
+  = CNumber  !Integer                          a
+  | CBoolean !Bool                             a
+  | CId      !Id                               a
+  | CPrim    !Id                               a
+  | CIf      !(Core a)    !(Core a) !(Core a)  a
+  | CLet     !(AnnBind a) !(Core a) !(Core a)  a
+  | CTuple   !(Core a)    !(Core a)            a
+  | CApp     !(Core a)    !Id                  a
+  | CLam     [AnnBind a]  !(Core a)            a
+  | CTApp    !(Core a)    !Type                a      -- TODO: should the type instantiation be a Type or an RType?
+  | CTAbs    [TVar]       !(Core a)            a
     deriving (Show, Functor)
 
 data Sig
@@ -133,10 +133,10 @@ data Bind a = Bind
   }
   deriving (Show, Functor)
 
-data CBind a = CBind
-  { cBindId :: !Id
-  , cBindType :: !(RPoly a)
-  , cBindLabel :: a
+data AnnBind a = AnnBind
+  { aBindId :: !Id
+  , aBindType :: !(RPoly a)
+  , aBindLabel :: a
   }
   deriving (Show, Functor)
 
@@ -159,11 +159,11 @@ bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
 bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
 
 -- | Constructing `RPoly` from let-binds
-bindsRType :: [CBind a] -> RPoly a -> RPoly a
+bindsRType :: [AnnBind a] -> RPoly a -> RPoly a
 bindsRType bs t = foldr mkPiCB t bs
 
-mkPiCB :: CBind a -> RPoly a -> RPoly a
-mkPiCB (CBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
+mkPiCB :: AnnBind a -> RPoly a -> RPoly a
+mkPiCB (AnnBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
   where RForall [] tmono = t
 
 -- | Destructing `Expr` into let-binds

@@ -19,7 +19,7 @@ addC γ t t' = modify (<> subC γ t t')
 subC γ t t' = CGInfo { subCs = [SubC γ t t'] }
 
 addBinds = flip (foldr addB)
-addB (CBind x t _) γ = (x, t) : γ
+addB (AnnBind x t _) γ = (x, t) : γ
 
 generateConstraints :: Core a -> CGInfo a
 generateConstraints = flip execState mempty . synth []
@@ -52,7 +52,7 @@ synth _γ (CIf _b _e1 _e2 _) = undefined
 synth γ (CLam xs e _)
   = bindsRType xs <$>
     synth (addBinds xs γ) e
-synth γ  (CLet b@(CBind _ t1 _) e1 e2 _)
+synth γ  (CLet b@(AnnBind _ t1 _) e1 e2 _)
   = synth γ e1 >>=
     flip (addC γ) t1 >>
     synth (addB b γ) e2
