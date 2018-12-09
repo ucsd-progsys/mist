@@ -1,2 +1,2 @@
-incr :: Int 
-incr = ( 12 )
+int :: { v : Int  | v == 12 }
+int = ( 12 )

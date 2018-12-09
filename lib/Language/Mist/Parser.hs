@@ -272,20 +272,20 @@ either a parser-assigned one or given explicitly. e.g.
 -}
 
 typeRType :: Parser BareType
-typeRType = try rfun <|> rbase <|> unrefined
+typeRType = try rfun <|> unrefined <|> rbase
 
 rfun :: Parser BareType
 rfun = do id <- (binder <* colon) <|> freshBinder
-          tin <- (rbase <|> parens typeRType) <* (symbol "->")
+          tin <- (unrefined <|> rbase <|> parens typeRType) <* (symbol "->")
           RFun id tin <$> typeRType
 
 unrefined :: Parser BareType
-unrefined = RBase <$> freshBinder <*> typeType <*> pure (Boolean True mempty)
+unrefined = RBase <$> freshBinder <*> baseType <*> pure (Boolean True mempty)
 
 rbase :: Parser BareType
 rbase = braces $ RBase
     <$> binder <* colon
-    <*> typeType <* suchthat
+    <*> baseType <* suchthat
     <*> expr
 
 baseType :: Parser Type
