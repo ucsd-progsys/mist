@@ -111,7 +111,7 @@ data Core a
   | CLet     !(AnnBind a) !(Core a) !(Core a)  a
   | CTuple   !(Core a)    !(Core a)            a
   | CApp     !(Core a)    !Id                  a
-  | CLam     [AnnBind a]  !(Core a)            a
+  | CLam     [AnnBind a]  !(Core a)            a      -- TODO: change to single argument functions
   | CTApp    !(Core a)    !Type                a      -- TODO: should the type instantiation be a Type or an RType?
   | CTAbs    [TVar]       !(Core a)            a
     deriving (Show, Functor)
