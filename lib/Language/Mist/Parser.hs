@@ -234,8 +234,7 @@ lamExpr = withSpan' $ do
   e     <- expr
   return (Lam xs e)
 
-
-typeSig :: Parser Sig
+typeSig :: Parser BareSig
 typeSig
   =   try (Assume <$> (rWord "as" *> scheme))
   <|> try (Check  <$> (dcolon     *> scheme))

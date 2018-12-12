@@ -19,7 +19,7 @@ module Language.Mist.Types
   , Bind  (..)
   , Def
 
-  , BareBind, BareType, BarePoly, Bare, BareDef
+  , BareBind, BareType, BarePoly, Bare, BareDef, BareSig
 
   , AnfExpr,   ImmExpr
   , Core  (..)
@@ -86,7 +86,7 @@ data Expr a
   | Id      !Id                                     a
   | Prim2   !Prim2    !(Expr a) !(Expr a)           a
   | If      !(Expr a) !(Expr a) !(Expr a)           a
-  | Let     !(Bind a) !Sig      !(Expr a) !(Expr a) a
+  | Let     !(Bind a) !(Sig  a) !(Expr a) !(Expr a) a
   | Tuple   !(Expr a) !(Expr a)                     a
   | GetItem !(Expr a) !Field                        a
   | App     !(Expr a) !(Expr a)                     a
@@ -122,11 +122,11 @@ data CorePrim
   | CProject !Field
   deriving (Show)
 
-data Sig
+data Sig a
   = Infer
-  | Check  BarePoly
-  | Assume BarePoly
-    deriving (Show)
+  | Check  (RPoly a)
+  | Assume (RPoly a)
+    deriving (Show, Functor)
 
 data Field
   = Zero
@@ -146,7 +146,7 @@ data AnnBind a = AnnBind
   }
   deriving (Show, Functor)
 
-type Def a = (Bind a, Sig, Expr a)
+type Def a = (Bind a, Sig a, Expr a)
 
 
 -- | Constructing a function declaration
@@ -301,6 +301,7 @@ type BareType = RType SourceSpan
 type BarePoly = RPoly SourceSpan
 type BareBind = Bind SourceSpan
 type BareDef  = Def  SourceSpan
+type BareSig  = Sig  SourceSpan
 
 instance Located Bare where
   sourceSpan = extract
