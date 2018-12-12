@@ -23,6 +23,7 @@ module Language.Mist.Types
 
   , AnfExpr,   ImmExpr
   , Core  (..)
+  , ANFCore
   , AnnBind  (..)
 
   , Field (..)
@@ -105,11 +106,15 @@ data Core a
   | CIf      !(Core a)    !(Core a) !(Core a)  a
   | CLet     !(AnnBind a) !(Core a) !(Core a)  a
   | CTuple   !(Core a)    !(Core a)            a
-  | CApp     !(Core a)    !Id                  a
+  | CApp     !(Core a)    !(Core a)            a
   | CLam     [AnnBind a]  !(Core a)            a      -- TODO: change to single argument functions
   | CTApp    !(Core a)    !Type                a      -- TODO: should the type instantiation be a Type or an RType?
   | CTAbs    [TVar]       !(Core a)            a
   deriving (Show, Functor)
+
+-- | An ANFCore is a Core where applications are of the form
+-- CApp (Core a) ({v:Core a | is-CId(v)})
+type ANFCore a = Core a
 
 -- | Core primitive operations
 data CorePrim
