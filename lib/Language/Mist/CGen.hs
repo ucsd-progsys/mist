@@ -27,7 +27,7 @@ generateConstraints = flip execState mempty . synth []
 synth :: [(Id, RPoly a)] -> Core a -> CG a (RPoly a)
 synth _ e@CNumber{}  = pure $ prim e
 synth _ e@CBoolean{} = pure $ prim e
-synth _ e@CPrim{}    = pure $ prim e
+synth _ e@CPrimOp{}  = pure $ prim e
 synth γ (CId x _   ) = pure $ single γ x
 
 synth γ (CApp f y _) = do
