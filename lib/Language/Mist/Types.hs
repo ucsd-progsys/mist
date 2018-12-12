@@ -30,6 +30,7 @@ module Language.Mist.Types
   , Prim2 (..)
 
   , isAnf
+  , isVarAnf
   , extract
 
 
@@ -113,7 +114,7 @@ data Core a
   deriving (Show, Functor)
 
 -- | An ANFCore is a Core where applications are of the form
--- CApp (Core a) ({v:Core a | is-CId(v)})
+{-@ type ANFCore a = {v:(Core a) | isVarAnf v } @-}
 type ANFCore a = Core a
 
 -- | Core primitive operations
@@ -161,7 +162,7 @@ type Def a = (Bind a, Sig, Expr a)
 defsExpr :: Show a => [Def a] -> Expr a
 defsExpr [] = error "list of defintions is empty"
 defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs
-  where 
+  where
     go l []               = Unit l
     go _ ((b, s, e) : ds) = Let b s e (go l ds) l where l = bindLabel b
 
@@ -179,8 +180,8 @@ mkPiCB (AnnBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
 
 -- | Destructing `Expr` into let-binds
 exprDefs :: Expr a -> ([Def a], Expr a)
-exprDefs = go 
-  where 
+exprDefs = go
+  where
     go (Let x s e e' _) = ((x, s, e) : bs, body) where  (bs, body) = go e'
     go body             = ([]            , body)
 
@@ -197,7 +198,7 @@ extract (App _ _ l)     = l
 extract (Tuple _ _ l)   = l
 extract (GetItem _ _ l) = l
 extract (Lam _ _ l)     = l
-extract (Unit  l)       = l 
+extract (Unit  l)       = l
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -244,18 +245,18 @@ instance PPrint (Expr a) where
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
-  pprint (Unit _)        = "skip" 
+  pprint (Unit _)        = "skip"
 
-ppMany :: (PPrint a) => Text -> [a] -> Text 
-ppMany sep = L.intercalate sep . fmap pprint 
+ppMany :: (PPrint a) => Text -> [a] -> Text
+ppMany sep = L.intercalate sep . fmap pprint
 
 ppDefs :: [Def a] -> Text
-ppDefs = L.intercalate "\n " . fmap ppDef 
+ppDefs = L.intercalate "\n " . fmap ppDef
 
-ppDef :: Def a -> Text 
-ppDef (b, Check s , e) = ppSig "::" b s ++ ppEqn b e 
-ppDef (b, Assume s, e) = ppSig "as" b s ++ ppEqn b e 
-ppDef (b, Infer   , e) =                   ppEqn b e 
+ppDef :: Def a -> Text
+ppDef (b, Check s , e) = ppSig "::" b s ++ ppEqn b e
+ppDef (b, Assume s, e) = ppSig "as" b s ++ ppEqn b e
+ppDef (b, Infer   , e) =                   ppEqn b e
 
 ppSig k b _s = printf "%s %s %s\n" (pprint b) k "TODO-SIGNATURE" -- (pprint s) 
 ppEqn b e    = printf "%s = \n" (pprint b)
@@ -297,6 +298,31 @@ type AnfExpr = Expr
 {-@ type ImmExpr a = {v:Expr a | isImm v} @-}
 type ImmExpr = Expr
 
+-- for core, we want every function applied to a Var, not simply
+-- an Imm
+{-@ measure isVarAnf @-}
+isVarAnf :: Core a -> Bool
+isVarAnf (CNumber _ _) = True
+isVarAnf (CBoolean _ _) = True
+isVarAnf (CId _ _) = True
+isVarAnf (CTApp e _tau _) = isVarAnf e
+isVarAnf (CTAbs _α e _) = isVarAnf e
+isVarAnf (CPrimOp _ es _) = isVarAll es
+isVarAnf (CIf b e1 e2 _) = isVar b && isVarAnf e1 && isVarAnf e2
+isVarAnf (CLet _ e1 e2  _) = isVarAnf e1 && isVarAnf e2
+isVarAnf (CTuple e1 e2 _) = isVarAnf e1 && isVarAnf e2
+isVarAnf (CLam _ e _) = isVarAnf e
+isVarAnf (CApp f x _) = isVarAnf f && isVar x
+
+{-@ measure isVarAll @-}
+isVarAll :: [Core a] -> Bool
+isVarAll [] = True
+isVarAll (e:es) = isVar e && isVarAll es
+
+{-@ measure isVar @-}
+isVar :: Core a -> Bool
+isVar CId{} = True
+isVar _ = False
 --------------------------------------------------------------------------------
 -- | The `Bare` types are for parsed ASTs.
 --------------------------------------------------------------------------------
@@ -410,8 +436,8 @@ instance IsString TVar where
 instance IsString Type where
   fromString = TVar . TV
 
-instance PPrint Type where 
-  pprint = show 
+instance PPrint Type where
+  pprint = show
 
 prType            :: Type -> PP.Doc
 prType (TVar a)     = prTVar a
@@ -436,4 +462,3 @@ prPoly (Forall [] t)  = prType t
 prPoly (Forall as t)  = PP.text "Forall" PP.<+>
                           PP.hcat (PP.punctuate PP.comma (map prTVar as))
                           PP.<> PP.text "." PP.<+> prType t
-
