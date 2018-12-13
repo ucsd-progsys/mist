@@ -21,7 +21,7 @@ module Language.Mist.Types
 
   , BareBind, BareType, BarePoly, Bare, BareDef, BareSig
 
-  , AnfExpr,   ImmExpr
+  , AnfExpr,   ImmExpr, AnfCore
   , Core  (..)
   , AnnBind  (..)
 
@@ -29,6 +29,7 @@ module Language.Mist.Types
   , Prim2 (..)
 
   , isAnf
+  , isVarAnf
   , extract
 
 
@@ -147,7 +148,7 @@ type Def a = (Bind a, Sig a, Expr a)
 defsExpr :: Show a => [Def a] -> Expr a
 defsExpr [] = error "list of defintions is empty"
 defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs
-  where 
+  where
     go l []               = Unit l
     go _ ((b, s, e) : ds) = Let b s e (go l ds) l where l = bindLabel b
 
@@ -165,8 +166,8 @@ mkPiCB (AnnBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
 
 -- | Destructing `Expr` into let-binds
 exprDefs :: Expr a -> ([Def a], Expr a)
-exprDefs = go 
-  where 
+exprDefs = go
+  where
     go (Let x s e e' _) = ((x, s, e) : bs, body) where  (bs, body) = go e'
     go body             = ([]            , body)
 
@@ -183,7 +184,7 @@ extract (App _ _ l)     = l
 extract (Tuple _ _ l)   = l
 extract (GetItem _ _ l) = l
 extract (Lam _ _ l)     = l
-extract (Unit  l)       = l 
+extract (Unit  l)       = l
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -230,18 +231,18 @@ instance PPrint (Expr a) where
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
-  pprint (Unit _)        = "skip" 
+  pprint (Unit _)        = "skip"
 
-ppMany :: (PPrint a) => Text -> [a] -> Text 
-ppMany sep = L.intercalate sep . fmap pprint 
+ppMany :: (PPrint a) => Text -> [a] -> Text
+ppMany sep = L.intercalate sep . fmap pprint
 
 ppDefs :: [Def a] -> Text
-ppDefs = L.intercalate "\n " . fmap ppDef 
+ppDefs = L.intercalate "\n " . fmap ppDef
 
-ppDef :: Def a -> Text 
-ppDef (b, Check s , e) = ppSig "::" b s ++ ppEqn b e 
-ppDef (b, Assume s, e) = ppSig "as" b s ++ ppEqn b e 
-ppDef (b, Infer   , e) =                   ppEqn b e 
+ppDef :: Def a -> Text
+ppDef (b, Check s , e) = ppSig "::" b s ++ ppEqn b e
+ppDef (b, Assume s, e) = ppSig "as" b s ++ ppEqn b e
+ppDef (b, Infer   , e) =                   ppEqn b e
 
 ppSig k b _s = printf "%s %s %s\n" (pprint b) k "TODO-SIGNATURE" -- (pprint s) 
 ppEqn b e    = printf "%s = \n" (pprint b)
@@ -282,6 +283,32 @@ type AnfExpr = Expr
 
 {-@ type ImmExpr a = {v:Expr a | isImm v} @-}
 type ImmExpr = Expr
+
+-- ANF for core is a little stricter; instead of immediates, we want functions
+-- to be applied only to vars
+
+{-@ type AnfCore a = {v:(Core a) | isVarAnf v } @-}
+type AnfCore a = Core a
+
+{-@ measure isVarAnf @-}
+isVarAnf :: Expr a -> Bool
+isVarAnf (Unit _)         = True
+isVarAnf (Number  _ _)    = True
+isVarAnf (Boolean _ _)    = True
+isVarAnf (Id      _ _)    = True
+isVarAnf (Prim2 _ e e' _) = isVar e && isVar e'
+isVarAnf (If c t e _)     = isVar c && isVarAnf t && isVarAnf e
+isVarAnf (Let _ _ e e' _) = isVarAnf e && isVarAnf e'
+isVarAnf (Tuple e e' _)   = isVarAnf e && isVarAnf e'
+isVarAnf (GetItem e _ _)  = isVarAnf e
+isVarAnf (App e e' _)     = isVarAnf e  && isVar e'
+isVarAnf (Lam _ e _)      = isVarAnf e
+
+{-@ measure isVar @-}
+isVar :: Expr a -> Bool
+isVar (Id      _ _) = True
+isVar _             = False
+
 
 --------------------------------------------------------------------------------
 -- | The `Bare` types are for parsed ASTs.
@@ -397,8 +424,8 @@ instance IsString TVar where
 instance IsString Type where
   fromString = TVar . TV
 
-instance PPrint Type where 
-  pprint = show 
+instance PPrint Type where
+  pprint = show
 
 prType            :: Type -> PP.Doc
 prType (TVar a)     = prTVar a
@@ -423,4 +450,3 @@ prPoly (Forall [] t)  = prType t
 prPoly (Forall as t)  = PP.text "Forall" PP.<+>
                           PP.hcat (PP.punctuate PP.comma (map prTVar as))
                           PP.<> PP.text "." PP.<+> prType t
-
