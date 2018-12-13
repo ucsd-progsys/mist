@@ -78,7 +78,7 @@ data Prim2
   | Less
   | Greater
   | Equal
-  deriving (Show)
+  deriving (Show, Read)
 
 -- | Expr are single expressions
 data Expr a
@@ -94,7 +94,7 @@ data Expr a
   | Lam     [Bind a]  !(Expr a)                     a
   -- | KVar    !KVar     ![Id]                         a
   | Unit                                            a
-    deriving (Show, Functor)
+    deriving (Show, Functor, Read)
 
 -- | Core are expressions with explicit TAbs and TApp
 -- and every binding annotated.
@@ -108,35 +108,35 @@ data Core a
   | CTuple   !(Core a)    !(Core a)           a
   | CGetItem !(Core a)    !Field              a
   | CApp     !(Core a)    !(Core a)           a
-  | CLam     [AnnBind a]  !(Core a)            a      -- TODO: change to single argument functions
-  | CTApp    !(Core a)    !Type                a      -- TODO: should the type instantiation be a Type or an RType?
-  | CTAbs    [TVar]       !(Core a)            a
-
-  deriving (Show, Functor)
+  | CLam     [AnnBind a]  !(Core a)           a      -- TODO: change to single argument functions
+  | CTApp    !(Core a)    !Type               a      -- TODO: should the type instantiation be a Type or an RType?
+  | CTAbs    [TVar]       !(Core a)           a
+  | CUnit                                     a
+  deriving (Show, Functor, Read)
 
 data Sig a
   = Infer
   | Check  (RPoly a)
   | Assume (RPoly a)
-    deriving (Show, Functor)
+    deriving (Show, Functor, Read)
 
 data Field
   = Zero
   | One
-    deriving (Show)
+    deriving (Show, Read)
 
 data Bind a = Bind
   { bindId    :: !Id
   , bindLabel :: a
   }
-  deriving (Show, Functor)
+  deriving (Show, Functor, Read)
 
 data AnnBind a = AnnBind
   { aBindId :: !Id
   , aBindType :: !(RPoly a)
   , aBindLabel :: a
   }
-  deriving (Show, Functor)
+  deriving (Show, Functor, Read)
 
 type Def a = (Bind a, Sig a, Expr a)
 
@@ -380,7 +380,7 @@ data RType a
   = RBase !(Bind a) Type !(Expr a)
   | RFun !(Bind a) !(RType a) !(RType a)
   | RRTy !(Bind a) !(RType a) !(Expr a)
-  deriving (Show, Functor)
+  deriving (Show, Functor, Read)
 
 data Type =  TVar TVar          -- a
           |  TInt               -- Int
@@ -388,15 +388,16 @@ data Type =  TVar TVar          -- a
           |  [Type] :=> Type    -- (t1,...,tn) => t2               TODO: make currying the only option
           |  TPair Type Type    -- (t0, t1)
           |  TCtor Ctor [Type]  -- Ctor [t1,...,tn]
-          deriving (Eq, Ord)
+          deriving (Eq, Ord, Show, Read)
 
-newtype Ctor = CT String deriving (Eq, Ord)
+newtype Ctor = CT String deriving (Eq, Ord, Show, Read)
 
-newtype TVar = TV String deriving (Eq, Ord)
+newtype TVar = TV String deriving (Eq, Ord, Show, Read)
 
 data Poly = Forall [TVar] Type       -- forall a. t
+  deriving (Show, Read)
 
-data RPoly a =  RForall [TVar] (RType a) deriving (Show, Functor)
+data RPoly a =  RForall [TVar] (RType a) deriving (Show, Functor, Read)
 
 eraseRPoly :: RPoly a -> Poly
 eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
@@ -406,26 +407,23 @@ eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = [(eraseRType t1)] :=> (eraseRType t2)
 eraseRType (RRTy _ t _) = eraseRType t
 
-instance Show Ctor where
-  showsPrec _ c = shows (prCtor c)
+instance PPrint Ctor where
+  pprint = PP.render . prCtor
 
-instance Show TVar where
-  showsPrec _ x = shows (prTVar x)
+instance PPrint TVar where
+  pprint = PP.render . prTVar
 
-instance Show Type where
-  showsPrec _ x = shows (prType x)
+instance PPrint Type where
+  pprint = PP.render . prType
 
-instance Show Poly where
-  showsPrec _ x = shows (prPoly x)
+instance PPrint Poly where
+  pprint = PP.render . prPoly
 
 instance IsString TVar where
   fromString = TV
 
 instance IsString Type where
   fromString = TVar . TV
-
-instance PPrint Type where
-  pprint = show
 
 prType            :: Type -> PP.Doc
 prType (TVar a)     = prTVar a
