@@ -37,7 +37,8 @@ Library
                        tasty-ant-xml,
                        process, 
                        text,
-                       mtl
+                       mtl,
+                       liquid-fixpoint
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
