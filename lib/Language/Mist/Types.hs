@@ -98,29 +98,20 @@ data Expr a
 -- | Core are expressions with explicit TAbs and TApp
 -- and every binding annotated.
 data Core a
-  = CNumber  !Integer                          a
-  | CBoolean !Bool                             a
-  | CId      !Id                               a
-  | CPrimOp  !CorePrim    [Core a]             a
-  | CIf      !(Core a)    !(Core a) !(Core a)  a
-  | CLet     !(AnnBind a) !(Core a) !(Core a)  a
-  | CTuple   !(Core a)    !(Core a)            a
-  | CApp     !(Core a)    !Id                  a
+  = CNumber  !Integer                         a
+  | CBoolean !Bool                            a
+  | CId      !Id                              a
+  | CPrim2   !Prim2       !(Core a) !(Core a) a
+  | CIf      !(Core a)    !(Core a) !(Core a) a
+  | CLet     !(AnnBind a) !(Core a) !(Core a) a
+  | CTuple   !(Core a)    !(Core a)           a
+  | CGetItem !(Core a)    !Field              a
+  | CApp     !(Core a)    !(Core a)           a
   | CLam     [AnnBind a]  !(Core a)            a      -- TODO: change to single argument functions
   | CTApp    !(Core a)    !Type                a      -- TODO: should the type instantiation be a Type or an RType?
   | CTAbs    [TVar]       !(Core a)            a
-  deriving (Show, Functor)
 
--- | Core primitive operations
-data CorePrim
-  = CPlus
-  | CMinus
-  | CTimes
-  | CLess
-  | CGreater
-  | CEqual
-  | CProject !Field
-  deriving (Show)
+  deriving (Show, Functor)
 
 data Sig a
   = Infer

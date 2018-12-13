@@ -27,7 +27,7 @@ generateConstraints = flip execState mempty . synth []
 synth :: [(Id, RPoly a)] -> Core a -> CG a (RPoly a)
 synth _ e@CNumber{}  = pure $ prim e
 synth _ e@CBoolean{} = pure $ prim e
-synth _ e@CPrimOp{}  = pure $ prim e
+synth _ e@CPrim2{}  = pure $ prim e
 synth γ (CId x _   ) = pure $ single γ x
 
 synth γ (CApp f y _) = do
@@ -45,6 +45,7 @@ synth γ (CTApp e tau _) = do
 
   -- Fake ADT stuff
 synth _γ (CTuple _e1 _e2 _) = undefined
+synth _γ (CGetItem _e1 _e2 _) = undefined
 synth _γ (CIf _b _e1 _e2 _) = undefined
 
 -- "Bidirectional" "portal" that's made redudant by the fact that we insert
