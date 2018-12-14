@@ -35,6 +35,7 @@ Library
                        process, 
                        text,
                        mtl,
+                       split,
                        liquid-fixpoint
 
   hs-source-dirs:      lib

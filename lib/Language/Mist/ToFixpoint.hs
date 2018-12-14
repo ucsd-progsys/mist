@@ -3,6 +3,7 @@ module Language.Mist.ToFixpoint ( exprToFixpoint, coreToFixpoint ) where
 import Data.String (fromString)
 
 import Language.Mist.Types     as M
+import Language.Mist.Uniqify (varNum)
 import Language.Fixpoint.Types as F
 
 exprToFixpoint :: M.Expr a -> F.Expr
@@ -29,6 +30,8 @@ exprToFixpoint (GetItem e Zero _) =
   EApp (EVar $ fromString "Pi0") (exprToFixpoint e)
 exprToFixpoint (GetItem e One _)  =
   EApp (EVar $ fromString "Pi1") (exprToFixpoint e)
+  -- To translate Lambdas we need to keep around the sorts of each Expr. We
+  -- can do this in Core, but doing it in Expr seems like it's not work it.
 exprToFixpoint (Lam _bs _e2 _)      = error "TODO exprToFixpoint"
 
 coreToFixpoint :: Core a -> F.Expr
@@ -60,13 +63,17 @@ coreToFixpoint (CTApp e tau _)     = ETApp (coreToFixpoint e) (typeToSort tau)
 coreToFixpoint (CTAbs _as e _)      = ETAbs (coreToFixpoint e) (error "TODO coreToFixpoint TVar")
 
 typeToSort :: M.Type -> F.Sort
-typeToSort (TVar t) = undefined
+typeToSort (TVar (TV t)) = FVar (varNum t)
 typeToSort TInt = FInt
 typeToSort TBool = undefined
 -- is this backwards?
 typeToSort (t1 :=> t2) = foldr FFunc (typeToSort t2) (typeToSort <$> t1)
-typeToSort (TPair t1 t2) = undefined
-typeToSort (TCtor t1 t2) = undefined --- foldr FApp (FTC t1) (typeToSort <$> t2)
+-- We can't actually build arbitary TyCons in FP, so for now we just use
+-- the constructor for Map for everything. Later we should make this work
+-- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
+-- with FTyCon right now.
+typeToSort (TPair t1 t2) = FApp (FApp (FTC mapFTyCon) (typeToSort t1)) (typeToSort t2)
+typeToSort (TCtor _ t2) = foldr FApp (FTC mapFTyCon) (typeToSort <$> t2)
 
 prim2ToFixpoint :: Prim2 -> Either Brel Bop
 prim2ToFixpoint M.Plus  = Right F.Plus
