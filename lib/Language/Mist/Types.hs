@@ -244,7 +244,7 @@ ppDef (b, Check s , e) = ppSig "::" b s ++ ppEqn b e
 ppDef (b, Assume s, e) = ppSig "as" b s ++ ppEqn b e
 ppDef (b, Infer   , e) =                   ppEqn b e
 
-ppSig k b _s = printf "%s %s %s\n" (pprint b) k "TODO-SIGNATURE" -- (pprint s) 
+ppSig k b s = printf "%s %s %s\n" (pprint b) k (pprint s)
 ppEqn b e    = printf "%s = \n" (pprint b)
             ++ nest 2           (pprint e)
 
@@ -253,6 +253,18 @@ nest n     = unlines . map pad . lines
   where
     pad s  = blanks ++ s
     blanks = replicate n ' '
+
+instance PPrint (RPoly a) where
+  pprint (RForall [] t)  = pprint t
+  pprint (RForall tvs t) = printf "forall %s. %s" (ppMany " " tvs) (pprint t)
+
+instance PPrint (RType a) where
+  pprint (RBase b t e) =
+    printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
+  pprint (RFun b t1 t2) =
+    printf "%s:%s -> %s" (pprint b) (pprint t1) (pprint t2)
+  pprint (RRTy b t e) =
+    printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
 
 --------------------------------------------------------------------------------
 -- | `isAnf e` is True if `e` is an A-Normal Form
