@@ -117,8 +117,8 @@ data Core a
 
 data Sig a
   = Infer
-  | Check  (RPoly a)
-  | Assume (RPoly a)
+  | Check  (RPoly Expr a)
+  | Assume (RPoly Expr a)
     deriving (Show, Functor, Read)
 
 data Field
@@ -134,7 +134,7 @@ data Bind a = Bind
 
 data AnnBind a = AnnBind
   { aBindId :: !Id
-  , aBindType :: !(RPoly a)
+  , aBindType :: !(RPoly Core a)
   , aBindLabel :: a
   }
   deriving (Show, Functor, Read)
@@ -158,10 +158,10 @@ bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
 bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
 
 -- | Constructing `RPoly` from let-binds
-bindsRType :: [AnnBind a] -> RPoly a -> RPoly a
+bindsRType :: [AnnBind a] -> RPoly Core a -> RPoly Core a
 bindsRType bs t = foldr mkPiCB t bs
 
-mkPiCB :: AnnBind a -> RPoly a -> RPoly a
+mkPiCB :: AnnBind a -> RPoly Core a -> RPoly Core a
 mkPiCB (AnnBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
   where RForall [] tmono = t
 
@@ -272,7 +272,7 @@ nest n     = unlines . map pad . lines
     pad s  = blanks ++ s
     blanks = replicate n ' '
 
-instance PPrint (RPoly a) where
+instance PPrint (e a) => PPrint (RPoly e a) where
   pprint (RForall [] t)  = pprint t
   pprint (RForall tvs t) = printf "forall %s. %s" (ppMany " " tvs) (pprint t)
 
@@ -346,7 +346,7 @@ isVar _             = False
 
 type Bare     = Expr SourceSpan
 type BareType = RType Expr SourceSpan
-type BarePoly = RPoly SourceSpan
+type BarePoly = RPoly Expr SourceSpan
 type BareBind = Bind SourceSpan
 type BareDef  = Def  SourceSpan
 type BareSig  = Sig  SourceSpan
@@ -427,9 +427,9 @@ newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 data Poly = Forall [TVar] Type       -- forall a. t
   deriving (Show, Read)
 
-data RPoly a =  RForall [TVar] (RType Expr a) deriving (Show, Functor, Read)
+data RPoly e a =  RForall [TVar] (RType e a) deriving (Show, Functor, Read)
 
-eraseRPoly :: RPoly a -> Poly
+eraseRPoly :: RPoly e a -> Poly
 eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
 
 eraseRType :: RType e a -> Type

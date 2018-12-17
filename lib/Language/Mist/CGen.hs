@@ -8,13 +8,13 @@ import           Language.Mist.Types
 import           Control.Monad.State.Strict
 -- import qualified Language.Fixpoint.Types as F
 
-data SubC a = SubC [(Id, RPoly a)] (RPoly a) (RPoly a)
+data SubC a = SubC [(Id, RPoly Core a)] (RPoly Core a) (RPoly Core a)
   deriving Show
 data CGInfo a = CGInfo { subCs :: [SubC a], fresh :: Int }
   deriving Show
 
 type CG a = State (CGInfo a)
-type CGEnv a = [(Id, RPoly a)]
+type CGEnv a = [(Id, RPoly Core a)]
 
 -- Just for Debugging
 instance (Show a, Show e, Monoid a) => Show (CG a e) where
@@ -25,7 +25,7 @@ instance Semigroup (CGInfo a) where
 instance Monoid (CGInfo a) where
   mempty = CGInfo mempty 0
 
-addC :: CGEnv a -> RPoly a -> RPoly a -> CG a ()
+addC :: CGEnv a -> RPoly Core a -> RPoly Core a -> CG a ()
 addC γ t t' = modify $ \(CGInfo scs n) -> CGInfo ((SubC γ t t'):scs) n
 
 addBinds = flip (foldr addB)
@@ -34,7 +34,7 @@ addB (AnnBind x t _) γ = (x, t) : γ
 generateConstraints :: Core a -> CGInfo a
 generateConstraints = flip execState mempty . synth []
 
-synth :: [(Id, RPoly a)] -> Core a -> CG a (RPoly a)
+synth :: [(Id, RPoly Core a)] -> Core a -> CG a (RPoly Core a)
 synth _ e@CUnit{}    = pure $ prim e (TCtor (CT "()") [])
 synth _ e@CNumber{}  = pure $ prim e TInt
 synth _ e@CBoolean{} = pure $ prim e TBool
@@ -71,11 +71,11 @@ synth γ  (CLet b@(AnnBind _ t1 _) e1 e2 _)
     synth (addB b γ) e2
 
 -- (needs to be refreshed)
-prim :: Core a -> Type -> RPoly a
+prim :: Core a -> Type -> RPoly Core a
 prim e t = RForall [] $ RBase vv t expr
   where l = extractC e
         vv = Bind "VV" l
-        expr = Prim2 Equal (Id "VV" l) (Unit l) l
+        expr = CPrim2 Equal (CId "VV" l) e l
   -- need to pass around a fresh variable supply...
   -- RForall [] $ RBase (Bind "" l) TInt (Prim2 Equal
 single _γ _e = undefined
