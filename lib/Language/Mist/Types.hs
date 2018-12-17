@@ -276,7 +276,7 @@ instance PPrint (RPoly a) where
   pprint (RForall [] t)  = pprint t
   pprint (RForall tvs t) = printf "forall %s. %s" (ppMany " " tvs) (pprint t)
 
-instance PPrint (RType a) where
+instance PPrint (e a) => PPrint (RType e a) where
   pprint (RBase b t e) =
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
   pprint (RFun b t1 t2) =
@@ -345,7 +345,7 @@ isVar _             = False
 --------------------------------------------------------------------------------
 
 type Bare     = Expr SourceSpan
-type BareType = RType SourceSpan
+type BareType = RType Expr SourceSpan
 type BarePoly = RPoly SourceSpan
 type BareBind = Bind SourceSpan
 type BareDef  = Def  SourceSpan
@@ -406,10 +406,10 @@ fromListEnv bs = Env bs n
 -- | This allows us to bind functions as in LH `--higherorder`
 -- |   {f : { v:_ | v < 0 } -> { v:_ | v > 0} | f 0 = 0}
 
-data RType a
-  = RBase !(Bind a) Type !(Expr a)
-  | RFun !(Bind a) !(RType a) !(RType a)
-  | RRTy !(Bind a) !(RType a) !(Expr a)
+data RType e a
+  = RBase !(Bind a) Type !(e a)
+  | RFun !(Bind a) !(RType e a) !(RType e a)
+  | RRTy !(Bind a) !(RType e a) !(e a)
   deriving (Show, Functor, Read)
 
 data Type =  TVar TVar          -- a
@@ -427,12 +427,12 @@ newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 data Poly = Forall [TVar] Type       -- forall a. t
   deriving (Show, Read)
 
-data RPoly a =  RForall [TVar] (RType a) deriving (Show, Functor, Read)
+data RPoly a =  RForall [TVar] (RType Expr a) deriving (Show, Functor, Read)
 
 eraseRPoly :: RPoly a -> Poly
 eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
 
-eraseRType :: RType a -> Type
+eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = [(eraseRType t1)] :=> (eraseRType t2)
 eraseRType (RRTy _ t _) = eraseRType t

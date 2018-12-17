@@ -70,7 +70,7 @@ instance Refresh [TVar] where
 instance Refresh TVar where
   refresh (TV a) =  TV <$> refresh a
 
-instance Refresh (RType a) where
+instance Refresh (e a) => Refresh (RType e a) where
   refresh (RBase b t e) =
     RBase <$> refresh b <*> refresh t <*> refresh e
   refresh (RFun b rt1 rt2) =
