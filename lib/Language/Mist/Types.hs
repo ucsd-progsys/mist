@@ -390,9 +390,9 @@ data Type =  TVar TVar          -- a
           |  TCtor Ctor [Type]  -- Ctor [t1,...,tn]
           deriving (Eq, Ord, Show, Read)
 
-newtype Ctor = CT String deriving (Eq, Ord, Show, Read)
+newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 
-newtype TVar = TV String deriving (Eq, Ord, Show, Read)
+newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 
 data Poly = Forall [TVar] Type       -- forall a. t
   deriving (Show, Read)
