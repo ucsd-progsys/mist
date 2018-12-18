@@ -18,8 +18,7 @@ Library
                        Language.Mist.Checker,
                        Language.Mist.CGen,
                        Language.Mist.Normalizer,
-                       Language.Mist.Runner,
-                       Language.Mist.Test
+                       Language.Mist.Runner
 
   -- other-extensions:
   build-depends:       array, base,
@@ -31,10 +30,6 @@ Library
                        semigroups,
                        megaparsec,
                        filepath,
-                       tasty, 
-                       tasty-hunit, 
-                       tasty-rerun, 
-                       tasty-ant-xml,
                        process, 
                        text,
                        mtl,
@@ -54,10 +49,6 @@ Executable mist
   build-depends:       base,
                        directory,
                        filepath,
-                       tasty,
-                       tasty-hunit,
-                       tasty-rerun,
-                       tasty-ant-xml,
                        text,
                        mist 
 
