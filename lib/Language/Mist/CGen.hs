@@ -35,10 +35,11 @@ generateConstraints :: Core a -> CGInfo a
 generateConstraints = flip execState mempty . synth []
 
 synth :: [(Id, RPoly a)] -> Core a -> CG a (RPoly a)
-synth _ e@CUnit{}    = pure $ prim e
-synth _ e@CNumber{}  = pure $ prim e
-synth _ e@CBoolean{} = pure $ prim e
-synth _ e@CPrim2{}   = pure $ prim e
+synth _ e@CUnit{}    = pure $ prim e (TCtor (CT "()") [])
+synth _ e@CNumber{}  = pure $ prim e TInt
+synth _ e@CBoolean{} = pure $ prim e TBool
+--- is this right? Shouldn't this be a lookup or something?
+synth _ e@CPrim2{}   = pure $ prim e undefined
 synth γ (CId x _   ) = pure $ single γ x
 
 synth γ (CApp f y _) = do
@@ -69,7 +70,12 @@ synth γ  (CLet b@(AnnBind _ t1 _) e1 e2 _)
     flip (addC γ) t1 >>
     synth (addB b γ) e2
 
-prim _e = undefined
+-- (needs to be refreshed)
+prim :: Core a -> Type -> RPoly a
+prim e t = RForall [] $ RBase vv t expr
+  where l = extractC e
+        vv = Bind "VV" l
+        expr = Prim2 Equal (Id "VV" l) (Unit l) l
   -- need to pass around a fresh variable supply...
   -- RForall [] $ RBase (Bind "" l) TInt (Prim2 Equal
 single _γ _e = undefined

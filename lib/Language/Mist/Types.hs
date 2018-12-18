@@ -31,6 +31,7 @@ module Language.Mist.Types
   , isAnf
   , isVarAnf
   , extract
+  , extractC
 
 
   -- * Smart Constructors
@@ -185,6 +186,23 @@ extract (Tuple _ _ l)   = l
 extract (GetItem _ _ l) = l
 extract (Lam _ _ l)     = l
 extract (Unit  l)       = l
+
+--------------------------------------------------------------------------------
+extractC :: Core a -> a
+--------------------------------------------------------------------------------
+extractC (CNumber _ l)    = l
+extractC (CBoolean _ l)   = l
+extractC (CId _ l)        = l
+extractC (CPrim2 _ _ _ l) = l
+extractC (CIf    _ _ _ l) = l
+extractC (CLet _ _ _ l) = l
+extractC (CApp _ _ l)     = l
+extractC (CTuple _ _ l)   = l
+extractC (CGetItem _ _ l) = l
+extractC (CLam _ _ l)     = l
+extractC (CUnit  l)       = l
+extractC (CTApp _ _ l)    = l
+extractC (CTAbs _ _ l)    = l
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
