@@ -1,12 +1,17 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE FlexibleInstances  #-}
-module Language.Mist.Uniqify where
+module Language.Mist.Uniqify (uniqify, varNum) where
 
 import Control.Monad.State
 import Data.Map.Strict as M
+import Data.List.Split
 import Language.Mist.Types
 
-cREFRESH x n = x ++ "##" ++ show n
+cSEPERATOR = "##"
+
+refreshSep x n = x ++ cSEPERATOR ++ show n
+varNum :: String -> Int
+varNum = read . last . splitOn cSEPERATOR
 
 type Fresh = State (Int, Map String String)
 
@@ -41,7 +46,7 @@ instance Refresh (Expr a) where
 instance Refresh String where
   refresh x = do
       (n, m) <- get
-      let x' = cREFRESH x n
+      let x' = refreshSep x n
       put (n+1, M.insert x x' m)
       pure x'
 
