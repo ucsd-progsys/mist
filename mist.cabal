@@ -17,6 +17,7 @@ Library
                        Language.Mist.Parser,
                        Language.Mist.Checker,
                        Language.Mist.CGen,
+                       Language.Mist.Uniqify,
                        Language.Mist.Normalizer,
                        Language.Mist.Runner
 
