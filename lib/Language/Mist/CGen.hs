@@ -34,7 +34,7 @@ addB (AnnBind x t _) γ = (x, t) : γ
 generateConstraints :: Core a -> CGInfo a
 generateConstraints = flip execState mempty . synth []
 
-synth :: [(Id, RPoly Core a)] -> Core a -> CG a (RPoly Core a)
+synth :: CGEnv a -> Core a -> CG a (RPoly Core a)
 synth _ e@CUnit{}    = pure $ prim e (TCtor (CT "()") [])
 synth _ e@CNumber{}  = pure $ prim e TInt
 synth _ e@CBoolean{} = pure $ prim e TBool
@@ -44,7 +44,9 @@ synth γ (CId x _   ) = pure $ single γ x
 
 synth γ (CApp f y _) = do
   RForall [] (RFun x t t') <- synth γ f
-  addC γ (single γ y) (RForall [] t)
+  -- TODO: Enforce this in the refinement type
+  let CId y' _ = y
+  addC γ (single γ y') (RForall [] t)
   pure $ subst y x t'
 
 synth γ (CTAbs as e _) = do
@@ -78,5 +80,6 @@ prim e t = RForall [] $ RBase vv t expr
         expr = CPrim2 Equal (CId "VV" l) e l
   -- need to pass around a fresh variable supply...
   -- RForall [] $ RBase (Bind "" l) TInt (Prim2 Equal
-single _γ _e = undefined
+single :: CGEnv a -> Id -> RPoly Core a
+single _γ _e = undefined -- HEREHEREHERE
 subst = undefined

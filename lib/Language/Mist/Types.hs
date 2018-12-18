@@ -234,6 +234,9 @@ instance PPrint Bool where
 instance PPrint (Bind a) where
   pprint (Bind x _) = x
 
+instance PPrint (AnnBind a) where
+  pprint (AnnBind x _ _) = x
+
 instance PPrint Field where
   pprint Zero  = "0"
   pprint One   = "1"
@@ -250,6 +253,19 @@ instance PPrint (Expr a) where
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
   pprint (Unit _)        = "skip"
+
+instance PPrint (Core a) where
+  pprint (CNumber n _)    = show n
+  pprint (CBoolean b _)   = pprint b
+  pprint (CId x _)        = x
+  pprint (CPrim2 o l r _) = printf "%s %s %s"                (pprint l)      (pprint o) (pprint r)
+  pprint (CIf    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
+  pprint (CApp e1 e2 _)   = printf "(%s %s)"                 (pprint e1)     (pprint e2)
+  pprint (CTuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
+  pprint (CGetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
+  pprint (CLam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
+  pprint (CUnit _)        = "()"
+  pprint _                = "TODO PPrint Core"
 
 ppMany :: (PPrint a) => Text -> [a] -> Text
 ppMany sep = L.intercalate sep . fmap pprint
