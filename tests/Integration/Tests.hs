@@ -12,9 +12,11 @@ import System.IO
 import Test.Tasty
 import Test.Tasty.HUnit
 
+import Utils
+
 import Language.Mist.Runner
 
-integrationTests = group "Integration tests"
+integrationTests = testGroupM "Integration tests"
   [ testGroup "pos" <$> dirTests "tests/Integration/pos"    ExitSuccess
   , testGroup "neg" <$> dirTests "tests/Integration/neg"    (ExitFailure 1)
   ]
@@ -46,12 +48,6 @@ mkTest code dir file = testCase file $ do
 -- resultExitCode :: Result -> ExitCode
 resultExitCode (Left _)  = ExitFailure 1
 resultExitCode (Right _) = ExitSuccess
-
-----------------------------------------------------------------------------------------
--- Generic Helpers
-----------------------------------------------------------------------------------------
-
-group n xs = testGroup n <$> sequence xs
 
 ----------------------------------------------------------------------------------------
 walkDirectory :: FilePath -> IO [FilePath]

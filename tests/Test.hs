@@ -10,12 +10,13 @@ import Test.Tasty.Runners
 import Test.Tasty.Runners.AntXML
 
 import Integration.Tests
+import Utils
 
 main :: IO ()
 main = runTests
 
 runTests :: IO ()
-runTests = run =<< group "Tests" [integrationTests]
+runTests = run =<< testGroupM "Tests" [integrationTests]
   where
     run = defaultMainWithIngredients [
                 testRunner
@@ -45,9 +46,3 @@ combineReporters (TestReporter opts1 run1) (TestReporter opts2 run2)
       f2 <- run2 opts tree
       return $ \smap -> f1 smap >> f2 smap
 combineReporters _ _ = error "combineReporters needs TestReporters"
-
-----------------------------------------------------------------------------------------
--- Generic Helpers
-----------------------------------------------------------------------------------------
-
-group n xs = testGroup n <$> sequence xs
