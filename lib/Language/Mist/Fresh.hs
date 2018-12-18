@@ -1,6 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances  #-}
 {-# LANGUAGE FlexibleInstances  #-}
-module Language.Mist.Uniqify (uniqify, varNum) where
+module Language.Mist.Fresh (uniqify, varNum) where
 
 import Control.Monad.State
 import Data.Map.Strict as M
