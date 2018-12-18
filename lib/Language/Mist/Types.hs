@@ -31,6 +31,7 @@ module Language.Mist.Types
   , isAnf
   , isVarAnf
   , extract
+  , extractC
 
 
   -- * Smart Constructors
@@ -116,8 +117,8 @@ data Core a
 
 data Sig a
   = Infer
-  | Check  (RPoly a)
-  | Assume (RPoly a)
+  | Check  (RPoly Expr a)
+  | Assume (RPoly Expr a)
     deriving (Show, Functor, Read)
 
 data Field
@@ -133,7 +134,7 @@ data Bind a = Bind
 
 data AnnBind a = AnnBind
   { aBindId :: !Id
-  , aBindType :: !(RPoly a)
+  , aBindType :: !(RPoly Core a)
   , aBindLabel :: a
   }
   deriving (Show, Functor, Read)
@@ -157,10 +158,10 @@ bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
 bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
 
 -- | Constructing `RPoly` from let-binds
-bindsRType :: [AnnBind a] -> RPoly a -> RPoly a
+bindsRType :: [AnnBind a] -> RPoly Core a -> RPoly Core a
 bindsRType bs t = foldr mkPiCB t bs
 
-mkPiCB :: AnnBind a -> RPoly a -> RPoly a
+mkPiCB :: AnnBind a -> RPoly Core a -> RPoly Core a
 mkPiCB (AnnBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
   where RForall [] tmono = t
 
@@ -185,6 +186,23 @@ extract (Tuple _ _ l)   = l
 extract (GetItem _ _ l) = l
 extract (Lam _ _ l)     = l
 extract (Unit  l)       = l
+
+--------------------------------------------------------------------------------
+extractC :: Core a -> a
+--------------------------------------------------------------------------------
+extractC (CNumber _ l)    = l
+extractC (CBoolean _ l)   = l
+extractC (CId _ l)        = l
+extractC (CPrim2 _ _ _ l) = l
+extractC (CIf    _ _ _ l) = l
+extractC (CLet _ _ _ l) = l
+extractC (CApp _ _ l)     = l
+extractC (CTuple _ _ l)   = l
+extractC (CGetItem _ _ l) = l
+extractC (CLam _ _ l)     = l
+extractC (CUnit  l)       = l
+extractC (CTApp _ _ l)    = l
+extractC (CTAbs _ _ l)    = l
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors
@@ -216,6 +234,9 @@ instance PPrint Bool where
 instance PPrint (Bind a) where
   pprint (Bind x _) = x
 
+instance PPrint (AnnBind a) where
+  pprint (AnnBind x _ _) = x
+
 instance PPrint Field where
   pprint Zero  = "0"
   pprint One   = "1"
@@ -232,6 +253,19 @@ instance PPrint (Expr a) where
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
   pprint (Unit _)        = "skip"
+
+instance PPrint (Core a) where
+  pprint (CNumber n _)    = show n
+  pprint (CBoolean b _)   = pprint b
+  pprint (CId x _)        = x
+  pprint (CPrim2 o l r _) = printf "%s %s %s"                (pprint l)      (pprint o) (pprint r)
+  pprint (CIf    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
+  pprint (CApp e1 e2 _)   = printf "(%s %s)"                 (pprint e1)     (pprint e2)
+  pprint (CTuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
+  pprint (CGetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
+  pprint (CLam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
+  pprint (CUnit _)        = "()"
+  pprint _                = "TODO PPrint Core"
 
 ppMany :: (PPrint a) => Text -> [a] -> Text
 ppMany sep = L.intercalate sep . fmap pprint
@@ -254,11 +288,11 @@ nest n     = unlines . map pad . lines
     pad s  = blanks ++ s
     blanks = replicate n ' '
 
-instance PPrint (RPoly a) where
+instance PPrint (e a) => PPrint (RPoly e a) where
   pprint (RForall [] t)  = pprint t
   pprint (RForall tvs t) = printf "forall %s. %s" (ppMany " " tvs) (pprint t)
 
-instance PPrint (RType a) where
+instance PPrint (e a) => PPrint (RType e a) where
   pprint (RBase b t e) =
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
   pprint (RFun b t1 t2) =
@@ -327,8 +361,8 @@ isVar _             = False
 --------------------------------------------------------------------------------
 
 type Bare     = Expr SourceSpan
-type BareType = RType SourceSpan
-type BarePoly = RPoly SourceSpan
+type BareType = RType Expr SourceSpan
+type BarePoly = RPoly Expr SourceSpan
 type BareBind = Bind SourceSpan
 type BareDef  = Def  SourceSpan
 type BareSig  = Sig  SourceSpan
@@ -388,10 +422,10 @@ fromListEnv bs = Env bs n
 -- | This allows us to bind functions as in LH `--higherorder`
 -- |   {f : { v:_ | v < 0 } -> { v:_ | v > 0} | f 0 = 0}
 
-data RType a
-  = RBase !(Bind a) Type !(Expr a)
-  | RFun !(Bind a) !(RType a) !(RType a)
-  | RRTy !(Bind a) !(RType a) !(Expr a)
+data RType e a
+  = RBase !(Bind a) Type !(e a)
+  | RFun !(Bind a) !(RType e a) !(RType e a)
+  | RRTy !(Bind a) !(RType e a) !(e a)
   deriving (Show, Functor, Read)
 
 data Type =  TVar TVar          -- a
@@ -409,12 +443,12 @@ newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 data Poly = Forall [TVar] Type       -- forall a. t
   deriving (Show, Read)
 
-data RPoly a =  RForall [TVar] (RType a) deriving (Show, Functor, Read)
+data RPoly e a =  RForall [TVar] (RType e a) deriving (Show, Functor, Read)
 
-eraseRPoly :: RPoly a -> Poly
+eraseRPoly :: RPoly e a -> Poly
 eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
 
-eraseRType :: RType a -> Type
+eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = [(eraseRType t1)] :=> (eraseRType t2)
 eraseRType (RRTy _ t _) = eraseRType t
