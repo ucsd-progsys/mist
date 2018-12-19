@@ -31,6 +31,61 @@ varNum = read . last . splitOn cSEPARATOR
 -- change this if it's too slow
 createInternalName name number = head (splitOn cSEPARATOR name) ++ cSEPARATOR ++ show number
 
+--------------------------------------------------------------------------------
+-- | Substitutions
+--------------------------------------------------------------------------------
+type Subst e = M.Map Id e
+
+class Subable e a where
+    subst :: Subst e -> a -> a
+
+--- subst values for value-space variables
+instance Subable (Core a) (Core a) where
+  subst su e
+    | M.null su = e
+  subst su e@(CId id _) = fromMaybe e $ M.lookup id su
+
+  subst su (CLam bs body l) =
+    CLam (subst su bs) (subst (foldr M.delete su (aBindId <$> bs)) body) l
+  subst su (CLet bind e1 e2 l) =
+    CLet (subst su bind) (subst su e1) (subst (M.delete (aBindId bind) su) e2) l
+
+  subst _  e@CNumber{} = e
+  subst _  e@CBoolean{} = e
+  subst _  e@CUnit{} = e
+  subst _  e@CPrim{} = e
+  subst su (CPrim2 op e1 e2 l) =
+    CPrim2 op (subst su e1)(subst su e2) l
+  subst su (CIf e1 e2 e3 l) =
+    CIf (subst su e1) (subst su e2) (subst su e3) l
+  subst su (CTuple e1 e2 l) =
+    CTuple (subst su e1)(subst su e2) l
+  subst su (CApp e1 e2 l) =
+    CApp (subst su e1) (subst su e2) l
+  subst su (CTApp e t l) =
+    CTApp (subst su e) t l
+  subst su (CTAbs tvs e l) =
+    CTAbs tvs (subst su e) l
+
+instance Subable (Core a) (AnnBind a) where
+  subst su (AnnBind name t l) = AnnBind name (subst su t) l
+
+instance Subable e a => Subable e [a] where
+    subst su = fmap (subst su)
+
+instance Subable (e a) (e a) => Subable (e a) (RPoly e a) where
+  subst su (RForall tvars r) =
+    RForall tvars (subst su r)
+
+instance Subable (e a) (e a) => Subable (e a) (RType e a) where
+  subst su (RBase bind typ expr) =
+    RBase bind typ (subst (M.delete (bindId bind) su) expr)
+  subst su (RFun bind rtype1 rtype2) =
+    RFun bind (subst su rtype1) (subst (M.delete (bindId bind) su) rtype2)
+  subst su (RRTy bind rtype expr) =
+    RRTy bind (subst su rtype) (subst (M.delete (bindId bind) su) expr)
+
+-- TODO Subst for Exprs and with TVars instead of Ids
 
 --------------------------------------------------------------------------------
 -- | A MonadFresh encompasses the operations for generating fresh, scoped names
