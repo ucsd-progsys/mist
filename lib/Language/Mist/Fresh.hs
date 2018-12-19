@@ -19,7 +19,7 @@ module Language.Mist.Fresh (
 import Control.Monad.State.Strict
 import Control.Monad.Identity (Identity, runIdentity)
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromJust, fromMaybe)
+import Data.Maybe (fromMaybe)
 import Data.List.Split (splitOn)
 
 import Language.Mist.Types
@@ -134,7 +134,7 @@ instance Freshable (Expr a) where
   refresh (Let bind sig e1 e2 l) =
     (Let <$> refresh bind <*> refresh sig <*> refresh e1 <*> refresh e2 <*> pure l)
     <* popId
-  refresh (Id id l) = Id . fromJust <$> lookupId id <*> pure l
+  refresh (Id id l) = Id . fromMaybe id <$> lookupId id <*> pure l
 
   refresh e@Number{} = pure e
   refresh e@Boolean{} = pure e
@@ -157,7 +157,7 @@ instance Freshable (Core a) where
   refresh (CLet bind e1 e2 l) =
     (CLet <$> refresh bind <*> refresh e1 <*> refresh e2 <*> pure l)
     <* popId
-  refresh (CId id l) = CId . fromJust <$> lookupId id <*> pure l
+  refresh (CId id l) = CId . fromMaybe id <$> lookupId id <*> pure l
 
   refresh e@CNumber{} = pure e
   refresh e@CBoolean{} = pure e
