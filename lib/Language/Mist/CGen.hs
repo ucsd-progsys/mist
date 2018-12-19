@@ -5,6 +5,7 @@
 module Language.Mist.CGen ( generateConstraints ) where
 -- TODO: Do we need to run a Uniqify pass before we run this module?
 import           Language.Mist.Types
+import           Language.Mist.Fresh
 import           Control.Monad.State.Strict
 -- import qualified Language.Fixpoint.Types as F
 
@@ -13,12 +14,17 @@ data SubC a = SubC [(Id, RPoly Core a)] (RPoly Core a) (RPoly Core a)
 data CGInfo a = CGInfo { subCs :: [SubC a], fresh :: Int }
   deriving Show
 
-type CG a = State (CGInfo a)
+type CG a = StateT (CGInfo a) Fresh
 type CGEnv a = [(Id, RPoly Core a)]
+
+instance MonadFresh (CG a) where
+  refreshId = lift . refreshId
+  popId     = lift popId
+  lookupId  = lift . lookupId
 
 -- Just for Debugging
 instance (Show a, Show e, Monoid a) => Show (CG a e) where
- show sa = show $ runState sa mempty
+ show sa = show $ runFresh $ runStateT sa mempty
 
 instance Semigroup (CGInfo a) where
   CGInfo a n <> CGInfo b m = CGInfo (a <> b) (n + m)
@@ -32,14 +38,14 @@ addBinds = flip (foldr addB)
 addB (AnnBind x t _) γ = (x, t) : γ
 
 generateConstraints :: Core a -> CGInfo a
-generateConstraints = flip execState mempty . synth []
+generateConstraints = runFresh . flip execStateT mempty . synth []
 
 synth :: CGEnv a -> Core a -> CG a (RPoly Core a)
-synth _ e@CUnit{}    = pure $ prim e (TCtor (CT "()") [])
-synth _ e@CNumber{}  = pure $ prim e TInt
-synth _ e@CBoolean{} = pure $ prim e TBool
+synth _ e@CUnit{}    = prim e (TCtor (CT "()") [])
+synth _ e@CNumber{}  = prim e TInt
+synth _ e@CBoolean{} = prim e TBool
 --- is this right? Shouldn't this be a lookup or something?
-synth _ e@CPrim2{}   = pure $ prim e undefined
+synth _ e@CPrim2{}   = prim e undefined
 synth γ (CId x _   ) = pure $ single γ x
 
 synth γ (CApp f y _) = do
@@ -72,9 +78,8 @@ synth γ  (CLet b@(AnnBind _ t1 _) e1 e2 _)
     flip (addC γ) t1 >>
     synth (addB b γ) e2
 
--- (needs to be refreshed)
-prim :: Core a -> Type -> RPoly Core a
-prim e t = RForall [] $ RBase vv t expr
+prim :: Core a -> Type -> CG a (RPoly Core a)
+prim e t = refresh $ RForall [] $ RBase vv t expr
   where l = extractC e
         vv = Bind "VV" l
         expr = CPrim2 Equal (CId "VV" l) e l

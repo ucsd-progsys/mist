@@ -9,12 +9,15 @@ module Language.Mist.Fresh (
 
      varNum,
 
+     MonadFresh (..),
      FreshT,
      Fresh,
+     runFreshT,
+     runFresh
      ) where
 
-import Control.Monad.State
-import Control.Monad.Identity (Identity)
+import Control.Monad.State.Strict
+import Control.Monad.Identity (Identity, runIdentity)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromJust, fromMaybe)
 import Data.List.Split (splitOn)
@@ -55,10 +58,16 @@ instance Monad m => MonadFresh (FreshT m) where
 
 emptyFreshState :: FreshState
 emptyFreshState = FreshState { nameMap = M.empty, freshInt = 0, ctx = [] }
+
+runFreshT :: Monad m => FreshT m a -> m a
+runFreshT act = evalStateT act emptyFreshState
+
+runFresh :: Fresh a -> a
+runFresh = runIdentity . runFreshT
 --------------------------------------------------------------------------------
 
 uniquify :: Freshable a => a -> a
-uniquify expr = evalState (refresh expr) emptyFreshState
+uniquify = runFresh . refresh
 
 class Freshable a where
   refresh :: MonadFresh m => a -> m a
