@@ -4,7 +4,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Language.Mist.Fresh (
-     uniqify,
+     uniquify,
      refresh,
 
      varNum,
@@ -57,8 +57,8 @@ emptyFreshState :: FreshState
 emptyFreshState = FreshState { nameMap = M.empty, freshInt = 0, ctx = [] }
 --------------------------------------------------------------------------------
 
-uniqify :: Freshable a => a -> a
-uniqify expr = evalState (refresh expr) emptyFreshState
+uniquify :: Freshable a => a -> a
+uniquify expr = evalState (refresh expr) emptyFreshState
 
 class Freshable a where
   refresh :: MonadFresh m => a -> m a
