@@ -4,6 +4,7 @@
 
 module Language.Mist.CGen ( generateConstraints ) where
 -- TODO: Do we need to run a Uniqify pass before we run this module?
+-- Matt: We should uniquify at the beginning and then maintain the unique names property
 import           Language.Mist.Types
 import           Language.Mist.Names
 import           Control.Monad.State.Strict
