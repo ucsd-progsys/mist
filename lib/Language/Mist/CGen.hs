@@ -7,6 +7,7 @@ module Language.Mist.CGen ( generateConstraints ) where
 -- Matt: We should uniquify at the beginning and then maintain the unique names property
 import           Language.Mist.Types
 import           Language.Mist.Names
+import           Language.Mist.Checker (prim2Unpoly)
 import           Control.Monad.State.Strict
 -- import qualified Language.Fixpoint.Types as F
 
@@ -42,18 +43,18 @@ generateConstraints :: Core a -> CGInfo a
 generateConstraints = runFresh . flip execStateT mempty . synth []
 
 synth :: CGEnv a -> Core a -> CG a (RPoly Core a)
-synth _ e@CUnit{}    = prim e (TCtor (CT "()") [])
+synth _ e@CUnit{}    = prim e TUnit
 synth _ e@CNumber{}  = prim e TInt
 synth _ e@CBoolean{} = prim e TBool
 --- is this right? Shouldn't this be a lookup or something?
-synth _ e@CPrim2{}   = prim e undefined
-synth γ (CId x _   ) = pure $ single γ x
+synth _ e@(CPrim2 o _ _ _) = prim e $ prim2Unpoly o
+synth γ (CId x _   ) = single γ x
 
 synth γ (CApp f y _) = do
   RForall [] (RFun x t t') <- synth γ f
   -- TODO: Enforce this in the refinement type
   let CId y' _ = y
-  addC γ (single γ y') (RForall [] t)
+  addC γ <$> single γ y' <*> pure (RForall [] t)
   pure $ subst y x t'
 
 synth γ (CTAbs as e _) = do
@@ -84,8 +85,14 @@ prim e t = refresh $ RForall [] $ RBase vv t expr
   where l = extractC e
         vv = Bind "VV" l
         expr = CPrim2 Equal (CId "VV" l) e l
-  -- need to pass around a fresh variable supply...
-  -- RForall [] $ RBase (Bind "" l) TInt (Prim2 Equal
-single :: CGEnv a -> Id -> RPoly Core a
-single _γ _e = undefined -- HEREHEREHERE
+
+single :: CGEnv a -> Id -> CG a (RPoly Core a)
+single γ x = case lookup x γ of
+  -- TODO: why do we need to refresh this? Just blindly following the paper
+  -- here
+  Just rt@(RForall _ (RBase (Bind v l) _ _))
+   | v == x -> do rt'@(RForall [] (RBase (Bind v' _) _ _)) <- refresh rt
+                  pure $ strengthen (CPrim2 Equal (CId v' l) (CId x l) l) rt'
+  Just rt -> pure rt
+  Nothing -> error $ "Unbound Variable " ++ show x
 subst = undefined

@@ -1,6 +1,7 @@
 {-# LANGUAGE DeriveFunctor        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 
 module Language.Mist.Types
   (
@@ -39,6 +40,7 @@ module Language.Mist.Types
   , bindsExpr
   , defsExpr
   , bindsRType
+  , strengthen
 
   -- * Destructors
   , exprDefs
@@ -80,6 +82,7 @@ data Prim2
   | Less
   | Greater
   | Equal
+  | And
   deriving (Show, Read)
 
 -- | Expr are single expressions
@@ -232,6 +235,7 @@ instance PPrint Prim2 where
   pprint Less    = "<"
   pprint Greater = ">"
   pprint Equal   = "=="
+  pprint And     = "&&"
 
 instance PPrint Bool where
   pprint True  = "True"
@@ -455,6 +459,23 @@ data Poly = Forall [TVar] Type       -- forall a. t
   deriving (Show, Read)
 
 data RPoly e a =  RForall [TVar] (RType e a) deriving (Show, Functor, Read)
+
+class Strengthable e a | a -> e where
+  strengthen :: e -> a -> a
+
+instance Strengthable (Expr a) (Expr a) where
+  strengthen q p = Prim2 And p q (extract p)
+
+instance Strengthable (Core a) (Core a) where
+  strengthen q p = CPrim2 And p q (extractC p)
+
+instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
+  strengthen q (RBase v t p) = RBase v t (strengthen q p)
+  strengthen q (RRTy v t p) = RRTy v t (strengthen q p)
+  strengthen q (RFun v t p) = RFun v (strengthen q t) p
+
+instance Strengthable (e a) (e a) => Strengthable (e a) (RPoly e a) where
+  strengthen q (RForall tvs rt) = RForall tvs $ strengthen q rt
 
 eraseRPoly :: RPoly e a -> Poly
 eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)

@@ -4,6 +4,7 @@
 {-# LANGUAGE TypeSynonymInstances      #-}
 {-# LANGUAGE NoMonomorphismRestriction #-}
 {-# LANGUAGE FlexibleInstances         #-}
+{-# LANGUAGE PatternGuards             #-}
 
 --------------------------------------------------------------------------------
 -- | This module contains the code for Static Checking an `Expr`
@@ -19,6 +20,8 @@ module Language.Mist.Checker
     -- * Error Constructors
   , errUnboundVar
   , errUnboundFun
+
+  , prim2Unpoly
   ) where
 
 
@@ -257,7 +260,12 @@ prim2Poly Minus   = Forall []    ([TInt, TInt] :=> TInt)
 prim2Poly Times   = Forall []    ([TInt, TInt] :=> TInt)
 prim2Poly Less    = Forall []    ([TInt, TInt] :=> TBool)
 prim2Poly Greater = Forall []    ([TInt, TInt] :=> TBool)
+prim2Poly And     = Forall []    ([TBool, TBool] :=> TBool)
 prim2Poly Equal   = Forall ["a"] (["a" , "a" ] :=> TBool)
+
+prim2Unpoly c
+ | Forall [] (_ :=> t) <- prim2Poly c = t
+prim2Unpoly _ = error "prim2Poly on a prim which is not a function"
 
 --------------------------------------------------------------------------------
 unify :: SourceSpan -> Subst -> Type -> Type -> Subst

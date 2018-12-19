@@ -39,6 +39,7 @@ coreToFixpoint (CNumber n _)       = ECon (I n)
 coreToFixpoint (CBoolean True _)   = PTrue
 coreToFixpoint (CBoolean False _)  = PFalse
 coreToFixpoint (CId x _)           = EVar (fromString x)
+coreToFixpoint (CPrim2 And e1 e2 _)= F.PAnd [coreToFixpoint e1, coreToFixpoint e2]
 coreToFixpoint (CPrim2 o e1 e2 _)  =
   case prim2ToFixpoint o of
     Left brel -> PAtom brel (coreToFixpoint e1) (coreToFixpoint e2)
@@ -84,3 +85,4 @@ prim2ToFixpoint M.Times = Right F.Times
 prim2ToFixpoint Less    = Left Lt
 prim2ToFixpoint Greater = Left Gt
 prim2ToFixpoint Equal   = Left Eq
+prim2ToFixpoint _       = error "Internal Error: prim2fp"
