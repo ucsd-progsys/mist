@@ -385,9 +385,11 @@ instance Substitutable Type where
   apply su (ts :=> t)      = apply su ts :=> apply su t
   apply su (TPair t1 t2)   = TPair (apply su t1) (apply su t2)
   apply su (TCtor c ts)    = TCtor c (apply su ts)
+  apply _ TUnit           = TUnit
 
   freeTvars TInt           = []
   freeTvars TBool          = []
+  freeTvars TUnit          = []
   freeTvars (TVar a)       = [a]
   freeTvars (ts :=> t)     = freeTvars ts ++ freeTvars t
   freeTvars (TPair t1 t2)  = freeTvars t1 ++ freeTvars t2
