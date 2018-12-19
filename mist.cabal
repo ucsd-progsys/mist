@@ -18,7 +18,7 @@ Library
                        Language.Mist.Checker,
                        Language.Mist.CGen,
                        Language.Mist.ToFixpoint,
-                       Language.Mist.Fresh,
+                       Language.Mist.Names,
                        Language.Mist.Normalizer,
                        Language.Mist.Runner
 

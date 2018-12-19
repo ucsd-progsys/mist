@@ -3,7 +3,7 @@ module Language.Mist.ToFixpoint ( exprToFixpoint, coreToFixpoint ) where
 import Data.String (fromString)
 
 import Language.Mist.Types     as M
-import Language.Mist.Fresh (varNum)
+import Language.Mist.Names (varNum)
 import Language.Fixpoint.Types as F
 
 exprToFixpoint :: M.Expr a -> F.Expr

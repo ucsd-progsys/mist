@@ -3,7 +3,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Mist.Fresh (
+module Language.Mist.Names (
      uniquify,
      refresh,
 
