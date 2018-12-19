@@ -120,7 +120,7 @@ instance Freshable (Sig a) where
 
 instance Freshable (e a) => Freshable (RPoly e a) where
   refresh (RForall tvars r) =
-    (RForall <$> mapM uniqifyBindingTVar tvars <*> refresh r)
+    (RForall <$> mapM uniquifyBindingTVar tvars <*> refresh r)
     <* popId
 
 instance Freshable (e a) => Freshable (RType e a) where
@@ -135,7 +135,7 @@ instance Freshable (e a) => Freshable (RType e a) where
     <* popId
 
 instance Freshable Type where
-  refresh (TVar tvar) = TVar <$> uniqifyTVar tvar
+  refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
   refresh TInt = pure TInt
   refresh TBool = pure TBool
   refresh (domain :=> codomain) =
@@ -152,8 +152,8 @@ instance Freshable (AnnBind a) where
   refresh (AnnBind name t l) = AnnBind <$> refreshId name <*> refresh t <*> pure l
 
 
-uniqifyBindingTVar :: (MonadFresh m) => TVar -> m TVar
-uniqifyBindingTVar (TV name) = TV <$> refreshId name
+uniquifyBindingTVar :: (MonadFresh m) => TVar -> m TVar
+uniquifyBindingTVar (TV name) = TV <$> refreshId name
 
-uniqifyTVar :: (MonadFresh m) => TVar -> m TVar
-uniqifyTVar (TV name) = TV <$> (fromMaybe name <$> lookupId name)
+uniquifyTVar :: (MonadFresh m) => TVar -> m TVar
+uniquifyTVar (TV name) = TV <$> (fromMaybe name <$> lookupId name)
