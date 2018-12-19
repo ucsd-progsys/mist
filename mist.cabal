@@ -70,3 +70,5 @@ test-suite test
                     tasty-ant-xml,
                     text,
                     mist
+  other-modules:    Utils,
+                    Integration.Tests
