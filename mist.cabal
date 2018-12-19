@@ -17,8 +17,8 @@ Library
                        Language.Mist.Parser,
                        Language.Mist.Checker,
                        Language.Mist.CGen,
-                       Language.Mist.Uniqify,
                        Language.Mist.ToFixpoint,
+                       Language.Mist.Fresh,
                        Language.Mist.Normalizer,
                        Language.Mist.Runner
 
@@ -34,7 +34,7 @@ Library
                        filepath,
                        process, 
                        text,
-                       mtl,
+                       transformers, mtl,
                        split,
                        liquid-fixpoint
 

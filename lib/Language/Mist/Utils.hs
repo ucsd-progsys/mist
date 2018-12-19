@@ -73,6 +73,10 @@ safeHead :: a -> [a] -> a
 safeHead def []    = def
 safeHead _   (x:_) = x
 
+safeTail :: [a] -> [a]
+safeTail [] = []
+safeTail (_:xs) = xs
+
 getRange :: Int -> Int -> [a] -> [a]
 getRange i1 i2
   = take (i2 - i1 + 1)
