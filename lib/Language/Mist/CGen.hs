@@ -59,7 +59,7 @@ synth γ (CTApp e tau _) = do
 
   -- Fake ADT stuff
 synth _γ (CTuple _e1 _e2 _) = undefined
-synth _γ (CGetItem _e1 _e2 _) = undefined
+synth _γ (CPrim _prim _) = undefined
 synth _γ (CIf _b _e1 _e2 _) = undefined
 
 -- "Bidirectional" "portal" that's made redudant by the fact that we insert

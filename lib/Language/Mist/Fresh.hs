@@ -104,8 +104,7 @@ instance Freshable (Core a) where
     CIf <$> refresh e1 <*> refresh e2 <*> refresh e3 <*> pure l
   refresh (CTuple e1 e2 l) =
     CTuple <$> refresh e1 <*> refresh e2 <*> pure l
-  refresh (CGetItem e field l) =
-    CGetItem <$> refresh e <*> pure field <*> pure l
+  refresh e@CPrim{} = pure e
   refresh (CApp e1 e2 l) =
     CApp <$> refresh e1 <*> refresh e2 <*> pure l
   refresh (CTApp e t l) =
@@ -138,6 +137,7 @@ instance Freshable Type where
   refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
   refresh TInt = pure TInt
   refresh TBool = pure TBool
+  refresh TUnit = pure TUnit
   refresh (domain :=> codomain) =
     (:=>) <$> mapM refresh domain <*> refresh codomain
   refresh (TPair t1 t2) =

@@ -23,6 +23,7 @@ module Language.Mist.Types
 
   , AnfExpr,   ImmExpr, AnfCore
   , Core  (..)
+  , Prim (..)
   , AnnBind  (..)
 
   , Field (..)
@@ -107,7 +108,7 @@ data Core a
   | CIf      !(Core a)    !(Core a) !(Core a) a
   | CLet     !(AnnBind a) !(Core a) !(Core a) a
   | CTuple   !(Core a)    !(Core a)           a
-  | CGetItem !(Core a)    !Field              a
+  | CPrim    !Prim                            a
   | CApp     !(Core a)    !(Core a)           a
   | CLam     [AnnBind a]  !(Core a)           a      -- TODO: change to single argument functions
   | CTApp    !(Core a)    !Type               a      -- TODO: should the type instantiation be a Type or an RType?
@@ -119,12 +120,17 @@ data Sig a
   = Infer
   | Check  (RPoly Expr a)
   | Assume (RPoly Expr a)
-    deriving (Show, Functor, Read)
+  deriving (Show, Functor, Read)
 
 data Field
   = Zero
   | One
-    deriving (Show, Read)
+  deriving (Show, Read)
+
+data Prim
+  = Pi0
+  | Pi1
+  deriving (Show, Read)
 
 data Bind a = Bind
   { bindId    :: !Id
@@ -195,10 +201,10 @@ extractC (CBoolean _ l)   = l
 extractC (CId _ l)        = l
 extractC (CPrim2 _ _ _ l) = l
 extractC (CIf    _ _ _ l) = l
-extractC (CLet _ _ _ l) = l
+extractC (CLet _ _ _ l)   = l
 extractC (CApp _ _ l)     = l
 extractC (CTuple _ _ l)   = l
-extractC (CGetItem _ _ l) = l
+extractC (CPrim _ l)   = l
 extractC (CLam _ _ l)     = l
 extractC (CUnit  l)       = l
 extractC (CTApp _ _ l)    = l
@@ -247,7 +253,7 @@ instance PPrint (Expr a) where
   pprint (Id x _)        = x
   pprint (Prim2 o l r _) = printf "%s %s %s"                (pprint l)      (pprint o) (pprint r)
   pprint (If    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
-  pprint e@(Let {})      = printf "(let %s in %s)"          (ppDefs ds)     (pprint e') where (ds, e') = exprDefs e
+  pprint e@Let{}      = printf "(let %s in %s)"          (ppDefs ds)     (pprint e') where (ds, e') = exprDefs e
   pprint (App e1 e2 _)   = printf "(%s %s)"                 (pprint e1)     (pprint e2)
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
@@ -262,10 +268,14 @@ instance PPrint (Core a) where
   pprint (CIf    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
   pprint (CApp e1 e2 _)   = printf "(%s %s)"                 (pprint e1)     (pprint e2)
   pprint (CTuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
-  pprint (CGetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
+  pprint (CPrim prim _)   = printf "%s"                      (pprint prim)
   pprint (CLam xs e _)    = printf "(\\ %s -> %s)"           (ppMany " " xs) (pprint e)
   pprint (CUnit _)        = "()"
   pprint _                = "TODO PPrint Core"
+
+instance PPrint Prim where
+  pprint Pi0              = "π0"
+  pprint Pi1              = "π1"
 
 ppMany :: (PPrint a) => Text -> [a] -> Text
 ppMany sep = L.intercalate sep . fmap pprint
@@ -428,12 +438,13 @@ data RType e a
   | RRTy !(Bind a) !(RType e a) !(e a)
   deriving (Show, Functor, Read)
 
-data Type =  TVar TVar          -- a
-          |  TInt               -- Int
-          |  TBool              -- Bool
-          |  [Type] :=> Type    -- (t1,...,tn) => t2               TODO: make currying the only option
-          |  TPair Type Type    -- (t0, t1)
-          |  TCtor Ctor [Type]  -- Ctor [t1,...,tn]
+data Type = TVar TVar           -- a
+          | TUnit               -- 1
+          | TInt                -- Int
+          | TBool               -- Bool
+          | [Type] :=> Type     -- (t1,...,tn) => t2               TODO: make currying the only option
+          | TPair Type Type     -- (t0, t1)
+          | TCtor Ctor [Type]   -- Ctor [t1,...,tn]
           deriving (Eq, Ord, Show, Read)
 
 newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
@@ -450,7 +461,7 @@ eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
 
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
-eraseRType (RFun _ t1 t2) = [(eraseRType t1)] :=> (eraseRType t2)
+eraseRType (RFun _ t1 t2) = [eraseRType t1] :=> eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 
 instance PPrint Ctor where
@@ -472,6 +483,7 @@ instance IsString Type where
   fromString = TVar . TV
 
 prType            :: Type -> PP.Doc
+prType TUnit        = PP.text "Unit"
 prType (TVar a)     = prTVar a
 prType TInt         = PP.text "Int"
 prType TBool        = PP.text "Bool"

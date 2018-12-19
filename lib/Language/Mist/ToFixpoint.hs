@@ -54,16 +54,18 @@ coreToFixpoint (CTuple e1 e2 _)    =
   EApp (EApp (EVar $ fromString "(,)")
              (coreToFixpoint e1))
        (coreToFixpoint e2)
-coreToFixpoint (CGetItem e Zero _) =
-  EApp (EVar $ fromString "Pi0") (coreToFixpoint e)
-coreToFixpoint (CGetItem e One _)  =
-  EApp (EVar $ fromString "Pi1") (coreToFixpoint e)
+coreToFixpoint (CPrim prim _)      = primToFixpoint prim
 coreToFixpoint (CLam _bs _e2 _)    = error "TODO coreToFixpoint"
 coreToFixpoint (CTApp e tau _)     = ETApp (coreToFixpoint e) (typeToSort tau)
-coreToFixpoint (CTAbs _as e _)      = ETAbs (coreToFixpoint e) (error "TODO coreToFixpoint TVar")
+coreToFixpoint (CTAbs _as e _)     = ETAbs (coreToFixpoint e) (error "TODO coreToFixpoint TVar")
+
+primToFixpoint :: Prim -> F.Expr
+primToFixpoint Pi0 = EVar $ fromString "Pi0"
+primToFixpoint Pi1 = EVar $ fromString "Pi1"
 
 typeToSort :: M.Type -> F.Sort
 typeToSort (TVar (TV t)) = FVar (varNum t)
+typeToSort TUnit = FObj $ fromString "Unit"
 typeToSort TInt = FInt
 typeToSort TBool = undefined
 -- is this backwards?
