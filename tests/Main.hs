@@ -9,14 +9,16 @@ import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.Runners
 import Test.Tasty.Runners.AntXML
 
-import Tests.Integration.Tests
 import Tests.Utils
+
+import Tests.Integration.Tests
+import Tests.Language.Mist.Names
 
 main :: IO ()
 main = runTests
 
 runTests :: IO ()
-runTests = run =<< testGroupM "Tests" [integrationTests]
+runTests = run =<< testGroupM "Tests" [integrationTests, pure unitTests]
   where
     run = defaultMainWithIngredients [
                 testRunner
@@ -24,6 +26,10 @@ runTests = run =<< testGroupM "Tests" [integrationTests]
             --                     , Option (Proxy :: Proxy LiquidOpts)
             --                     , Option (Proxy :: Proxy SmtSolver) ]
               ]
+
+unitTests = testGroup "Unit"
+  [ namesTests
+  ]
 
 testRunner :: Ingredient
 testRunner = rerunningTests
