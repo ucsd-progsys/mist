@@ -83,10 +83,6 @@ instance Subable (Core a) (AnnBind a) where
 instance Subable e a => Subable e [a] where
     subst su = fmap (subst su)
 
-instance Subable (e a) (e a) => Subable (e a) (RPoly e a) where
-  subst su (RForall tvars r) =
-    RForall tvars (subst su r)
-
 instance Subable (e a) (e a) => Subable (e a) (RType e a) where
   subst su (RBase bind typ expr) =
     RBase bind typ (subst (M.delete (bindId bind) su) expr)
@@ -94,6 +90,8 @@ instance Subable (e a) (e a) => Subable (e a) (RType e a) where
     RFun bind (subst su rtype1) (subst (M.delete (bindId bind) su) rtype2)
   subst su (RRTy bind rtype expr) =
     RRTy bind (subst su rtype) (subst (M.delete (bindId bind) su) expr)
+  subst su (RForall tvars r) =
+    RForall tvars (subst su r)
 
 -- TODO Subst for Exprs and with TVars instead of Ids
 
@@ -195,11 +193,6 @@ instance Freshable (Sig a) where
   refresh (Check r) = Check <$> refresh r
   refresh (Assume r) = Assume <$> refresh r
 
-instance Freshable (e a) => Freshable (RPoly e a) where
-  refresh (RForall tvars r) =
-    (RForall <$> mapM uniquifyBindingTVar tvars <*> refresh r)
-    <* popId
-
 instance Freshable (e a) => Freshable (RType e a) where
   refresh (RBase bind typ expr) =
     (RBase <$> refresh bind <*> refresh typ <*> refresh expr)
@@ -210,6 +203,9 @@ instance Freshable (e a) => Freshable (RType e a) where
   refresh (RRTy bind rtype expr) =
     (RRTy <$> refresh bind <*> refresh rtype <*> refresh expr)
     <* popId
+  refresh (RForall tvars r) =
+    (RForall <$> mapM uniquifyBindingTVar tvars <*> refresh r)
+    <* mapM (const popId) tvars
 
 instance Freshable Type where
   refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
@@ -222,6 +218,9 @@ instance Freshable Type where
     TPair <$> refresh t1 <*> refresh t2
   refresh (TCtor c ts) =
     TCtor c <$> mapM refresh ts
+  refresh (TForall tvars t) =
+    TForall <$> mapM uniquifyBindingTVar tvars <*> refresh t
+    <* mapM (const popId) tvars
 
 instance Freshable (Bind a) where
   refresh (Bind name l) = Bind <$> refreshId name <*> pure l

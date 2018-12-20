@@ -77,6 +77,7 @@ typeToSort (t1 :=> t2) = foldr FFunc (typeToSort t2) (typeToSort <$> t1)
 -- with FTyCon right now.
 typeToSort (TPair t1 t2) = FApp (FApp (FTC mapFTyCon) (typeToSort t1)) (typeToSort t2)
 typeToSort (TCtor _ t2) = foldr FApp (FTC mapFTyCon) (typeToSort <$> t2)
+typeToSort (TForall{}) = error "TODO?"
 
 prim2ToFixpoint :: Prim2 -> Either Brel Bop
 prim2ToFixpoint M.Plus  = Right F.Plus

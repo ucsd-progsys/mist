@@ -240,7 +240,7 @@ typeSig
   <|> try (Check  <$> (dcolon     *> scheme))
   <|> pure Infer
 
-scheme :: Parser (BarePoly)
+scheme :: Parser (BareRType)
 scheme
   =  try (RForall    <$> (rWord "forall" *> sepBy tvar comma <* symbol ".") <*> typeRType)
  <|>     (RForall [] <$> typeRType)
@@ -270,18 +270,18 @@ either a parser-assigned one or given explicitly. e.g.
 
 -}
 
-typeRType :: Parser BareType
+typeRType :: Parser BareRType
 typeRType = try rfun <|> unrefined <|> rbase
 
-rfun :: Parser BareType
+rfun :: Parser BareRType
 rfun = do id <- (binder <* colon) <|> freshBinder
           tin <- (unrefined <|> rbase <|> parens typeRType) <* (symbol "->")
           RFun id tin <$> typeRType
 
-unrefined :: Parser BareType
+unrefined :: Parser BareRType
 unrefined = RBase <$> freshBinder <*> baseType <*> pure (Boolean True mempty)
 
-rbase :: Parser BareType
+rbase :: Parser BareRType
 rbase = braces $ RBase
     <$> binder <* colon
     <*> baseType <* suchthat
