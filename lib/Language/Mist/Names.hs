@@ -3,7 +3,6 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Mist.Names
@@ -110,7 +109,8 @@ class Monad m => MonadFresh m where
 data FreshState = FreshState { nameMap :: M.Map Id [Id], freshInt :: Integer, ctx :: [Id] }
 
 newtype FreshT m a = FreshT { unFreshT :: StateT FreshState m a }
-  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadTrans)
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadTrans,
+            MonadError e, MonadReader r, MonadWriter w, MonadFix, MonadFail, MonadIO, MonadCont)
 
 type Fresh = FreshT Identity
 
@@ -240,14 +240,6 @@ uniquifyTVar (TV name) = TV <$> (fromMaybe name <$> lookupId name)
 -------------------------------------------------------------------------------
 -- MonadFresh instances -------------------------------------------------------
 -------------------------------------------------------------------------------
-
-deriving instance MonadError e m => MonadError e (FreshT m)
-deriving instance MonadReader r m => MonadReader r (FreshT m)
-deriving instance MonadWriter w m => MonadWriter w (FreshT m)
-deriving instance MonadFix m => MonadFix (FreshT m)
-deriving instance MonadFail m => MonadFail (FreshT m)
-deriving instance MonadIO m => MonadIO (FreshT m)
-deriving instance MonadCont m => MonadCont (FreshT m)
 
 instance MonadState s m => MonadState s (FreshT m) where
   get = lift get
