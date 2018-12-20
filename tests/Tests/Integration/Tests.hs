@@ -17,8 +17,8 @@ import Tests.Utils
 import Language.Mist.Runner
 
 integrationTests = testGroupM "Integration"
-  [ testGroup "pos" <$> dirTests "tests/Integration/pos"    ExitSuccess
-  , testGroup "neg" <$> dirTests "tests/Integration/neg"    (ExitFailure 1)
+  [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos"    ExitSuccess
+  , testGroup "neg" <$> dirTests "tests/Tests/Integration/neg"    (ExitFailure 1)
   ]
 
 

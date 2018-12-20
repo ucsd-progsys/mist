@@ -59,7 +59,7 @@ test-suite test
   type:             exitcode-stdio-1.0
   hs-source-dirs:   tests
   ghc-options:      -threaded
-  main-is:          Tests/Main.hs
+  main-is:          Main.hs
   build-depends:    base,
                     directory,
                     filepath,
@@ -70,4 +70,5 @@ test-suite test
                     text,
                     mist
   other-modules:    Tests.Utils,
-                    Tests.Integration.Tests
+                    Tests.Integration.Tests,
+                    Tests.Language.Mist.Names
