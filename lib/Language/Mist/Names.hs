@@ -2,28 +2,39 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
-module Language.Mist.Names (
-     uniquify,
-     refresh,
+module Language.Mist.Names
+  ( uniquify
+  , refresh
 
-     varNum,
+  , varNum
 
-     MonadFresh (..),
-     FreshT,
-     Fresh,
-     runFreshT,
-     runFresh
-     ) where
+  , MonadFresh (..)
+  , FreshT
+  , Fresh
+  , evalFreshT
+  , runFresh
+  ) where
 
-import Control.Monad.State.Strict
-import Control.Monad.Identity (Identity, runIdentity)
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe)
 import Data.List.Split (splitOn)
+import Control.Applicative (Alternative)
 
 import Language.Mist.Types
 import Language.Mist.Utils (safeTail)
+
+import Control.Monad.State
+import Control.Monad.Writer
+import Control.Monad.Identity
+import Control.Monad.Except
+import Control.Monad.Reader
+import Control.Monad.Cont
+import Control.Monad.Fail
+
 
 cSEPARATOR = "##"
 varNum :: Id -> Int
@@ -97,28 +108,31 @@ class Monad m => MonadFresh m where
 
 --------------------------------------------------------------------------------
 data FreshState = FreshState { nameMap :: M.Map Id [Id], freshInt :: Integer, ctx :: [Id] }
-type FreshT = StateT FreshState
+
+newtype FreshT m a = FreshT { unFreshT :: StateT FreshState m a }
+  deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadTrans)
+
 type Fresh = FreshT Identity
 
 instance Monad m => MonadFresh (FreshT m) where
   refreshId name = do
-    FreshState m n g <- get
+    FreshState m n g <- FreshT get
     let name' = createInternalName name n
         n' = n + 1
-    put $ FreshState (M.insertWith (++) name [name'] m) n' g
+    FreshT (put $ FreshState (M.insertWith (++) name [name'] m) n' g)
     return name'
-  popId = modify $ \(FreshState m n g) ->
-    FreshState (M.adjust safeTail (head g) m) n (tail g)
-  lookupId name = gets $ fmap head . M.lookup name . nameMap
+  popId = FreshT (modify $ \(FreshState m n g) ->
+    FreshState (M.adjust safeTail (head g) m) n (tail g))
+  lookupId name = FreshT (gets $ fmap head . M.lookup name . nameMap)
 
 emptyFreshState :: FreshState
 emptyFreshState = FreshState { nameMap = M.empty, freshInt = 0, ctx = [] }
 
-runFreshT :: Monad m => FreshT m a -> m a
-runFreshT act = evalStateT act emptyFreshState
+evalFreshT :: Monad m => FreshT m a -> FreshState -> m a
+evalFreshT freshT initialNames = evalStateT (unFreshT freshT) initialNames
 
 runFresh :: Fresh a -> a
-runFresh = runIdentity . runFreshT
+runFresh m = runIdentity $ evalFreshT m emptyFreshState
 --------------------------------------------------------------------------------
 
 uniquify :: Freshable a => a -> a
@@ -221,3 +235,51 @@ uniquifyBindingTVar (TV name) = TV <$> refreshId name
 
 uniquifyTVar :: (MonadFresh m) => TVar -> m TVar
 uniquifyTVar (TV name) = TV <$> (fromMaybe name <$> lookupId name)
+
+
+-------------------------------------------------------------------------------
+-- MonadFresh instances -------------------------------------------------------
+-------------------------------------------------------------------------------
+
+deriving instance MonadError e m => MonadError e (FreshT m)
+deriving instance MonadReader r m => MonadReader r (FreshT m)
+deriving instance MonadWriter w m => MonadWriter w (FreshT m)
+deriving instance MonadFix m => MonadFix (FreshT m)
+deriving instance MonadFail m => MonadFail (FreshT m)
+deriving instance MonadIO m => MonadIO (FreshT m)
+deriving instance MonadCont m => MonadCont (FreshT m)
+
+instance MonadState s m => MonadState s (FreshT m) where
+  get = lift get
+  put = lift . put
+  state = lift . state
+
+instance (Monoid w, MonadFresh m) => MonadFresh (WriterT w m) where
+  refreshId = lift . refreshId
+  popId = lift popId
+  lookupId = lift . lookupId
+
+instance MonadFresh m => MonadFresh (IdentityT m) where
+  refreshId = lift . refreshId
+  popId = lift popId
+  lookupId = lift . lookupId
+
+instance MonadFresh m => MonadFresh (ExceptT e m) where
+  refreshId = lift . refreshId
+  popId = lift popId
+  lookupId = lift . lookupId
+
+instance MonadFresh m => MonadFresh (StateT s m) where
+  refreshId = lift . refreshId
+  popId = lift popId
+  lookupId = lift . lookupId
+
+instance MonadFresh m => MonadFresh (ReaderT r m) where
+  refreshId = lift . refreshId
+  popId = lift popId
+  lookupId = lift . lookupId
+
+instance MonadFresh m => MonadFresh (ContT r m) where
+  refreshId = lift . refreshId
+  popId = lift popId
+  lookupId = lift . lookupId
