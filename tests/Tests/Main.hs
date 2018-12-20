@@ -9,8 +9,8 @@ import Test.Tasty.Ingredients.Rerun
 import Test.Tasty.Runners
 import Test.Tasty.Runners.AntXML
 
-import Integration.Tests
-import Utils
+import Tests.Integration.Tests
+import Tests.Utils
 
 main :: IO ()
 main = runTests

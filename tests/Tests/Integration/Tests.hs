@@ -1,4 +1,4 @@
-module Integration.Tests (integrationTests) where
+module Tests.Integration.Tests (integrationTests) where
 
 import Control.Monad (liftM3)
 import Data.Bool (bool)
@@ -12,7 +12,7 @@ import System.IO
 import Test.Tasty
 import Test.Tasty.HUnit
 
-import Utils
+import Tests.Utils
 
 import Language.Mist.Runner
 

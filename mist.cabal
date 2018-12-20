@@ -52,15 +52,14 @@ Executable mist
   build-depends:       base,
                        directory,
                        filepath,
-                       text,
-                       mist 
+                       text, mist 
 
 test-suite test
   default-language: Haskell98
   type:             exitcode-stdio-1.0
   hs-source-dirs:   tests
   ghc-options:      -threaded
-  main-is:          Test.hs
+  main-is:          Tests/Main.hs
   build-depends:    base,
                     directory,
                     filepath,
@@ -70,5 +69,5 @@ test-suite test
                     tasty-ant-xml,
                     text,
                     mist
-  other-modules:    Utils,
-                    Integration.Tests
+  other-modules:    Tests.Utils,
+                    Tests.Integration.Tests
