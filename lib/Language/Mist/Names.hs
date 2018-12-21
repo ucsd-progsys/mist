@@ -16,6 +16,9 @@ module Language.Mist.Names
   , Fresh
   , evalFreshT
   , runFresh
+
+  , Subable (..)
+  , subst1
   ) where
 
 import qualified Data.Map.Strict as M
@@ -46,8 +49,10 @@ createInternalName name number = head (splitOn cSEPARATOR name) ++ cSEPARATOR ++
 --------------------------------------------------------------------------------
 type Subst e = M.Map Id e
 
+subst1 ex x e = subst (M.insert x ex M.empty) e
+
 class Subable e a where
-    subst :: Subst e -> a -> a
+  subst :: Subst e -> a -> a
 
 --- subst values for value-space variables
 instance Subable (Core a) (Core a) where
@@ -81,7 +86,7 @@ instance Subable (Core a) (AnnBind a) where
   subst su (AnnBind name t l) = AnnBind name (subst su t) l
 
 instance Subable e a => Subable e [a] where
-    subst su = fmap (subst su)
+  subst su = fmap (subst su)
 
 instance Subable (e a) (e a) => Subable (e a) (RType e a) where
   subst su (RBase bind typ expr) =
@@ -93,7 +98,51 @@ instance Subable (e a) (e a) => Subable (e a) (RType e a) where
   subst su (RForall tvars r) =
     RForall tvars (subst su r)
 
--- TODO Subst for Exprs and with TVars instead of Ids
+--- subst types for tyvars
+instance Subable Type Type where
+  subst su t@(TVar (TV a)) = fromMaybe t $ M.lookup a su
+
+  subst _ TUnit = TUnit
+  subst _ TInt  = TInt
+  subst _ TBool = TBool
+
+  subst su (t1 :=> t2) = subst su t1 :=> subst su t2
+  subst su (TPair t1 t2) = TPair (subst su t1) (subst su t2)
+  subst su (TCtor c t2) = TCtor c (subst su t2)
+
+instance Subable Type (Core a) where
+  subst su e
+    | M.null su = e
+
+  subst su (CTApp e t l) =
+    CTApp (subst su e) (subst su t) l
+  subst su (CTAbs tvs e l) =
+    CTAbs tvs (subst (foldr M.delete su (unTV <$> tvs)) e) l
+  subst su (CLet bind e1 e2 l) =
+    CLet (subst su bind) (subst su e1) (subst su e2) l
+  subst su (CLam bs body l) =
+    CLam (subst su bs) (subst su body) l
+
+  subst _ e = e
+
+instance Subable Type (AnnBind a) where
+  subst su (AnnBind name t l) = AnnBind name (subst su t) l
+
+instance Subable Type (e a) => Subable Type (RPoly e a) where
+  subst su (RForall tvars r) =
+    RForall tvars (subst (foldr M.delete su (unTV <$> tvars)) r)
+
+unTV (TV t) = t
+
+instance Subable Type (e a) => Subable Type (RType e a) where
+  subst su (RBase bind typ p) =
+    RBase bind (subst su typ) p
+  subst su (RFun bind rtype1 rtype2) =
+    RFun bind (subst su rtype1) (subst su rtype2)
+  subst su (RRTy bind rtype expr) =
+    RRTy bind (subst su rtype) (subst su expr)
+
+-- TODO Subst for Exprs
 
 --------------------------------------------------------------------------------
 -- | A MonadFresh encompasses the operations for generating fresh, scoped names
