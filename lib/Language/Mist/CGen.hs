@@ -29,12 +29,12 @@ instance (Show a, Show e, Monoid a) => Show (CG a e) where
  show sa = show $ runFresh $ runStateT sa mempty
 
 instance Semigroup (CGInfo a) where
-  CGInfo a n <> CGInfo b m = CGInfo (a <> b) (n + m)
+  CGInfo a <> CGInfo b = CGInfo (a <> b)
 instance Monoid (CGInfo a) where
-  mempty = CGInfo mempty 0
+  mempty = CGInfo mempty
 
 addC :: CGEnv a -> RType Core a -> RType Core a -> CG a ()
-addC γ t t' = modify $ \(CGInfo scs n) -> CGInfo (SubC γ t t':scs) n
+addC γ t t' = modify $ \(CGInfo scs) -> CGInfo (SubC γ t t':scs)
 
 addBinds :: [AnnBind a] -> CGEnv a -> CGEnv a
 addBinds = flip (foldr addB)
