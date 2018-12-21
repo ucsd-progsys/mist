@@ -55,15 +55,15 @@ synth γ (CApp f y _) = do
   -- TODO: Enforce this in the refinement type
   let CId y' _ = y
   addC γ <$> single γ y' <*> pure (RForall [] t)
-  pure $ subst y x t'
+  pure $ RForall [] $ subst1 y (bindId x) t'
 
 synth γ (CTAbs as e _) = do
   RForall as' t <- synth γ e
   pure $ RForall (as' ++ as) t
 
 synth γ (CTApp e tau _) = do
-  RForall (a : as) t <- synth γ e
-  pure $ RForall as $ subst tau a t
+  RForall (TV a : as) t <- synth γ e
+  pure $ RForall as $ subst1 tau a t
 
   -- Fake ADT stuff
 synth _γ (CTuple _e1 _e2 _) = undefined
@@ -95,4 +95,3 @@ single γ x = case lookup x γ of
                   pure $ strengthen (CPrim2 Equal (CId v' l) (CId x l) l) rt'
   Just rt -> pure rt
   Nothing -> error $ "Unbound Variable " ++ show x
-subst = undefined
