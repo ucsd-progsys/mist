@@ -232,7 +232,7 @@ lamExpr = withSpan' $ do
   -- xs    <- parens (sepBy binder comma) <* symbol "->"
   xs    <- sepBy binder sc <* symbol "->"
   e     <- expr
-  return (Lam xs e)
+  return (\span -> (foldr (\x e -> Lam x e span) e xs))
 
 typeSig :: Parser BareSig
 typeSig
@@ -240,10 +240,16 @@ typeSig
   <|> try (Check  <$> (dcolon     *> scheme))
   <|> pure Infer
 
-scheme :: Parser (BareRType)
+scheme :: Parser BareRType
 scheme
-  =  try (RForall    <$> (rWord "forall" *> sepBy tvar comma <* symbol ".") <*> typeRType)
- <|>     (RForall [] <$> typeRType)
+  =  try schemeForall
+ <|>     typeRType
+
+schemeForall :: Parser BareRType
+schemeForall = do
+  tvars <- rWord "forall" *> sepBy tvar comma <* symbol "."
+  bodyType <- typeRType
+  pure $ foldr (\tvar t -> RForall tvar t) bodyType tvars
 
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
@@ -296,10 +302,10 @@ baseType
  <|> ctorType
 
 mkArrow :: [Type] -> Type
-mkArrow ts = case L.reverse ts of
-               [t]   -> t
-               t:ts' -> L.reverse ts' :=> t
-               _     -> error "impossible: mkArrow"
+mkArrow [t] = t
+mkArrow (_:_) = foldr (:=>) t ts'
+  where t:ts' = L.reverse ts'
+mkArrow _  = error "impossible: mkArrow"
 
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier

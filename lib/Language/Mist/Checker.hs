@@ -46,26 +46,16 @@ wellFormed = go emptyEnv
     go vEnv (Prim2 _ e1 e2 _) = gos vEnv [e1, e2]
     go vEnv (If   e1 e2 e3 _) = gos vEnv [e1, e2, e3]
     go vEnv (Let x _ e1 e2 _) = duplicateBindErrors vEnv x
-                             ++ go vEnv e1
-                             ++ go (addEnv x vEnv) e2
+                                ++ go vEnv e1
+                                ++ go (addEnv x vEnv) e2
     go vEnv (Tuple e1 e2   _) = gos vEnv [e1, e2]
     go vEnv (GetItem e1 _ _)  = go  vEnv e1
     go vEnv (App e1 e2     _) = gos vEnv [e1, e2]
-    go vEnv (Lam xs e      _) = duplicateParamErrors xs
-                             ++ go (addsEnv xs vEnv) e
-
-addsEnv :: [BareBind] -> Env -> Env
-addsEnv xs env = L.foldl' (flip addEnv) env xs
+    go vEnv (Lam x e      _)  = go (addEnv x vEnv) e
 
 --------------------------------------------------------------------------------
 -- | Error Checkers: In each case, return an empty list if no errors.
 --------------------------------------------------------------------------------
-duplicateParamErrors :: [BareBind] -> [UserError]
-duplicateParamErrors xs
-  = map (errDupParam . head)
-  . dupBy bindId
-  $ xs
-
 duplicateBindErrors :: Env -> BareBind -> [UserError]
 duplicateBindErrors vEnv x
   = condError (memberEnv (bindId x) vEnv) (errDupBind x)
@@ -89,7 +79,6 @@ condError :: Bool -> UserError -> [UserError]
 condError True  e = [e]
 condError False _ = []
 
-errDupParam     x  = mkError (printf "Duplicate parameter '%s'" (bindId x)) (sourceSpan x)
 errDupBind      x  = mkError (printf "Shadow binding '%s'" (bindId x))      (sourceSpan x)
 errLargeNum   l n  = mkError (printf "Number '%d' is too large" n) l
 errUnboundVar l x  = mkError (printf "Unbound variable '%s'" x) l
@@ -152,10 +141,10 @@ ti env su (Lam xs e l)     = tiFun sp env xs e su' Nothing tXs tOut
 -}
 
 {- starter -}
-ti env su (Lam xs body l)  = (su3, apply su3 (tXs :=> tOut))
+ti env su (Lam x body l)   = (su3, apply su3 (tX :=> tOut))
   where
-    (su1, tXs :=> tOut)    = freshFun su (length xs)
-    env'                   = extTypesEnv env (zip xs tXs)
+    (su1, tX :=> tOut)     = freshFun su
+    env'                   = extTypesEnv env [(x, tX)]
     (su2, tBody)           = ti env' su1 body
     su3                    = unify sp su2 tBody (apply su2 tOut)
     sp                     = sourceSpan l
@@ -200,21 +189,19 @@ ti env su e@(Let x _ e1 e2 _) = traceShow False (pprint e) $ ti env'' su1 e2    
 -- DEAD CODE
 ti _ su (Unit _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (extract e))
 
-freshFun :: Subst -> Int -> (Subst, Type)
-freshFun su arity    = (su', tXs :=> tOut)
+freshFun :: Subst -> (Subst, Type)
+freshFun su = (su', tX :=> tOut)
   where
-    (su' , tOut:tXs) = freshTVars su (1 + arity)
+    (su' , [tOut, tX]) = freshTVars su 2
 
 eqPoly  :: Type -> Type -> Bool
-eqPoly (TForall as s) (TForall bs t)
-  | length as == length bs = apply su s == t
-  | otherwise              = False
+eqPoly (TForall a s) (TForall b t) = apply su s == t
   where
-    su                     = mkSubst [(a, TVar b) | (a, b) <- zip as bs]
-eqPoly _ _ = error "TODO?"
+    su                     = mkSubst [(a, TVar b)]
+eqPoly s t = s == t
 
 extTypesEnv :: TypeEnv -> [(Bind a, Type)] -> TypeEnv
-extTypesEnv = foldr (\(x, t) -> extTypeEnv (bindId x) (TForall [] t))
+extTypesEnv = foldr (\(x, t) -> extTypeEnv (bindId x) t)
 
 -----------------------------------------------------------------------------------------------
 instApp :: (Located a) => SourceSpan -> TypeEnv -> Subst -> Type -> [Expr a] -> (Subst, Type)
@@ -230,39 +217,40 @@ tiApp sp su env tF eIns   = (su''', apply su''' tOut)
   where
     (su' , tIns)          = L.mapAccumL (ti env) su eIns
     (su'', tOut)          = freshTVar su'
-    su'''                 = unify sp su'' tF (tIns :=> tOut)
+    su'''                 = unify sp su'' tF (foldr (:=>) tOut tIns)
 
 -- HIDE
 tupPoly, ifPoly :: Type
-tupPoly  = TForall ["a", "b"] (["a", "b"] :=> TPair "a" "b")
-ifPoly   = TForall ["a"]      ([TBool, "a", "a"] :=> "a")
+tupPoly  = TForall "a" (TForall "b" ("a" :=> ("b" :=> TPair "a" "b")))
+ifPoly   = TForall "a" (TBool :=>  ("a" :=> ("a" :=> "a")))
 
 -- HIDE
 fieldPoly :: Field -> Type
-fieldPoly Zero = TForall ["a", "b"] ([TPair "a" "b"] :=> "a")
-fieldPoly One  = TForall ["a", "b"] ([TPair "a" "b"] :=> "b")
+fieldPoly Zero = TForall "a" (TForall "b" (TPair "a" "b" :=> "a"))
+fieldPoly One  = TForall "a" (TForall "b" (TPair "a" "b" :=> "b"))
 
 -- HIDE
 prim2Poly :: Prim2 -> Type
-prim2Poly Plus    = TForall []    ([TInt, TInt] :=> TInt)
-prim2Poly Minus   = TForall []    ([TInt, TInt] :=> TInt)
-prim2Poly Times   = TForall []    ([TInt, TInt] :=> TInt)
-prim2Poly Less    = TForall []    ([TInt, TInt] :=> TBool)
-prim2Poly Greater = TForall []    ([TInt, TInt] :=> TBool)
-prim2Poly And     = TForall []    ([TBool, TBool] :=> TBool)
-prim2Poly Equal   = TForall ["a"] (["a" , "a" ] :=> TBool)
+prim2Poly Plus    = TInt :=> (TInt :=> TInt)
+prim2Poly Minus   = TInt :=> (TInt :=> TInt)
+prim2Poly Times   = TInt :=> (TInt :=> TInt)
+prim2Poly Less    = TInt :=> (TInt :=> TBool)
+prim2Poly Greater = TInt :=> (TInt :=> TBool)
+prim2Poly And     = TBool :=> (TBool :=> TBool)
+prim2Poly Equal   = TForall "a" ("a" :=> ("a" :=> TBool))
 
-prim2Unpoly c
- | TForall [] (_ :=> t) <- prim2Poly c = t
-prim2Unpoly _ = error "prim2Poly on a prim which is not a function"
+prim2Unpoly c = go $ prim2Poly c
+  where
+    go (TForall _ t) = go t
+    go (_ :=> (_ :=> t)) = t
+    go _ = error "prim2Poly on a prim which is not a binary function"
 
 --------------------------------------------------------------------------------
 unify :: SourceSpan -> Subst -> Type -> Type -> Subst
 --------------------------------------------------------------------------------
-unify sp su (ls :=> r) (ls' :=> r')
-  | length ls == length ls'           = s2
+unify sp su (l :=> r) (l' :=> r') = s2
   where
-    s1                                = unifys sp su ls ls'
+    s1                                = unify sp su l l'
     s2                                = unify sp s1 (apply s1 r) (apply s1 r')
 
 -- HIDE
@@ -303,7 +291,7 @@ varAsgn sp su a t
 --------------------------------------------------------------------------------
 generalize :: TypeEnv -> Type -> Type
 --------------------------------------------------------------------------------
-generalize env t = TForall as t
+generalize env t = (foldr TForall t as)
   where
     as           = L.nub (tvs L.\\ evs)
     tvs          = freeTvars t
@@ -312,11 +300,11 @@ generalize env t = TForall as t
 --------------------------------------------------------------------------------
 instantiate :: Subst -> Type -> (Subst, Type)
 --------------------------------------------------------------------------------
-instantiate su (TForall as t) = (su', apply suInst t)
+instantiate su (TForall a t) = (su', apply suInst t)
   where
-    (su', as')               = freshTVars su (length as)
-    suInst                   = mkSubst (zip as as')
-instantiate _ _ = error "TODO?"
+    (su', a')                = freshTVar su
+    suInst                   = mkSubst [(a, a')]
+instantiate su t = (su, t)
 
 --------------------------------------------------------------------------------
 -- | Environments --------------------------------------------------------------
@@ -384,7 +372,7 @@ instance Substitutable Type where
   apply su (TPair t1 t2)   = TPair (apply su t1) (apply su t2)
   apply su (TCtor c ts)    = TCtor c (apply su ts)
   apply _ TUnit            = TUnit
-  apply s (TForall as t)   = TForall as $ apply (unSubst as s)  t
+  apply s (TForall a t)    = TForall a $ apply (unSubst [a] s)  t
 
   freeTvars TInt           = []
   freeTvars TBool          = []
@@ -393,7 +381,7 @@ instance Substitutable Type where
   freeTvars (ts :=> t)     = freeTvars ts ++ freeTvars t
   freeTvars (TPair t1 t2)  = freeTvars t1 ++ freeTvars t2
   freeTvars (TCtor _ ts)   = freeTvars ts
-  freeTvars (TForall as t) = freeTvars t L.\\ as
+  freeTvars (TForall a t)  = freeTvars t L.\\ [a]
 
 instance (Functor t, Foldable t, Substitutable a) => Substitutable (t a) where
   apply     = fmap . apply

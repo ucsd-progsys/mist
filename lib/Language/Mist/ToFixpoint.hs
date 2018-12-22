@@ -70,7 +70,7 @@ typeToSort TUnit = FObj $ fromString "Unit"
 typeToSort TInt = FInt
 typeToSort TBool = undefined
 -- is this backwards?
-typeToSort (t1 :=> t2) = foldr FFunc (typeToSort t2) (typeToSort <$> t1)
+typeToSort (t1 :=> t2) = FFunc (typeToSort t1) (typeToSort t2)
 -- We can't actually build arbitary TyCons in FP, so for now we just use
 -- the constructor for Map for everything. Later we should make this work
 -- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
