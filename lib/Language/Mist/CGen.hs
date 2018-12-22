@@ -11,13 +11,13 @@ import           Language.Mist.Checker (prim2Unpoly)
 import           Control.Monad.State.Strict
 -- import qualified Language.Fixpoint.Types as F
 
-data SubC a = SubC [(Id, RPoly Core a)] (RPoly Core a) (RPoly Core a)
+data SubC a = SubC [(Id, RType Core a)] (RType Core a) (RType Core a)
   deriving Show
 data CGInfo a = CGInfo { subCs :: [SubC a], fresh :: Int }
   deriving Show
 
 type CG a = StateT (CGInfo a) Fresh
-type CGEnv a = [(Id, RPoly Core a)]
+type CGEnv a = [(Id, RType Core a)]
 
 instance MonadFresh (CG a) where
   refreshId = lift . refreshId
@@ -33,16 +33,19 @@ instance Semigroup (CGInfo a) where
 instance Monoid (CGInfo a) where
   mempty = CGInfo mempty 0
 
-addC :: CGEnv a -> RPoly Core a -> RPoly Core a -> CG a ()
-addC γ t t' = modify $ \(CGInfo scs n) -> CGInfo ((SubC γ t t'):scs) n
+addC :: CGEnv a -> RType Core a -> RType Core a -> CG a ()
+addC γ t t' = modify $ \(CGInfo scs n) -> CGInfo (SubC γ t t':scs) n
 
+addBinds :: [AnnBind a] -> CGEnv a -> CGEnv a
 addBinds = flip (foldr addB)
+
+addB :: AnnBind a -> CGEnv a -> CGEnv a
 addB (AnnBind x t _) γ = (x, t) : γ
 
 generateConstraints :: Core a -> CGInfo a
 generateConstraints = runFresh . flip execStateT mempty . synth []
 
-synth :: CGEnv a -> Core a -> CG a (RPoly Core a)
+synth :: CGEnv a -> Core a -> CG a (RType Core a)
 synth _ e@CUnit{}    = prim e TUnit
 synth _ e@CNumber{}  = prim e TInt
 synth _ e@CBoolean{} = prim e TBool
@@ -80,13 +83,13 @@ synth γ  (CLet b@(AnnBind _ t1 _) e1 e2 _)
     flip (addC γ) t1 >>
     synth (addB b γ) e2
 
-prim :: Core a -> Type -> CG a (RPoly Core a)
+prim :: Core a -> Type -> CG a (RType Core a)
 prim e t = refresh $ RForall [] $ RBase vv t expr
   where l = extractC e
         vv = Bind "VV" l
         expr = CPrim2 Equal (CId "VV" l) e l
 
-single :: CGEnv a -> Id -> CG a (RPoly Core a)
+single :: CGEnv a -> Id -> CG a (RType Core a)
 single γ x = case lookup x γ of
   -- TODO: why do we need to refresh this? Just blindly following the paper
   -- here

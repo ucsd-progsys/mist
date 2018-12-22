@@ -11,16 +11,16 @@ module Language.Mist.Types
   -- * Aliases for various identifiers
   , Id
 
-  -- * Types and Polys
-  , Sig (..), Type (..), Poly (..), TVar (..), Ctor (..)
-  , RType (..), RPoly (..)
+  -- * Types and Types
+  , Sig (..), Type (..), TVar (..), Ctor (..)
+  , RType (..)
 
   -- * Abstract syntax of Mist
   , Expr  (..)
   , Bind  (..)
   , Def
 
-  , BareBind, BareType, BarePoly, Bare, BareDef, BareSig
+  , BareBind, BareRType, Bare, BareDef, BareSig
 
   , AnfExpr,   ImmExpr, AnfCore
   , Core  (..)
@@ -45,7 +45,6 @@ module Language.Mist.Types
   -- * Destructors
   , exprDefs
 
-  , eraseRPoly
   , eraseRType
 
     -- * Environments
@@ -121,8 +120,8 @@ data Core a
 
 data Sig a
   = Infer
-  | Check  (RPoly Expr a)
-  | Assume (RPoly Expr a)
+  | Check  (RType Expr a)
+  | Assume (RType Expr a)
   deriving (Show, Functor, Read)
 
 data Field
@@ -143,7 +142,7 @@ data Bind a = Bind
 
 data AnnBind a = AnnBind
   { aBindId :: !Id
-  , aBindType :: !(RPoly Core a)
+  , aBindType :: !(RType Core a)
   , aBindLabel :: a
   }
   deriving (Show, Functor, Read)
@@ -166,13 +165,14 @@ defsExpr bs@((b,_,_):_)   = go (bindLabel b) bs
 bindsExpr :: [(Bind a, Expr a)] -> Expr a -> a -> Expr a
 bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
 
--- | Constructing `RPoly` from let-binds
-bindsRType :: [AnnBind a] -> RPoly Core a -> RPoly Core a
+-- | Constructing `RForall` from let-binds
+bindsRType :: [AnnBind a] -> RType Core a -> RType Core a
 bindsRType bs t = foldr mkPiCB t bs
 
-mkPiCB :: AnnBind a -> RPoly Core a -> RPoly Core a
+mkPiCB :: AnnBind a -> RType Core a -> RType Core a
 mkPiCB (AnnBind x t l) (RForall as t') = RForall as (RFun (Bind x l) tmono t')
   where RForall [] tmono = t
+mkPiCB _ _ = error "TODO?"
 
 -- | Destructing `Expr` into let-binds
 exprDefs :: Expr a -> ([Def a], Expr a)
@@ -302,10 +302,6 @@ nest n     = unlines . map pad . lines
     pad s  = blanks ++ s
     blanks = replicate n ' '
 
-instance PPrint (e a) => PPrint (RPoly e a) where
-  pprint (RForall [] t)  = pprint t
-  pprint (RForall tvs t) = printf "forall %s. %s" (ppMany " " tvs) (pprint t)
-
 instance PPrint (e a) => PPrint (RType e a) where
   pprint (RBase b t e) =
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
@@ -313,6 +309,8 @@ instance PPrint (e a) => PPrint (RType e a) where
     printf "%s:%s -> %s" (pprint b) (pprint t1) (pprint t2)
   pprint (RRTy b t e) =
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
+  pprint (RForall [] t)  = pprint t
+  pprint (RForall tvs t) = printf "forall %s. %s" (ppMany " " tvs) (pprint t)
 
 --------------------------------------------------------------------------------
 -- | `isAnf e` is True if `e` is an A-Normal Form
@@ -375,8 +373,7 @@ isVar _             = False
 --------------------------------------------------------------------------------
 
 type Bare     = Expr SourceSpan
-type BareType = RType Expr SourceSpan
-type BarePoly = RPoly Expr SourceSpan
+type BareRType = RType Expr SourceSpan
 type BareBind = Bind SourceSpan
 type BareDef  = Def  SourceSpan
 type BareSig  = Sig  SourceSpan
@@ -440,6 +437,7 @@ data RType e a
   = RBase !(Bind a) Type !(e a)
   | RFun !(Bind a) !(RType e a) !(RType e a)
   | RRTy !(Bind a) !(RType e a) !(e a)
+  | RForall [TVar] !(RType e a)
   deriving (Show, Functor, Read)
 
 data Type = TVar TVar           -- a
@@ -449,16 +447,12 @@ data Type = TVar TVar           -- a
           | [Type] :=> Type     -- (t1,...,tn) => t2               TODO: make currying the only option
           | TPair Type Type     -- (t0, t1)
           | TCtor Ctor [Type]   -- Ctor [t1,...,tn]
+          | TForall [TVar] Type -- ∀a.t
           deriving (Eq, Ord, Show, Read)
 
 newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
-
-data Poly = Forall [TVar] Type       -- forall a. t
-  deriving (Show, Read)
-
-data RPoly e a =  RForall [TVar] (RType e a) deriving (Show, Functor, Read)
 
 class Strengthable e a | a -> e where
   strengthen :: e -> a -> a
@@ -473,17 +467,13 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
   strengthen q (RBase v t p) = RBase v t (strengthen q p)
   strengthen q (RRTy v t p) = RRTy v t (strengthen q p)
   strengthen q (RFun v t p) = RFun v (strengthen q t) p
-
-instance Strengthable (e a) (e a) => Strengthable (e a) (RPoly e a) where
   strengthen q (RForall tvs rt) = RForall tvs $ strengthen q rt
-
-eraseRPoly :: RPoly e a -> Poly
-eraseRPoly (RForall alphas t) = Forall alphas (eraseRType t)
 
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = [eraseRType t1] :=> eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
+eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor
@@ -493,9 +483,6 @@ instance PPrint TVar where
 
 instance PPrint Type where
   pprint = PP.render . prType
-
-instance PPrint Poly where
-  pprint = PP.render . prPoly
 
 instance IsString TVar where
   fromString = TV
@@ -511,6 +498,10 @@ prType TBool        = PP.text "Bool"
 prType (ts :=> t)   = PP.parens (prTypes ts) PP.<+> PP.text "=>" PP.<+> prType t
 prType (TPair t s)  = PP.parens $ prType t PP.<> PP.text "," PP.<+> prType s
 prType (TCtor c ts) = prCtor c PP.<> PP.brackets (prTypes ts)
+prType (TForall [] t)  = prType t
+prType (TForall as t)  = PP.text "Forall" PP.<+>
+                          PP.hcat (PP.punctuate PP.comma (map prTVar as))
+                          PP.<> PP.text "." PP.<+> prType t
 
 prTypes           :: [Type] -> PP.Doc
 prTypes ts         = PP.hsep $ PP.punctuate PP.comma (prType <$> ts)
@@ -521,9 +512,3 @@ prCtor (CT c) = PP.text c
 
 prTVar :: TVar -> PP.Doc
 prTVar (TV a) = PP.text a
-
-prPoly                ::  Poly -> PP.Doc
-prPoly (Forall [] t)  = prType t
-prPoly (Forall as t)  = PP.text "Forall" PP.<+>
-                          PP.hcat (PP.punctuate PP.comma (map prTVar as))
-                          PP.<> PP.text "." PP.<+> prType t

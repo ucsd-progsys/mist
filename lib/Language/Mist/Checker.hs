@@ -11,12 +11,10 @@
 --------------------------------------------------------------------------------
 module Language.Mist.Checker
   ( -- * Top-level Static Checker
-    wellFormed 
+    wellFormed
   , typeCheck
 
     -- * add type annoations
-  , ann
-
     -- * Error Constructors
   , errUnboundVar
   , errUnboundFun
@@ -100,21 +98,11 @@ errUnify l t1 t2   = mkError (printf "Type error: cannot unify %s and %s" (show 
 errMismatch l s s' = mkError (printf "Type error: mismatched function signature: specified %s but inferred %s" (show s) (show s')) l
 errOccurs l a t    = mkError (printf "Type error: occurs check fails: %s occurs in %s" (show a) (show t)) l
 
-
 --------------------------------------------------------------------------------
--- | Elaborates a surface Expr to a Core expression
--- | - adds type annotations
--- | - adds explicit type application
--- | - adds explicit type abstraction
+typeCheck :: (Located a) => Expr a -> Type
 --------------------------------------------------------------------------------
-ann :: Expr a -> Core (Poly, a)
-ann = undefined
-
---------------------------------------------------------------------------------
-typeCheck :: (Located a) => Expr a -> Type 
---------------------------------------------------------------------------------
-typeCheck = typeInfer env0 
-  where  
+typeCheck = typeInfer env0
+  where
     env0  = TypeEnv M.empty
 
 _showType :: Expr a -> Type -> IO ()
@@ -149,7 +137,7 @@ ti env su (GetItem e f l)  = instApp (sourceSpan l) env su (fieldPoly f) [e]
 ti env su (Let x (Assume s) _ e _)
                            = traceShow False (pprint x) $ ti env' su e
   where
-    env'                   = extTypeEnv (bindId x) (eraseRPoly s) env
+    env'                   = extTypeEnv (bindId x) (eraseRType s) env
 
 ti env su (App eF eArg l)  = tiApp (sourceSpan l) sF (apply sF env) tF [eArg]
   where
@@ -182,14 +170,14 @@ ti env su (Lam xs body l)  = (su3, apply su3 (tXs :=> tOut))
 ti env su (Let f (Check rs1) e1 e2 _)
   | ok                     = ti env' su'' e2
   | otherwise              = abort (errMismatch sp s1 s1')
-  where 
+  where
     ok                     = eqPoly s1 s1'
     s1'                    = generalize env (apply su'' t1')
     (su'', t1')            = ti env' su' e1
-    env'                   = extTypeEnv (bindId f) s1 env 
+    env'                   = extTypeEnv (bindId f) s1 env
     (su' , _t)             = instantiate su s1
     sp                     = sourceSpan (bindLabel f)
-    s1                     = eraseRPoly rs1
+    s1                     = eraseRType rs1
 
 -- ti env su (Fun f (Check s) xs e _)
   -- | ok                     = (su'', t')
@@ -217,18 +205,19 @@ freshFun su arity    = (su', tXs :=> tOut)
   where
     (su' , tOut:tXs) = freshTVars su (1 + arity)
 
-eqPoly  :: Poly -> Poly -> Bool
-eqPoly (Forall as s) (Forall bs t)
+eqPoly  :: Type -> Type -> Bool
+eqPoly (TForall as s) (TForall bs t)
   | length as == length bs = apply su s == t
   | otherwise              = False
   where
     su                     = mkSubst [(a, TVar b) | (a, b) <- zip as bs]
+eqPoly _ _ = error "TODO?"
 
 extTypesEnv :: TypeEnv -> [(Bind a, Type)] -> TypeEnv
-extTypesEnv = foldr (\(x, t) -> extTypeEnv (bindId x) (Forall [] t))
+extTypesEnv = foldr (\(x, t) -> extTypeEnv (bindId x) (TForall [] t))
 
 -----------------------------------------------------------------------------------------------
-instApp :: (Located a) => SourceSpan -> TypeEnv -> Subst -> Poly -> [Expr a] -> (Subst, Type)
+instApp :: (Located a) => SourceSpan -> TypeEnv -> Subst -> Type -> [Expr a] -> (Subst, Type)
 -----------------------------------------------------------------------------------------------
 instApp sp env su sF       = tiApp sp su' env tF
   where
@@ -244,27 +233,27 @@ tiApp sp su env tF eIns   = (su''', apply su''' tOut)
     su'''                 = unify sp su'' tF (tIns :=> tOut)
 
 -- HIDE
-tupPoly, ifPoly :: Poly
-tupPoly  = Forall ["a", "b"] (["a", "b"] :=> TPair "a" "b")
-ifPoly   = Forall ["a"]      ([TBool, "a", "a"] :=> "a")
+tupPoly, ifPoly :: Type
+tupPoly  = TForall ["a", "b"] (["a", "b"] :=> TPair "a" "b")
+ifPoly   = TForall ["a"]      ([TBool, "a", "a"] :=> "a")
 
 -- HIDE
-fieldPoly :: Field -> Poly
-fieldPoly Zero = Forall ["a", "b"] ([TPair "a" "b"] :=> "a")
-fieldPoly One  = Forall ["a", "b"] ([TPair "a" "b"] :=> "b")
+fieldPoly :: Field -> Type
+fieldPoly Zero = TForall ["a", "b"] ([TPair "a" "b"] :=> "a")
+fieldPoly One  = TForall ["a", "b"] ([TPair "a" "b"] :=> "b")
 
 -- HIDE
-prim2Poly :: Prim2 -> Poly
-prim2Poly Plus    = Forall []    ([TInt, TInt] :=> TInt)
-prim2Poly Minus   = Forall []    ([TInt, TInt] :=> TInt)
-prim2Poly Times   = Forall []    ([TInt, TInt] :=> TInt)
-prim2Poly Less    = Forall []    ([TInt, TInt] :=> TBool)
-prim2Poly Greater = Forall []    ([TInt, TInt] :=> TBool)
-prim2Poly And     = Forall []    ([TBool, TBool] :=> TBool)
-prim2Poly Equal   = Forall ["a"] (["a" , "a" ] :=> TBool)
+prim2Poly :: Prim2 -> Type
+prim2Poly Plus    = TForall []    ([TInt, TInt] :=> TInt)
+prim2Poly Minus   = TForall []    ([TInt, TInt] :=> TInt)
+prim2Poly Times   = TForall []    ([TInt, TInt] :=> TInt)
+prim2Poly Less    = TForall []    ([TInt, TInt] :=> TBool)
+prim2Poly Greater = TForall []    ([TInt, TInt] :=> TBool)
+prim2Poly And     = TForall []    ([TBool, TBool] :=> TBool)
+prim2Poly Equal   = TForall ["a"] (["a" , "a" ] :=> TBool)
 
 prim2Unpoly c
- | Forall [] (_ :=> t) <- prim2Poly c = t
+ | TForall [] (_ :=> t) <- prim2Poly c = t
 prim2Unpoly _ = error "prim2Poly on a prim which is not a function"
 
 --------------------------------------------------------------------------------
@@ -312,35 +301,36 @@ varAsgn sp su a t
   | otherwise            =  extSubst su a t
 
 --------------------------------------------------------------------------------
-generalize :: TypeEnv -> Type -> Poly
+generalize :: TypeEnv -> Type -> Type
 --------------------------------------------------------------------------------
-generalize env t = Forall as t
+generalize env t = TForall as t
   where
     as           = L.nub (tvs L.\\ evs)
     tvs          = freeTvars t
     evs          = freeTvars env
 
 --------------------------------------------------------------------------------
-instantiate :: Subst -> Poly -> (Subst, Type)
+instantiate :: Subst -> Type -> (Subst, Type)
 --------------------------------------------------------------------------------
-instantiate su (Forall as t) = (su', apply suInst t)
+instantiate su (TForall as t) = (su', apply suInst t)
   where
     (su', as')               = freshTVars su (length as)
     suInst                   = mkSubst (zip as as')
+instantiate _ _ = error "TODO?"
 
 --------------------------------------------------------------------------------
 -- | Environments --------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-newtype TypeEnv = TypeEnv (M.Map Id Poly)
+newtype TypeEnv = TypeEnv (M.Map Id Type)
 
-extTypeEnv :: Id -> Poly -> TypeEnv -> TypeEnv
+extTypeEnv :: Id -> Type -> TypeEnv -> TypeEnv
 extTypeEnv x s (TypeEnv env) =  TypeEnv $ M.insert x s env
   where
     -- _env  = traceShow _msg _env
     -- _msg  = "extTypeEnv: " ++ show x ++ " := " ++ show s
 
-lookupTypeEnv :: SourceSpan -> Id -> TypeEnv -> Poly
+lookupTypeEnv :: SourceSpan -> Id -> TypeEnv -> Type
 lookupTypeEnv l x (TypeEnv env) = fromMaybe err  (M.lookup x env)
   where
     err                         = abort (errUnboundVar l x)
@@ -393,7 +383,8 @@ instance Substitutable Type where
   apply su (ts :=> t)      = apply su ts :=> apply su t
   apply su (TPair t1 t2)   = TPair (apply su t1) (apply su t2)
   apply su (TCtor c ts)    = TCtor c (apply su ts)
-  apply _ TUnit           = TUnit
+  apply _ TUnit            = TUnit
+  apply s (TForall as t)   = TForall as $ apply (unSubst as s)  t
 
   freeTvars TInt           = []
   freeTvars TBool          = []
@@ -402,10 +393,7 @@ instance Substitutable Type where
   freeTvars (ts :=> t)     = freeTvars ts ++ freeTvars t
   freeTvars (TPair t1 t2)  = freeTvars t1 ++ freeTvars t2
   freeTvars (TCtor _ ts)   = freeTvars ts
-
-instance Substitutable Poly where
- apply s   (Forall as t) = Forall as $ apply (unSubst as s)  t
- freeTvars (Forall as t) = freeTvars t L.\\ as
+  freeTvars (TForall as t) = freeTvars t L.\\ as
 
 instance (Functor t, Foldable t, Substitutable a) => Substitutable (t a) where
   apply     = fmap . apply
