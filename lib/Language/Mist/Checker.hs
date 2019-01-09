@@ -169,8 +169,8 @@ ti env su (Let f (Check rs1) e1 e2 _)
     s1                     = eraseRType rs1
 
 -- ti env su (Fun f (Check s) xs e _)
-  -- | ok                     = (su'', t')
-  -- | otherwise              = abort (errMismatch sp s s')
+--   | ok                     = (su'', t')
+--   | otherwise              = abort (errMismatch sp s s')
   -- where
     -- ok                     = eqPoly (generalize env t) (generalize env t')
     -- s'                     = generalize env t'

@@ -56,6 +56,25 @@ instance (Show a, Show e, Monoid a) => Show (CG a e) where
 generateConstraints :: Core a -> CGInfo a
 generateConstraints = runFresh . flip execStateT mempty . synth []
 
+-- run doctests with
+--    stack build --copy-compiler-tool doctest
+--    stack exec -- doctest -ilib lib/Language/Mist/CGen.hs
+
+-- $
+-- >>> synth [] (CUnit ())
+-- (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ()),CGInfo {subCs = []})
+-- >>> synth [] (CNumber 1 ())
+-- (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CNumber 1 ()) ()),CGInfo {subCs = []})
+-- >>> let rInt = RBase (Bind "VV" ()) TInt (CBoolean True ())
+-- >>> synth [] (CLam (AnnBind "x" rInt ()) (CId "x" ()) ())
+-- (RFun (Bind {bindId = "x", bindLabel = ()}) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())),CGInfo {subCs = []})
+-- >>> synth [] (CPrim2 Plus (CNumber 1 ()) (CNumber 2 ()) ())
+-- (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CPrim2 Plus (CNumber 1 ()) (CNumber 2 ()) ()) ()),CGInfo {subCs = []})
+-- >>> synth [] (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
+-- (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()),CGInfo {subCs = [SubC [("y",RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))] (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))]})
+-- >>> generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
+-- CGInfo {subCs = [SubC [("y",RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))] (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))]}
+
 synth :: CGEnv a -> Core a -> CG a (RType Core a)
 synth _ e@CUnit{}    = prim e TUnit
 synth _ e@CNumber{}  = prim e TInt
