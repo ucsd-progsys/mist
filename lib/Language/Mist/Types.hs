@@ -169,10 +169,10 @@ bindsExpr bs e l = foldr (\(x, e1) e2  -> Let x Infer e1 e2 l) e bs
 bindsRType :: AnnBind a -> RType Core a -> RType Core a
 bindsRType b t = mkPiCB b t
 
--- TODO(MATT): what is this doing?
+-- | makes a Pi type from a Core Binder and an RType
 mkPiCB :: AnnBind a -> RType Core a -> RType Core a
 mkPiCB (AnnBind x t l) (RForall a t') = RForall a (RFun (Bind x l) t t')
-mkPiCB _ _ = error "TODO?"
+mkPiCB (AnnBind x t l) t' = RFun (Bind x l) t t'
 
 -- | Destructing `Expr` into let-binds
 exprDefs :: Expr a -> ([Def a], Expr a)
