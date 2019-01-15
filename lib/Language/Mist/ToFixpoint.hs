@@ -70,13 +70,14 @@ typeToSort TUnit = FObj $ fromString "Unit"
 typeToSort TInt = FInt
 typeToSort TBool = undefined
 -- is this backwards?
-typeToSort (t1 :=> t2) = foldr FFunc (typeToSort t2) (typeToSort <$> t1)
+typeToSort (t1 :=> t2) = FFunc (typeToSort t1) (typeToSort t2)
 -- We can't actually build arbitary TyCons in FP, so for now we just use
 -- the constructor for Map for everything. Later we should make this work
 -- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
 -- with FTyCon right now.
 typeToSort (TPair t1 t2) = FApp (FApp (FTC mapFTyCon) (typeToSort t1)) (typeToSort t2)
 typeToSort (TCtor _ t2) = foldr FApp (FTC mapFTyCon) (typeToSort <$> t2)
+typeToSort (TForall{}) = error "TODO?"
 
 prim2ToFixpoint :: Prim2 -> Either Brel Bop
 prim2ToFixpoint M.Plus  = Right F.Plus

@@ -49,8 +49,11 @@ createInternalName name number = head (splitOn cSEPARATOR name) ++ cSEPARATOR ++
 --------------------------------------------------------------------------------
 type Subst e = M.Map Id e
 
-subst1 ex x e = subst (M.insert x ex M.empty) e
+-- | e[ex/x]
+subst1 :: Subable e a => e -> Id -> a -> a
+subst1 ex x e = subst (M.singleton x ex) e
 
+-- | substitutes an e in a
 class Subable e a where
   subst :: Subst e -> a -> a
 
@@ -60,8 +63,8 @@ instance Subable (Core a) (Core a) where
     | M.null su = e
   subst su e@(CId id _) = fromMaybe e $ M.lookup id su
 
-  subst su (CLam bs body l) =
-    CLam (subst su bs) (subst (foldr M.delete su (aBindId <$> bs)) body) l
+  subst su (CLam b body l) =
+    CLam (subst su b) (subst (M.delete (aBindId b) su) body) l
   subst su (CLet bind e1 e2 l) =
     CLet (subst su bind) (subst su e1) (subst (M.delete (aBindId bind) su) e2) l
 
@@ -88,10 +91,6 @@ instance Subable (Core a) (AnnBind a) where
 instance Subable e a => Subable e [a] where
   subst su = fmap (subst su)
 
-instance Subable (e a) (e a) => Subable (e a) (RPoly e a) where
-  subst su (RForall tvars r) =
-    RForall tvars (subst su r)
-
 instance Subable (e a) (e a) => Subable (e a) (RType e a) where
   subst su (RBase bind typ expr) =
     RBase bind typ (subst (M.delete (bindId bind) su) expr)
@@ -99,6 +98,8 @@ instance Subable (e a) (e a) => Subable (e a) (RType e a) where
     RFun bind (subst su rtype1) (subst (M.delete (bindId bind) su) rtype2)
   subst su (RRTy bind rtype expr) =
     RRTy bind (subst su rtype) (subst (M.delete (bindId bind) su) expr)
+  subst su (RForall tvars r) =
+    RForall tvars (subst su r)
 
 --- subst types for tyvars
 instance Subable Type Type where
@@ -111,6 +112,7 @@ instance Subable Type Type where
   subst su (t1 :=> t2) = subst su t1 :=> subst su t2
   subst su (TPair t1 t2) = TPair (subst su t1) (subst su t2)
   subst su (TCtor c t2) = TCtor c (subst su t2)
+  subst su (TForall tvar t) = TForall tvar (subst (M.delete (unTV tvar) su) t)
 
 instance Subable Type (Core a) where
   subst su e
@@ -118,8 +120,8 @@ instance Subable Type (Core a) where
 
   subst su (CTApp e t l) =
     CTApp (subst su e) (subst su t) l
-  subst su (CTAbs tvs e l) =
-    CTAbs tvs (subst (foldr M.delete su (unTV <$> tvs)) e) l
+  subst su (CTAbs tv e l) =
+    CTAbs tv (subst (M.delete (unTV tv) su) e) l
   subst su (CLet bind e1 e2 l) =
     CLet (subst su bind) (subst su e1) (subst su e2) l
   subst su (CLam bs body l) =
@@ -130,10 +132,7 @@ instance Subable Type (Core a) where
 instance Subable Type (AnnBind a) where
   subst su (AnnBind name t l) = AnnBind name (subst su t) l
 
-instance Subable Type (e a) => Subable Type (RPoly e a) where
-  subst su (RForall tvars r) =
-    RForall tvars (subst (foldr M.delete su (unTV <$> tvars)) r)
-
+unTV :: TVar -> Id
 unTV (TV t) = t
 
 instance Subable Type (e a) => Subable Type (RType e a) where
@@ -143,6 +142,8 @@ instance Subable Type (e a) => Subable Type (RType e a) where
     RFun bind (subst su rtype1) (subst su rtype2)
   subst su (RRTy bind rtype expr) =
     RRTy bind (subst su rtype) (subst su expr)
+  subst su (RForall tvar r) =
+    RForall tvar (subst (M.delete (unTV tvar) su) r)
 
 -- TODO Subst for Exprs
 
@@ -191,9 +192,9 @@ class Freshable a where
   refresh :: MonadFresh m => a -> m a
 
 instance Freshable (Expr a) where
-  refresh (Lam bs body l) =
-    (Lam <$> mapM refresh bs <*> refresh body <*> pure l)
-    <* mapM (const popId) bs
+  refresh (Lam b body l) =
+    (Lam <$> refresh b <*> refresh body <*> pure l)
+    <* (const popId) b
   refresh (Let bind sig e1 e2 l) =
     (Let <$> refresh bind <*> refresh sig <*> refresh e1 <*> refresh e2 <*> pure l)
     <* popId
@@ -214,9 +215,9 @@ instance Freshable (Expr a) where
     App <$> refresh e1 <*> refresh e2 <*> pure l
 
 instance Freshable (Core a) where
-  refresh (CLam bs body l) =
-    (CLam <$> mapM refresh bs <*> refresh body <*> pure l)
-    <* mapM (const popId) bs
+  refresh (CLam b body l) =
+    (CLam <$> refresh b <*> refresh body <*> pure l)
+    <* (const popId) b
   refresh (CLet bind e1 e2 l) =
     (CLet <$> refresh bind <*> refresh e1 <*> refresh e2 <*> pure l)
     <* popId
@@ -244,11 +245,6 @@ instance Freshable (Sig a) where
   refresh (Check r) = Check <$> refresh r
   refresh (Assume r) = Assume <$> refresh r
 
-instance Freshable (e a) => Freshable (RPoly e a) where
-  refresh (RForall tvars r) =
-    (RForall <$> mapM uniquifyBindingTVar tvars <*> refresh r)
-    <* popId
-
 instance Freshable (e a) => Freshable (RType e a) where
   refresh (RBase bind typ expr) =
     (RBase <$> refresh bind <*> refresh typ <*> refresh expr)
@@ -259,6 +255,9 @@ instance Freshable (e a) => Freshable (RType e a) where
   refresh (RRTy bind rtype expr) =
     (RRTy <$> refresh bind <*> refresh rtype <*> refresh expr)
     <* popId
+  refresh (RForall tvar r) =
+    (RForall <$> uniquifyBindingTVar tvar <*> refresh r)
+    <* (const popId) tvar
 
 instance Freshable Type where
   refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
@@ -266,11 +265,14 @@ instance Freshable Type where
   refresh TBool = pure TBool
   refresh TUnit = pure TUnit
   refresh (domain :=> codomain) =
-    (:=>) <$> mapM refresh domain <*> refresh codomain
+    (:=>) <$> refresh domain <*> refresh codomain
   refresh (TPair t1 t2) =
     TPair <$> refresh t1 <*> refresh t2
   refresh (TCtor c ts) =
     TCtor c <$> mapM refresh ts
+  refresh (TForall tvar t) =
+    TForall <$> uniquifyBindingTVar tvar <*> refresh t
+    <* (const popId) tvar
 
 instance Freshable (Bind a) where
   refresh (Bind name l) = Bind <$> refreshId name <*> pure l
