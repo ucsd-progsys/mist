@@ -631,6 +631,7 @@ check expr typ = do
     go e@App{} t = checkSub e t
     go (Lam bind e tag) (t1 :=> t2) = do
       let newBinding = VarBind (bindId bind) t1
+      modifyEnv $ extendEnv [newBinding]
       c <- check e t2
       modifyEnv $ dropEnvAfter newBinding
       let annBind = AnnBind { aBindId = bindId bind
