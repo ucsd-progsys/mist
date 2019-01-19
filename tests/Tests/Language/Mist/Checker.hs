@@ -38,4 +38,28 @@ elaborationTests = testGroup "elaborate"
   , testCase "λx.y" $
     let result = elaborate (Lam (Bind "x") (Id "y"))
     in shouldFail result
+
+  , testCase "let id : (ASSUME A -> A) = () in ()" $
+    let result
+          = elaborate (Let
+                       (Bind "id")
+                       (Assume (RForall (TV "A") (toRBase $ (TVar $ TV "A") :=> (TVar $ TV "A"))))
+                       Unit
+                       Unit)
+    in shouldCheck result
+
+  , testGroup "let id : A -> A = λx.x in id 1" $
+    let result@(Right (CLet
+                       (AnnBind "id" _)
+                       (CTAbs (TV "A") _) -- TODO: lambda
+                        _
+                       -- (CApp (CTApp (CId "id") TInt) (CNumber 1))
+                      ))
+          = elaborate (Let
+                       (Bind "id")
+                       (Check (RForall (TV "A") (toRBase $ (TVar $ TV "A") :=> (TVar $ TV "A"))))
+                       (Lam (Bind "x") (Id "x"))
+                       (App (Id "id") (Number 1)))
+    in [ testCase "type checks" $ shouldCheck result
+       ]
   ]

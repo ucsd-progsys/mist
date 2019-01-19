@@ -845,6 +845,7 @@ checkSub e t1 = do
   env <- getEnv
   instSub c (applyEnv env t2) (applyEnv env t1)
 
+-- TODO: reintroduce generalizing for non recursive definitions
 typeCheckLet
   :: Bind a
   -> Sig a
@@ -873,7 +874,7 @@ typeCheckLet binding Infer e1 e2 tag handleBody = do
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
-typeCheckLet binding (Check rType) e1 e2 tag handleBody = do
+typeCheckLet binding (Check rType) e1 e2 tag handleBody = do -- TODO: insert Λ for forall's
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
   modifyEnv $ extendEnv [newBinding]
