@@ -705,8 +705,6 @@ synthesizeSpine funType cFun eArg = do
       evar <- generateExistential
       modifyEnv $ extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      -- TODO: when do we substitute things? In synthesizeApp?
-      -- TODO: do we add the KVar now and again later?
       synthesizeSpine newFunType (CTApp cFun (EVar evar) (extractC cFun)) eArg
     go t = throwError $ ApplyNonFunction t
 
@@ -716,7 +714,7 @@ synthesizeSpine funType cFun eArg = do
 -- polymorphic instantiation for c.
 instSub :: Core a -> Type -> Type -> Context tag (Core a)
 instSub c a@(TForall _ _) b =
-  foldr (\typ instantiated -> CTApp instantiated typ (extractC c)) -- TODO: test that this foldr is the correct order
+  foldr (\typ instantiated -> CTApp instantiated typ (extractC c))
         c <$> go a b
 
   where

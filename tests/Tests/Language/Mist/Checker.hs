@@ -1,4 +1,3 @@
--- module Tests.Language.Mist.Checker (checkerTests) where
 module Tests.Language.Mist.Checker (checkerTests) where
 
 import Debug.Trace
@@ -87,6 +86,28 @@ elaborationTests = testGroup "elaborate"
                         (Check (RForall (TV "A") (RForall (TV "B") (toRBase $ ("A" ==> "B") :=> ("A" ==> "B")))))
                         (Lam (Bind "f") (Lam (Bind "x") (App (Id "f") (Id "x"))))
                         (App (App (Id "map") (Id "id")) (Number 1))))
+    in [ testCase "type checks" $ shouldCheck result
+       ]
+
+  , testGroup "assume const : A -> Int = () in let map : (A -> B) -> A -> B = λf.λx.f x in map const ()" $
+    let result@(Right (CLet
+                       _
+                       _
+                       (CLet
+                        _
+                        (CTAbs (TV "A") (CTAbs (TV "B") _))
+                        (CApp (CApp (CTApp (CTApp (CId "map") TUnit) TInt)
+                                    (CTApp (CId "const") TUnit))
+                              CUnit))))
+          = elaborate (Let
+                       (Bind "const")
+                       (Assume (RForall (TV "A") (toRBase $ (TVar $ TV "A") :=> TInt)))
+                       Unit
+                       (Let
+                        (Bind "map")
+                        (Check (RForall (TV "A") (RForall (TV "B") (toRBase $ ("A" ==> "B") :=> ("A" ==> "B")))))
+                        (Lam (Bind "f") (Lam (Bind "x") (App (Id "f") (Id "x"))))
+                        (App (App (Id "map") (Id "const")) Unit)))
     in [ testCase "type checks" $ shouldCheck result
        ]
   ]
