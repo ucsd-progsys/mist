@@ -57,8 +57,7 @@ elaborationTests = testGroup "elaborate"
     let result@(Right (CLet
                        _
                        (CTAbs (TV "A") _)
-                       (CApp (CTApp (CId "id") TInt) (CNumber 1))
-                      ))
+                       (CApp (CTApp (CId "id") TInt) (CNumber 1))))
           = elaborate (Let
                        (Bind "id")
                        (Check (RForall (TV "A") (toRBase $ "A" ==> "A")))
@@ -109,5 +108,22 @@ elaborationTests = testGroup "elaborate"
                         (Lam (Bind "f") (Lam (Bind "x") (App (Id "f") (Id "x"))))
                         (App (App (Id "map") (Id "const")) Unit)))
     in [ testCase "type checks" $ shouldCheck result
+       ]
+
+  , testGroup "let id = λx.x in ()" $
+    let result@(Right (CLet
+                       (AnnBind _ (RUnrefined (TForall (TV a1) (TVar (TV a2) :=> TVar (TV a3)))))
+                       (CTAbs (TV a4) _)
+                       _))
+          = elaborate (Let
+                       (Bind "id")
+                       Infer
+                       (Lam (Bind "x") (Id "x"))
+                       Unit)
+    in [ testCase "type checks" $ shouldCheck result
+       , testCase "inferred type variables" $ do
+           assertEqual "a1 == a2" a1 a2
+           assertEqual "a2 == a3" a2 a3
+           assertEqual "a3 == a4" a3 a4
        ]
   ]

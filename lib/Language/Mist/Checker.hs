@@ -905,7 +905,6 @@ checkSub e t1 = do
   env <- getEnv
   instSub c (applyEnv env t2) (applyEnv env t1)
 
--- TODO: reintroduce generalizing for non recursive definitions
 typeCheckLet
   :: Bind a
   -> Sig a
@@ -918,13 +917,11 @@ typeCheckLet binding Infer e1 e2 tag handleBody = do
   alpha <- generateExistential
   let evar = EVar alpha
   modifyEnv $ extendEnv [Scope alpha, Unsolved alpha, VarBind (bindId binding) evar]
-  c1 <- check e1 evar
+  unsubstitutedC1 <- check e1 evar
   (delta, delta') <- getsEnv $ splitEnvAt (Scope alpha)
   setEnv delta
-  -- LET GENERALIZATION (not currently allowed)
-  -- (boundType, c1) <- letGeneralize binding evar unsubstitutedC1 delta'
+  (boundType, c1) <- letGeneralize evar unsubstitutedC1 delta'
   -- TODO: well-formedness error for non-annotated recursive definitions
-  let boundType = applyEnv delta' evar
   let newBinding = VarBind (bindId binding) boundType
   modifyEnv $ extendEnv [newBinding]
   let annBind = AnnBind { aBindId = bindId binding
@@ -964,8 +961,8 @@ typeCheckLet binding (Assume rType) e1 e2 tag handleBody = do
 
 -- | Carries out Hindley-Milner style let generalization on the existential variable.
 -- Also substitutes for all existentials that were added as annotations
-_letGeneralize :: Bind a -> Type -> Core a -> TypeEnv -> Context a (Type, Core a)
-_letGeneralize binding t c env = do
+letGeneralize :: Type -> Core a -> TypeEnv -> Context a (Type, Core a)
+letGeneralize t c env = do
   let preGeneralizedFun = applyEnv env t
   freeExistentials <- freeEVars preGeneralizedFun
   let unsolvedAlphas = filter (`elem` freeExistentials) (unsolvedExistentials env)
@@ -977,9 +974,8 @@ _letGeneralize binding t c env = do
   let generalizedType = if null pairedNewTvars
         then preGeneralizedFun
         else foldr (\(_, a) accType -> TForall a accType) (subst substitution preGeneralizedFun) pairedNewTvars
-  let instantiatedFunction = foldl (\accFun (_, a) -> CTApp accFun (TVar a) (bindLabel binding)) -- TODO: fix the tag information
-                             (CId (bindId binding) (bindLabel binding)) pairedNewTvars
-  pure (generalizedType, subst1 instantiatedFunction (bindId binding) $ subst substitution c)
+  let abstractedFun = insertTAbs generalizedType c
+  pure (generalizedType, subst substitution abstractedFun)
 
 synthesizeApp :: Type -> Core a -> Expr a -> a -> Context a (Core a, Type)
 synthesizeApp tFun cFun eArg tag = do
