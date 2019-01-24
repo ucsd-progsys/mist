@@ -513,7 +513,7 @@ dropEnvAfter part (TypeEnv env) = TypeEnv $ takeWhile (/= part) env
 
 -- | if Γ[part] = Δ, part, Θ then returns (Δ, Θ)
 splitEnvAt :: TypeEnvPart -> TypeEnv -> (TypeEnv, TypeEnv)
-splitEnvAt part (TypeEnv env) = (TypeEnv theta, TypeEnv delta)
+splitEnvAt part (TypeEnv env) = (TypeEnv delta, TypeEnv theta)
   where (delta, _:theta) = break (== part) env
 
 -- | Returns True if alpha is to the left of beta in the environment
@@ -777,7 +777,11 @@ a <: b = do
   maybeAEVar <- toEVar a
   maybeBEVar <- toEVar b
   case (maybeAEVar, maybeBEVar) of
-    (Just _, Just _) -> error "TODO: should this choose the right path/is there a right option between L and R?"
+    (Just alpha, Just beta) -> do
+      alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
+      if alphaToLeft
+        then instantiateL alpha (EVar beta)
+        else instantiateR (EVar alpha) beta
     (Just evar, _) -> do
       occurrenceCheck evar b
       instantiateL evar b
@@ -932,11 +936,12 @@ typeCheckLet binding Infer e1 e2 tag handleBody = do
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
-typeCheckLet binding (Check rType) e1 e2 tag handleBody = do -- TODO: insert Λ for forall's
+typeCheckLet binding (Check rType) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
   modifyEnv $ extendEnv [newBinding]
-  c1 <- check e1 typ
+  unabstractedC1 <- check e1 typ
+  let c1 = insertTAbs typ unabstractedC1
   elaboratedRType <- checkRType rType
   let annBind = AnnBind { aBindId = bindId binding
                         , aBindType = elaboratedRType
@@ -981,7 +986,9 @@ _letGeneralize binding t c env = do
 synthesizeApp :: Type -> Core a -> Expr a -> a -> Context a (Core a, Type)
 synthesizeApp tFun cFun eArg tag = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
-  pure (CApp cInstantiatedFun cArg tag, resultType)
+  env <- getEnv
+  let cApplication = subst (envToSubst env) $ CApp cInstantiatedFun cArg tag
+  pure (cApplication, resultType)
 
 selectorToPrim :: Field -> a -> Core a
 selectorToPrim Zero tag = CPrim Pi0 tag
@@ -1060,6 +1067,10 @@ freeEVars typ = eVars typ
     eVars (TPair t1 t2) = S.union <$> eVars t1 <*> eVars t2
     eVars (TCtor _ ts) = fold <$> mapM eVars ts
     eVars (TForall _ t) = eVars t
+
+insertTAbs :: Type -> Core a -> Core a
+insertTAbs (TForall tvar typ) c = CTAbs tvar (insertTAbs typ c) (extractC c)
+insertTAbs _ c = c
 
 
 --------------------------------------------------------------------------------
