@@ -14,6 +14,7 @@ module Language.Mist.Types
   -- * Types and Types
   , Sig (..), Type (..), TVar (..), Ctor (..)
   , RType (..)
+  , Boolable (..)
 
   -- * Abstract syntax of Mist
   , Expr  (..)
@@ -45,7 +46,9 @@ module Language.Mist.Types
   -- * Destructors
   , exprDefs
 
+  , bkRType
   , eraseRType
+  , reftRType
 
     -- * Environments
   , Env
@@ -465,11 +468,51 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
   strengthen q (RFun v t p) = RFun v (strengthen q t) p
   strengthen q (RForall tvs rt) = RForall tvs $ strengthen q rt
 
+class Boolable a l where
+    true :: l -> a
+    _false :: l -> a
+
+instance Boolable (Core a) a where
+    true = CBoolean True
+    _false = CBoolean False
+
+instance Boolable (Expr a) a where
+    true = Boolean True
+    _false = Boolean False
+
+
+-- | Breaks up an RType into an binder, sort, and refinement
+bkRType :: (Strengthable (e a) (e a), Boolable (e a) a)
+          => RType e a -> (String, Type, e a, a)
+bkRType rt = (bindRType rt, eraseRType rt, reftRType rt, tagRType rt)
+
+bindRType :: RType e a -> String
+bindRType (RBase (Bind x _) _ _) = x
+bindRType (RFun  (Bind x _) _ _) = x
+bindRType (RRTy  (Bind x _) _ _) = x
+bindRType (RForall _ rt) =  bindRType rt
+
+-- | Returns the base type for an RType
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
+
+-- | Returns the refinement of an RType
+reftRType :: (Strengthable (e a) (e a), Boolable (e a) a)
+          => RType e a -> e a
+reftRType (RRTy _ rt r)  = strengthen r (reftRType rt)
+reftRType (RBase _ _ r)  = r
+reftRType (RForall _ rt) = reftRType rt
+reftRType (RFun (Bind _ l) _ _) = true l
+
+tagRType :: (Strengthable (e a) (e a), Boolable (e a) a)
+         => RType e a -> a
+tagRType (RRTy (Bind _ l) _ _)  = l
+tagRType (RBase (Bind _ l) _ _)  = l
+tagRType (RForall _ rt) = tagRType rt
+tagRType (RFun (Bind _ l) _ _) = l
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor

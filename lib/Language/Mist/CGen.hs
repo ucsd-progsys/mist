@@ -5,7 +5,14 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Language.Mist.CGen ( generateConstraints ) where
+module Language.Mist.CGen
+  (
+    generateConstraints
+
+  , CGEnv
+  , CGInfo (..)
+  , SubC (..)
+  ) where
 
 -- TODO: Do we need to run a Uniqify pass before we run this module?
 -- Matt: We should uniquify at the beginning and then maintain the unique names property
@@ -20,10 +27,11 @@ import           Control.Monad.State.Strict
 -- Data Structures
 -------------------------------------------------------------------------------
 
+-- TODO: Break up function types, st these are only RRTy or RBase
 -- | SubC Γ α β is the constraint  Γ |- α <: β
-data SubC a = SubC [(Id, RType Core a)] (RType Core a) (RType Core a)
+data SubC a = SubC (CGEnv a) (RType Core a) (RType Core a)
   deriving Show
-data CGInfo a = CGInfo { subCs :: [SubC a] }
+newtype CGInfo a = CGInfo { subCs :: [SubC a] }
   deriving Show
 
 -- | Constraint Generation Monad
