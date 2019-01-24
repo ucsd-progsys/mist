@@ -259,6 +259,7 @@ instance PPrint Field where
 instance PPrint (Expr a) where
   pprint (Number n _)    = show n
   pprint (Boolean b _)   = pprint b
+  pprint (Unit _)        = "()"
   pprint (Id x _)        = x
   pprint (Prim2 o l r _) = printf "%s %s %s"                (pprint l)      (pprint o) (pprint r)
   pprint (If    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
@@ -267,7 +268,6 @@ instance PPrint (Expr a) where
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam x e _)     = printf "(\\ %s -> %s)"           (pprint x)      (pprint e)
-  pprint (Unit _)        = "skip"
 
 instance PPrint (Core a) where
   pprint (CNumber n _)    = show n

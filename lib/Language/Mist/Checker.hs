@@ -435,21 +435,43 @@ data TypeEnvPart
   | BoundTVar TVar   -- ^ Asserts that the type variable is bound in the context
   deriving (Eq)
 
+-- DEBUGGING
+instance Show TypeEnvPart where
+  show (Scope evar) = ">" ++ pprint evar
+  show (Unsolved evar) = pprint evar
+  show (Solved evar typ) = pprint evar ++ "=" ++ pprint typ
+  show (VarBind id typ) = show id ++ ":" ++ pprint typ
+  show (BoundTVar tvar) = "$" ++ pprint tvar
+
 -- | Ordered typing environment. Grows to the right.
 -- Bindings can only depend on things to the left of themselves.
 newtype TypeEnv = TypeEnv [TypeEnvPart]
+  deriving (Show)
 
 data Ctxt = Ctxt { typeEnv :: TypeEnv
                  , existentials :: S.Set TVar -- ^ The set of existential variables
                  }
 
 type Context tag = StateT Ctxt (FreshT (TypingEither tag))
+-- DEBUGGING
+-- type Context tag = StateT Ctxt (FreshT (StateT String (TypingEither tag)))
+
+-- DEBUGGING
+-- tell :: String -> Context tag ()
+-- tell str = lift . lift . modify $ (\stuff -> stuff ++ str ++ "\n")
+
+-- DEBUGGING
+-- untell :: Context tag String
+-- untell = lift get
 
 initialCtxt :: Ctxt
 initialCtxt = Ctxt { typeEnv = TypeEnv [], existentials = S.empty}
 
 evalContext :: Context tag a -> FreshState -> TypingEither tag a
-evalContext m = evalFreshT (evalStateT m initialCtxt)
+evalContext m freshState = evalFreshT (evalStateT m initialCtxt) freshState
+
+-- DEBUGGING
+-- evalContext m freshState = evalStateT (evalFreshT (evalStateT m initialCtxt) freshState) ""
 
 getBoundType :: Id -> TypeEnv -> Maybe Type
 getBoundType id (TypeEnv env) =
@@ -538,15 +560,19 @@ unsolvedExistentials (TypeEnv env) = [evar | (Unsolved evar) <- env]
 elaborate :: Expr a -> TypingEither a (Core a)
 elaborate e = fst <$> evalContext (synthesize e) emptyFreshState -- TODO: pass around the name state
 
+-- DEBUGGING
+-- synthesize e = do
+--   env <- getEnv
+--   tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
+--   internalsynthesize e
+
 -- TODO: add judgments for documentation
 -- | Γ ⊢ e ~> c => A ⊣ Θ
 synthesize :: Expr a -> Context a (Core a, Type)
 synthesize (Number i tag) = pure (CNumber i tag, TInt)
 synthesize (Boolean b tag) = pure (CBoolean b tag, TBool)
 synthesize (Unit tag) = pure (CUnit tag, TUnit)
-synthesize (Id id tag) = do -- TODO: do we have to instantiate this?
-                            -- TODO: AT: where does this get instantiated
-                            -- NOTE: Matt: I think this can be safely instantiated during the subtyping check
+synthesize (Id id tag) = do
   boundType <- getsEnv $ getBoundType id
   case boundType of
     Just typ -> pure (CId id tag, typ)
@@ -595,6 +621,12 @@ synthesize (Lam bind e tag) = do
                         }
   pure (CLam annBind c tag, EVar alpha :=> EVar beta)
 
+-- DEBUGGING
+-- check e t = do
+--   env <- getEnv
+--   tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
+--   internalcheck e t
+
 -- | Γ ⊢ e ~> c <= A ⊣ Θ
 check :: Expr a -> Type -> Context a (Core a)
 check expr (TForall tvar typ) = do
@@ -641,6 +673,12 @@ check expr typ = do
       pure $ CLam annBind c tag
     go (Unit tag) TUnit = pure $ CUnit tag
     go _ _ = error "TODO: this is a checking error"
+
+-- DEBUGGING
+-- synthesizeSpine funType cFun eArg = do
+--   env <- getEnv
+--   tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
+--   internalsynthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
 synthesizeSpine :: Type -> Core a -> Expr a -> Context a (Core a, Core a, Type)
@@ -697,6 +735,12 @@ instSub c a b = do
   a <: b
   pure c
 
+-- DEBUGGING
+-- a <: b = do
+--   env <- getEnv
+--   tell $ show env ++ " ⊢ " ++ pprint a ++ " <: " ++ pprint b
+--   a <: b
+
 -- | Γ ⊢ A <: B ⊣ Θ
 (<:) :: Type -> Type -> Context tag ()
 TUnit <: TUnit = pure ()
@@ -742,6 +786,12 @@ a <: b = do
       instantiateR a evar
     (_, _) -> error "TODO: this is a subtyping error"
 
+-- DEBUGGING
+-- instantiateL a b = do
+--   env <- getEnv
+--   tell $ show env ++ " ⊢ " ++ pprint a ++ " <=: " ++ pprint b
+--   internalinstantiateL a b
+
 -- TODO: figure out why we reverse the newly created existentials
 instantiateL :: EVar -> Type -> Context tag ()
 instantiateL alpha typ = do
@@ -779,6 +829,12 @@ instantiateL alpha typ = do
       instantiateL alpha a
       modifyEnv $ dropEnvAfter (BoundTVar tvar)
     go typ = solveExistential alpha typ []
+
+-- DEBUGGING
+-- instantiateR a b = do
+--   env <- getEnv
+--   tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
+--   internalinstantiateR a b
 
 instantiateR :: Type -> EVar -> Context tag ()
 instantiateR typ alpha = do
@@ -1025,30 +1081,3 @@ instance Show (TypingError a) where
   show SolvingSolvedExistential = printf "TODO: attempting to resolved solved existential variable"
   show (ApplyNonFunction t) = printf "TODO: attempting to use non-function type as a function: %s" (show t)
   show (InfiniteTypeConstraint evar typ) = printf "TODO: infinite type constraint: %s ~ %s" (show evar) (show typ)
-
-{-
-                    -----------------------------------  ---------------------------------------
-                     Γ,α,β,>γ,γ ⊢ α := γ ⊣ Γ,α,β,>γ,γ=α    Γ,α,β,>γ,γ=α ⊢ α := β ⊣ Γ,α,β=α,>γ,γ=α
-                    ----------------------------------   ---------------------------------------
-                     Γ,α,β,>γ,γ ⊢ α <: γ ⊣ Γ,α,β,>γ,γ=α    Γ,α,β,>γ,γ=α ⊢ α <: β ⊣ Γ,α,β=α,>γ,γ=α
-                    -----------------------------------------------------------------------------
-                     Γ,α,β,>γ,γ ⊢ γ → γ <: α → β ⊣ Γ,α,β=α,>γ,γ=α
-                    -------------------------------------------- NOTE: this subtyping check should return the instantiated type
-                     Γ,α,β ⊢ ID <: α → β ⊣ Γ,α,β=α
-                    ------------------------------------- NOTE: this checkSub should elaborate based on the subtyping check
-                     Γ,α,β ⊢ id ~> ??? <= α → β ⊣ Γ,α,β=α
-                    --------------------------------------------------------------------------
-                     Γ,α,β ⊢ MAP[A↦α][B↦β] map[α][β] • id ~> map[α][β] ??? >> α → β ⊣ Γ,α,β=α
-                    --------------------------------------------------------------------------
-                     Γ,α ⊢ MAP[A↦α] map[α] • id ~> map[α][β] ??? >> α → β ⊣ Γ,α,β=α
-                    ----------------------------------------------------------------
-Γ ⊢ map => MAP ⊣ Γ       Γ ⊢ MAP map • id ~> map[α][β] ??? >> α → β ⊣ Γ,α,β=α
-------------------------------------------------------------------------------
-Γ ⊢ map id ~> map[α][β] ??? => α → β ⊣ Γ,α,β=α  ...
-------------------------
-Γ ⊢ (map id) 1 ~> => ⊣
-
-
-map : ∀A.∀B. (A → B) → A → B = MAP
-id  : ∀A. A → A = ID
--}
