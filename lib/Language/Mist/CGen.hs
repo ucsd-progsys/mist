@@ -1,6 +1,7 @@
 -- | This module generates refinement type constraints
 -- | (see Cosman and Jhala, ICFP '17)
 
+{-# LANGUAGE DeriveFunctor #-}
 -- Extensions only needed for (Show (CG a e)) (for debugging)
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -30,7 +31,7 @@ import           Control.Monad.State.Strict
 -- TODO: Break up function types, st these are only RRTy or RBase
 -- | SubC Γ α β is the constraint  Γ |- α <: β
 data SubC a = SubC (CGEnv a) (RType Core a) (RType Core a)
-  deriving Show
+  deriving (Show, Functor)
 newtype CGInfo a = CGInfo { subCs :: [SubC a] }
   deriving Show
 
