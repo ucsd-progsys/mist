@@ -441,9 +441,9 @@ data RType e a
   | RFun !(Bind a) !(RType e a) !(RType e a)
   | RRTy !(Bind a) !(RType e a) !(e a)
   | RForall TVar !(RType e a)
-  | RUnrefined Type -- NOTE: this should be refactored such that the type of an
+  | RUnrefined Type -- [note-RUnrefined] this should be refactored such that the type of an
                     -- Expr or Core can be parameterized over the type data
-                    -- e.g. parse     :: -> Expr (Either RType Infer)
+                    -- e.g. parse     :: -> Expr (Maybe RType)
                     --      elaborate :: -> Expr (Either RType Type)
                     --      cgen      :: -> Expr RType
   deriving (Show, Functor, Read)
@@ -479,7 +479,7 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
   strengthen q (RRTy v t p) = RRTy v t (strengthen q p)
   strengthen q (RFun v t p) = RFun v (strengthen q t) p
   strengthen q (RForall tv rt) = RForall tv $ strengthen q rt
-  strengthen _q (RUnrefined _t) = error "TODO: Anish"
+  strengthen _q (RUnrefined _t) = error "Tried to strengthend KVar hole. See Mist.Types.[note-RUnrefined]"
 
 class Boolable a l where
     true :: l -> a
