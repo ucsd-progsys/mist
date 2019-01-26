@@ -19,8 +19,6 @@
 module Language.Mist.Checker
   ( -- * Top-level Static Checker
     wellFormed
-  , typeCheck
-
     -- * type check and produce an elaborated expression
   , elaborate
 
@@ -28,15 +26,12 @@ module Language.Mist.Checker
   , errUnboundVar
   , errUnboundFun
 
-  , prim2Unpoly
+  , primToUnpoly
   ) where
 
 
-import           Data.Maybe (fromMaybe)
 import qualified Data.Map          as M
 import qualified Data.Set          as S
-import qualified Data.List         as L
-import qualified Control.Exception as Ex
 import           Text.Printf (printf)
 import           Control.Monad.State
 import           Control.Monad.Except
@@ -48,32 +43,59 @@ import           Language.Mist.Names
 
 
 --------------------------------------------------------------------------------
--- | `wellFormed e` returns the list of errors for an expression `e`
+-- | Well-formedness errors
 --------------------------------------------------------------------------------
+
+-- | Environment for well-formedness checks
+-- Maintains recursive binders list to check for unannotated recursive binders
+data WEnv = WEnv
+  { binders :: [Id]
+  , unannRecursiveBinders :: [Id]
+  }
+
+emptyWEnv = WEnv { binders = []
+                 , unannRecursiveBinders = []
+                 }
+
+addBinder :: BareBind -> WEnv -> WEnv
+addBinder bind env@(WEnv{binders = binders})
+  = env{binders = (bindId bind):binders}
+
+addRecursiveBinder :: BareBind -> BareSig -> WEnv -> WEnv
+addRecursiveBinder bind Infer env@(WEnv{unannRecursiveBinders = unannRecursiveBinders})
+  = env{unannRecursiveBinders = (bindId bind):unannRecursiveBinders}
+addRecursiveBinder _ _ env = env
+
+-- | `wellFormed e` returns the list of errors for an expression `e`
 wellFormed :: Bare -> [UserError]
-wellFormed = go emptyEnv
+wellFormed = go emptyWEnv
   where
-    gos                       = concatMap . go
-    go _    (Unit    {})      = []
-    go _    (Boolean {})      = []
-    go _    (Number  n     l) = largeNumberErrors n l
-    go vEnv (Id      x     l) = unboundVarErrors vEnv x l
-    go vEnv (Prim2 _ e1 e2 _) = gos vEnv [e1, e2]
-    go vEnv (If   e1 e2 e3 _) = gos vEnv [e1, e2, e3]
-    go vEnv (Let x _ e1 e2 _) = duplicateBindErrors vEnv x
-                                ++ go vEnv e1
-                                ++ go (addEnv x vEnv) e2
-    go vEnv (Tuple e1 e2   _) = gos vEnv [e1, e2]
-    go vEnv (GetItem e1 _ _)  = go  vEnv e1
-    go vEnv (App e1 e2     _) = gos vEnv [e1, e2]
-    go vEnv (Lam x e      _)  = go (addEnv x vEnv) e
+    go _ (Number n l)             = largeNumberErrors n l
+    go _ Boolean{}                = []
+    go _ Unit{}                   = []
+    go env (Id x l)               = unboundVarErrors env x l
+                                    ++ unannotatedRecursiveBinder env x l
+    go env (Prim2 _ e1 e2 _)      = go env e1
+                                    ++ go env e2
+    go env (If e1 e2 e3 _)        = go env e1
+                                    ++ go env e2
+                                    ++ go env e3
+    go env (Let bind sig e1 e2 _) = duplicateBindErrors env bind
+                                    ++ go (addRecursiveBinder bind sig (addBinder bind env)) e1
+                                    ++ go (addBinder bind env) e2
+    go env (Tuple e1 e2 _)        = go env e1
+                                    ++ go env e2
+    go env (GetItem e1 _ _)       = go env e1
+    go env (App e1 e2 _)          = go env e1
+                                    ++ go env e2
+    go env (Lam bind e _)         = go (addBinder bind env) e
 
 --------------------------------------------------------------------------------
 -- | Error Checkers: In each case, return an empty list if no errors.
 --------------------------------------------------------------------------------
-duplicateBindErrors :: Env -> BareBind -> [UserError]
-duplicateBindErrors vEnv x
-  = condError (memberEnv (bindId x) vEnv) (errDupBind x)
+duplicateBindErrors :: WEnv -> BareBind -> [UserError]
+duplicateBindErrors env bind
+  = condError ((bindId bind) `elem` (binders env)) (errDupBind bind)
 
 largeNumberErrors :: Integer -> SourceSpan -> [UserError]
 largeNumberErrors n l
@@ -82,341 +104,13 @@ largeNumberErrors n l
 maxInt :: Integer
 maxInt = 1073741824
 
-unboundVarErrors :: Env -> Id -> SourceSpan -> [UserError]
-unboundVarErrors vEnv x l
-  = condError (not (memberEnv x vEnv)) (errUnboundVar l x)
-
---------------------------------------------------------------------------------
--- | Error Constructors
---------------------------------------------------------------------------------
-
-condError :: Bool -> UserError -> [UserError]
-condError True  e = [e]
-condError False _ = []
-
-errDupBind      x  = mkError (printf "Shadow binding '%s'" (bindId x))      (sourceSpan x)
-errLargeNum   l n  = mkError (printf "Number '%d' is too large" n) l
-errUnboundVar l x  = mkError (printf "Unbound variable '%s'" x) l
-errUnboundFun l f  = mkError (printf "Function '%s' is not defined" f) l
-errUnify l t1 t2   = mkError (printf "Type error: cannot unify %s and %s" (show t1) (show t2)) l
-errMismatch l s s' = mkError (printf "Type error: mismatched function signature: specified %s but inferred %s" (show s) (show s')) l
-errOccurs l a t    = mkError (printf "Type error: occurs check fails: %s occurs in %s" (show a) (show t)) l
-
---------------------------------------------------------------------------------
-typeCheck :: (Located a) => Expr a -> Type
---------------------------------------------------------------------------------
-typeCheck = typeInfer env0
-  where
-    env0  = OldTypeEnv M.empty
-
-_showType :: Expr a -> Type -> IO ()
-_showType e t = putStrLn $ pprint e ++ " :: " ++ show t
-
--------------------------------------------------------------------------------- typeInfer :: (Located a) => OldTypeEnv -> Expr a -> Type
---------------------------------------------------------------------------------
-typeInfer env e = apply su t
-  where
-    (su, t)     = ti env empSubst e
-
---------------------------------------------------------------------------------
-ti :: (Located a) => OldTypeEnv -> OldSubst -> Expr a -> (OldSubst, Type)
---------------------------------------------------------------------------------
-ti _ su   (Number {})      = (su, TInt)
-
-ti _ su   (Boolean {})     = (su, TBool)
-
-ti env su e@(Id x l)       = traceShow False (pprint e) $ instantiate su (lookupOldTypeEnv (sourceSpan l) x env)
-
--- the following cases reduce to special "function applications", handled by instApp
-ti env su (If e1 e2 e3 l)  = instApp (sourceSpan l) env su ifPoly [e1, e2, e3]
-
-ti env su (Prim2 p e e' l) = instApp (sourceSpan l) env su (prim2Poly p) [e,e']
-
-ti env su (Tuple e e' l)   = instApp (sourceSpan l) env su tupPoly [e, e']
-
-ti env su (GetItem e f l)  = instApp (sourceSpan l) env su (fieldPoly f) [e]
-
--- Trusted signature: just add x := s to the env and use it to check `e`
-ti env su (Let x (Assume s) _ e _)
-                           = traceShow False (pprint x) $ ti env' su e
-  where
-    env'                   = extOldTypeEnv (bindId x) (eraseRType s) env
-
-ti env su (App eF eArg l)  = tiApp (sourceSpan l) sF (apply sF env) tF [eArg]
-  where
-    (sF, tF)               = ti env su eF                            -- eF :: T1
-
--- HIDE?
-{- actual
-ti env su (Lam xs e l)     = tiFun sp env xs e su' Nothing tXs tOut
-  where
-    (su', tXs :=> tOut)    = freshFun su (length xs)
-    sp                     = sourceSpan l
--}
-
-{- starter -}
-ti env su (Lam x body l)   = (su3, apply su3 (tX :=> tOut))
-  where
-    (su1, tX :=> tOut)     = freshFun su
-    env'                   = extTypesEnv env [(x, tX)]
-    (su2, tBody)           = ti env' su1 body
-    su3                    = unify sp su2 tBody (apply su2 tOut)
-    sp                     = sourceSpan l
-
--- OLD-FUN ti env su (Fun f Infer xs e _)
-                           -- OLD-FUN = tiFun sp env xs e su' (Just f) tXs tOut
-  -- OLD-FUN where
-    -- OLD-FUN (su', tXs :=> tOut)    = freshFun su (length xs)
-    -- OLD-FUN sp                     = sourceSpan (bindLabel f)
-
--- HIDE : HARD
-ti env su (Let f (Check rs1) e1 e2 _)
-  | ok                     = ti env' su'' e2
-  | otherwise              = abort (errMismatch sp s1 s1')
-  where
-    ok                     = eqPoly s1 s1'
-    s1'                    = generalize env (apply su'' t1')
-    (su'', t1')            = ti env' su' e1
-    env'                   = extOldTypeEnv (bindId f) s1 env
-    (su' , _t)             = instantiate su s1
-    sp                     = sourceSpan (bindLabel f)
-    s1                     = eraseRType rs1
-
--- ti env su (Fun f (Check s) xs e _)
---   | ok                     = (su'', t')
---   | otherwise              = abort (errMismatch sp s s')
-  -- where
-    -- ok                     = eqPoly (generalize env t) (generalize env t')
-    -- s'                     = generalize env t'
-    -- (su'', t')             = tiFun sp env xs e su' (Just f) tXs tOut
-    -- (su' , t)              = instantiate su s
-    -- (tXs, tOut)            = splitFun sp (length xs) t
-    -- sp                     = sourceSpan (bindLabel f)
-
-ti env su e@(Let x _ e1 e2 _) = traceShow False (pprint e) $ ti env'' su1 e2                         -- e2 :: T2
-  where
-    env''                  = extOldTypeEnv (bindId x) s1 env'
-    (su1, t1)              = ti env su e1                            -- e1 :: T1
-    env'                   = apply su1 env
-    s1                     = generalize env' t1
-
--- DEAD CODE
-ti _ su (Unit _)           = (su, TInt) -- panic "ti: dead code" (sourceSpan (extract e))
-
-freshFun :: OldSubst -> (OldSubst, Type)
-freshFun su = (su', tX :=> tOut)
-  where
-    (su' , [tOut, tX]) = freshTVars su 2
-
-eqPoly  :: Type -> Type -> Bool
-eqPoly (TForall a s) (TForall b t) = apply su s == t
-  where
-    su                     = mkSubst [(a, TVar b)]
-eqPoly s t = s == t
-
-extTypesEnv :: OldTypeEnv -> [(Bind a, Type)] -> OldTypeEnv
-extTypesEnv = foldr (\(x, t) -> extOldTypeEnv (bindId x) t)
-
------------------------------------------------------------------------------------------------
-instApp :: (Located a) => SourceSpan -> OldTypeEnv -> OldSubst -> Type -> [Expr a] -> (OldSubst, Type)
------------------------------------------------------------------------------------------------
-instApp sp env su sF       = tiApp sp su' env tF
-  where
-    (su', tF)              = instantiate su sF
-
------------------------------------------------------------------------------------------------
-tiApp :: (Located a) => SourceSpan -> OldSubst -> OldTypeEnv -> Type -> [Expr a] -> (OldSubst, Type)
------------------------------------------------------------------------------------------------
-tiApp sp su env tF eIns   = (su''', apply su''' tOut)
-  where
-    (su' , tIns)          = L.mapAccumL (ti env) su eIns
-    (su'', tOut)          = freshTVar su'
-    su'''                 = unify sp su'' tF (foldr (:=>) tOut tIns)
-
--- HIDE
-tupPoly, ifPoly :: Type
-tupPoly  = TForall "a" (TForall "b" ("a" :=> ("b" :=> TPair "a" "b")))
-ifPoly   = TForall "a" (TBool :=>  ("a" :=> ("a" :=> "a")))
-
--- HIDE
-fieldPoly :: Field -> Type
-fieldPoly Zero = TForall "a" (TForall "b" (TPair "a" "b" :=> "a"))
-fieldPoly One  = TForall "a" (TForall "b" (TPair "a" "b" :=> "b"))
-
--- HIDE
-prim2Poly :: Prim2 -> Type
-prim2Poly Plus    = TInt :=> (TInt :=> TInt)
-prim2Poly Minus   = TInt :=> (TInt :=> TInt)
-prim2Poly Times   = TInt :=> (TInt :=> TInt)
-prim2Poly Less    = TInt :=> (TInt :=> TBool)
-prim2Poly Greater = TInt :=> (TInt :=> TBool)
-prim2Poly And     = TBool :=> (TBool :=> TBool)
-prim2Poly Equal   = TForall "a" ("a" :=> ("a" :=> TBool))
-
-prim2Unpoly c = go $ prim2Poly c
-  where
-    go (TForall _ t) = go t
-    go (_ :=> (_ :=> t)) = t
-    go _ = error "prim2Poly on a prim which is not a binary function"
-
---------------------------------------------------------------------------------
-unify :: SourceSpan -> OldSubst -> Type -> Type -> OldSubst
---------------------------------------------------------------------------------
-unify sp su (l :=> r) (l' :=> r') = s2
-  where
-    s1                                = unify sp su l l'
-    s2                                = unify sp s1 (apply s1 r) (apply s1 r')
-
--- HIDE
-unify sp su (TCtor c ts) (TCtor c' ts')
-  |  c == c'
-  && length ts == length ts'          = unifys sp su ts ts'
-
--- HIDE
-unify sp su (TPair s1 s2) (TPair t1 t2) = unifys sp su [s1, s2] [t1, t2]
-
-unify sp su (TVar a) t                  = varAsgn sp su a t
-unify sp su t (TVar a)                  = varAsgn sp su a t
-unify _ su TInt TInt                    = su
-unify _ su TBool TBool                  = su
-unify sp _  t1 t2                       = abort (errUnify sp t1 t2)
-
--- | `unifys` recursively calls `unify` on *lists* of types:
-unifys :: SourceSpan -> OldSubst -> [Type] -> [Type] -> OldSubst
-unifys sp su (t:ts) (t':ts') = unifys sp su' (apply su' ts) (apply su' ts')
-  where
-    su'                      = unify sp su t t'
-unifys _  su []     []       = su
-unifys sp _  _      _        = panic "unifys: dead code" sp
-
-_unify sp env su t1 t2 = traceShow False ("MGU: env = " ++ show env ++ " t1 = " ++ show t1 ++ ", t2 = " ++ show t2) su'
-  where
-    su'           = unify sp su t1 t2
-
---------------------------------------------------------------------------------
--- | `varAsgn su a t` extends `su` with `[a := t]` if **required** and **possible**!
-varAsgn :: SourceSpan -> OldSubst -> TVar -> Type -> OldSubst
---------------------------------------------------------------------------------
-varAsgn sp su a t
-  | t == TVar a          =  su
-  | a `elem` freeTvars t =  abort (errOccurs sp a t)
-  | otherwise            =  extSubst su a t
-
---------------------------------------------------------------------------------
-generalize :: OldTypeEnv -> Type -> Type
---------------------------------------------------------------------------------
-generalize env t = (foldr TForall t as)
-  where
-    as           = L.nub (tvs L.\\ evs)
-    tvs          = freeTvars t
-    evs          = freeTvars env
-
---------------------------------------------------------------------------------
-instantiate :: OldSubst -> Type -> (OldSubst, Type)
---------------------------------------------------------------------------------
-instantiate su (TForall a t) = (su', apply suInst t)
-  where
-    (su', a')                = freshTVar su
-    suInst                   = mkSubst [(a, a')]
-instantiate su t = (su, t)
-
---------------------------------------------------------------------------------
--- | Environments --------------------------------------------------------------
---------------------------------------------------------------------------------
-
-newtype OldTypeEnv = OldTypeEnv (M.Map Id Type)
-
-extOldTypeEnv :: Id -> Type -> OldTypeEnv -> OldTypeEnv
-extOldTypeEnv x s (OldTypeEnv env) =  OldTypeEnv $ M.insert x s env
-  where
-    -- _env  = traceShow _msg _env
-    -- _msg  = "extOldTypeEnv: " ++ show x ++ " := " ++ show s
-
-lookupOldTypeEnv :: SourceSpan -> Id -> OldTypeEnv -> Type
-lookupOldTypeEnv l x (OldTypeEnv env) = fromMaybe err  (M.lookup x env)
-  where
-    err                         = abort (errUnboundVar l x)
-
---------------------------------------------------------------------------------
--- | Substitutions -------------------------------------------------------------
---------------------------------------------------------------------------------
-data OldSubst   = Su { suMap :: M.Map TVar Type
-                  , suCnt :: !Int
-                  }
-
-empSubst :: OldSubst
-empSubst =  Su M.empty 0
-
-extSubst :: OldSubst -> TVar -> Type -> OldSubst
-extSubst su a t = su { suMap = M.insert a t su' }
-  where
-     su'        = apply (mkSubst [(a, t)]) (suMap su)
-
-
-mkSubst :: [(TVar, Type)] -> OldSubst
-mkSubst ats = Su (M.fromList ats) 666
-
-unSubst :: [TVar] -> OldSubst -> OldSubst
-unSubst as su = su { suMap = foldr M.delete (suMap su) as }
-
-freshTVars :: OldSubst -> Int -> (OldSubst, [Type])
-freshTVars su n = L.mapAccumL (\a _ -> freshTVar a) su (replicate n ())
-
-freshTVar :: OldSubst -> (OldSubst, Type)
-freshTVar su = (su', TVar (TV ("a" ++ show i)))
-  where
-    (su', i) = fresh su
-
-fresh :: OldSubst -> (OldSubst, Int)
-fresh su  = (su {suCnt = n + 1}, n) where n = suCnt su
-
---------------------------------------------------------------------------------
--- Applying Substitutions ------------------------------------------------------
---------------------------------------------------------------------------------
-
-class Substitutable a where
-  apply     :: OldSubst -> a -> a
-  freeTvars :: a -> [TVar]
-
-instance Substitutable Type where
-  apply _  TInt            = TInt
-  apply _  TBool           = TBool
-  apply su t@(TVar a)      = M.findWithDefault t a (suMap su)
-  apply su (ts :=> t)      = apply su ts :=> apply su t
-  apply su (TPair t1 t2)   = TPair (apply su t1) (apply su t2)
-  apply su (TCtor c ts)    = TCtor c (apply su ts)
-  apply _ TUnit            = TUnit
-  apply s (TForall a t)    = TForall a $ apply (unSubst [a] s)  t
-
-  freeTvars TInt           = []
-  freeTvars TBool          = []
-  freeTvars TUnit          = []
-  freeTvars (TVar a)       = [a]
-  freeTvars (ts :=> t)     = freeTvars ts ++ freeTvars t
-  freeTvars (TPair t1 t2)  = freeTvars t1 ++ freeTvars t2
-  freeTvars (TCtor _ ts)   = freeTvars ts
-  freeTvars (TForall a t)  = freeTvars t L.\\ [a]
-
-instance (Functor t, Foldable t, Substitutable a) => Substitutable (t a) where
-  apply     = fmap . apply
-  freeTvars = foldr (\x r -> freeTvars x ++ r) []
-
-instance Substitutable OldTypeEnv where
-  apply s   (OldTypeEnv env) =  OldTypeEnv   (apply s <$> env)
-  freeTvars (OldTypeEnv env) =  freeTvars (M.elems     env)
-
---------------------------------------------------------------------------------
--- Printing Types --------------------------------------------------------------
---------------------------------------------------------------------------------
-
-instance Show OldSubst where
-  show (Su m n) = show (m, n)
-
-instance Show OldTypeEnv where
-  showsPrec x (OldTypeEnv m) = showsPrec x (M.toList m)
-
-instance Ex.Exception String where
-
+unboundVarErrors :: WEnv -> Id -> SourceSpan -> [UserError]
+unboundVarErrors env x l
+  = condError (x `notElem` (binders env)) (errUnboundVar l x)
+
+unannotatedRecursiveBinder :: WEnv -> Id -> SourceSpan -> [UserError]
+unannotatedRecursiveBinder env x l
+  = condError (x `elem` (unannRecursiveBinders env)) (errUnannRecursiveBinder l x)
 
 --------------------------------------------------------------------------------
 -- Context -----------------------------------------------------------------
@@ -452,23 +146,26 @@ data Ctxt = Ctxt { typeEnv :: TypeEnv
                  , existentials :: S.Set TVar -- ^ The set of existential variables
                  }
 
-type Context tag = StateT Ctxt (FreshT (TypingEither tag))
+newtype TypingResult a = TypingResult {unTypingResult :: Result a}
+  deriving (Monad, Applicative, Functor, MonadError [UserError])
+
+type Context = StateT Ctxt (FreshT TypingResult)
 -- DEBUGGING
--- type Context tag = StateT Ctxt (FreshT (StateT String (TypingEither tag)))
+-- type Context = StateT Ctxt (FreshT (StateT String (TypingEither tag)))
 
 -- DEBUGGING
--- tell :: String -> Context tag ()
+-- tell :: String -> Context ()
 -- tell str = lift . lift . modify $ (\stuff -> stuff ++ str ++ "\n")
 
 -- DEBUGGING
--- untell :: Context tag String
+-- untell :: Context String
 -- untell = lift get
 
 initialCtxt :: Ctxt
 initialCtxt = Ctxt { typeEnv = TypeEnv [], existentials = S.empty}
 
-evalContext :: Context tag a -> FreshState -> TypingEither tag a
-evalContext m freshState = evalFreshT (evalStateT m initialCtxt) freshState
+evalContext :: Context a -> FreshState -> Result a
+evalContext m freshState = unTypingResult $ evalFreshT (evalStateT m initialCtxt) freshState
 
 -- DEBUGGING
 -- evalContext m freshState = evalStateT (evalFreshT (evalStateT m initialCtxt) freshState) ""
@@ -492,16 +189,16 @@ envToSubst (TypeEnv env) =
              _ -> substitution)
   M.empty env
 
-getsEnv :: (TypeEnv -> a) -> Context tag a
+getsEnv :: (TypeEnv -> a) -> Context a
 getsEnv f = gets $ f . typeEnv
 
-getEnv :: Context tag TypeEnv
+getEnv :: Context TypeEnv
 getEnv = getsEnv id
 
-modifyEnv :: (TypeEnv -> TypeEnv) -> Context tag ()
+modifyEnv :: (TypeEnv -> TypeEnv) -> Context ()
 modifyEnv f = modify $ \ctxt@Ctxt{typeEnv = env} -> ctxt { typeEnv = f env }
 
-setEnv :: TypeEnv -> Context tag ()
+setEnv :: TypeEnv -> Context ()
 setEnv newEnv = modifyEnv $ const newEnv
 
 extendEnv :: [TypeEnvPart] -> TypeEnv -> TypeEnv
@@ -532,13 +229,13 @@ isLeftOf alpha beta (TypeEnv env) = go env
       | otherwise     = go env'
     go (_:env') = go env'
 
-generateExistential :: Context tag EVar
+generateExistential :: Context EVar
 generateExistential = do
   newEvar <- TV <$> refreshId "E?"
   modify $ \ctxt@Ctxt{existentials = existSet} -> ctxt { existentials = S.insert newEvar existSet}
   pure newEvar
 
-toEVar :: Type -> Context tag (Maybe EVar)
+toEVar :: Type -> Context (Maybe EVar)
 toEVar (TVar tvar) = do
   isEVar <- gets $ S.member tvar . existentials
   if isEVar then pure $ Just tvar else pure Nothing
@@ -551,13 +248,12 @@ unsolvedExistentials (TypeEnv env) = [evar | (Unsolved evar) <- env]
 -- Elaboration -----------------------------------------------------------------
 --------------------------------------------------------------------------------
 
-
 -- | Elaborates a surface Expr
 -- - adds type annotations
 -- - adds explicit type application
 -- - adds explicit type abstraction
 -- - assumes every name is unique
-elaborate :: Expr a -> TypingEither a (Core a)
+elaborate :: (Located a) => Expr a -> Result (Core a)
 elaborate e = fst <$> evalContext (synthesize e) emptyFreshState -- TODO: pass around the name state
 
 -- DEBUGGING
@@ -568,7 +264,7 @@ elaborate e = fst <$> evalContext (synthesize e) emptyFreshState -- TODO: pass a
 
 -- TODO: add judgments for documentation
 -- | Γ ⊢ e ~> c => A ⊣ Θ
-synthesize :: Expr a -> Context a (Core a, Type)
+synthesize :: (Located a) => Expr a -> Context (Core a, Type)
 synthesize (Number i tag) = pure (CNumber i tag, TInt)
 synthesize (Boolean b tag) = pure (CBoolean b tag, TBool)
 synthesize (Unit tag) = pure (CUnit tag, TUnit)
@@ -576,12 +272,8 @@ synthesize (Id id tag) = do
   boundType <- getsEnv $ getBoundType id
   case boundType of
     Just typ -> pure (CId id tag, typ)
-    Nothing -> throwError $ UnboundIdErr id tag
-synthesize (Prim2 operator e1 e2 tag) = do -- TODO: fix this to work for equals and other polymorphic types
-  let (typ1 :=> (typ2 :=> typ3)) = primOpType operator
-  c1 <- check e1 typ1
-  c2 <- check e2 typ2
-  pure (CPrim2 operator c1 c2 tag, typ3)
+    Nothing -> throwError $ [errUnboundVar (sourceSpan tag) id]
+synthesize (Prim2 op e1 e2 tag) = synthesizePrim2 op e1 e2 tag -- TODO: fix Prim2 to allow type instantiation
 synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthesis of branching
   cCondition <- check condition TBool
   alpha <- generateExistential
@@ -628,7 +320,7 @@ synthesize (Lam bind e tag) = do
 --   internalcheck e t
 
 -- | Γ ⊢ e ~> c <= A ⊣ Θ
-check :: Expr a -> Type -> Context a (Core a)
+check :: (Located a) => Expr a -> Type -> Context (Core a)
 check expr (TForall tvar typ) = do
   modifyEnv $ extendEnv [BoundTVar tvar]
   c <- check expr typ
@@ -674,6 +366,13 @@ check expr typ = do
     go (Unit tag) TUnit = pure $ CUnit tag
     go _ _ = error "TODO: this is a checking error"
 
+synthesizeApp :: (Located a) => Type -> Core a -> Expr a -> a -> Context (Core a, Type)
+synthesizeApp tFun cFun eArg tag = do
+  (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
+  env <- getEnv
+  let cApplication = subst (envToSubst env) $ CApp cInstantiatedFun cArg tag
+  pure (cApplication, resultType)
+
 -- DEBUGGING
 -- synthesizeSpine funType cFun eArg = do
 --   env <- getEnv
@@ -681,7 +380,7 @@ check expr typ = do
 --   internalsynthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
-synthesizeSpine :: Type -> Core a -> Expr a -> Context a (Core a, Core a, Type)
+synthesizeSpine :: (Located a) => Type -> Core a -> Expr a -> Context (Core a, Core a, Type)
 synthesizeSpine funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
@@ -706,13 +405,26 @@ synthesizeSpine funType cFun eArg = do
       modifyEnv $ extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
       synthesizeSpine newFunType (CTApp cFun (EVar evar) (extractC cFun)) eArg
-    go t = throwError $ ApplyNonFunction t
+    go t = throwError $ [errApplyNonFunction t]
 
+synthesizePrim2 :: (Located a) => Prim2 -> Expr a -> Expr a -> a -> Context (Core a, Type)
+synthesizePrim2 Equal e1 e2 tag = do
+  alpha <- generateExistential
+  modifyEnv $ extendEnv [Unsolved alpha]
+  c1 <- check e1 (EVar alpha)
+  env <- getEnv
+  c2 <- check e2 (applyEnv env (EVar alpha))
+  pure (CPrim2 Equal c1 c2 tag, TBool)
+synthesizePrim2 operator e1 e2 tag = do
+  let (typ1 :=> (typ2 :=> typ3)) = primOpType operator
+  c1 <- check e1 typ1
+  c2 <- check e2 typ2
+  pure (CPrim2 operator c1 c2 tag, typ3)
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
 -- When doing a ∀A.B <: C the subtyping check will infer the
 -- polymorphic instantiation for c.
-instSub :: Core a -> Type -> Type -> Context tag (Core a)
+instSub :: Core a -> Type -> Type -> Context (Core a)
 instSub c a@(TForall _ _) b =
   foldr (\typ instantiated -> CTApp instantiated typ (extractC c))
         c <$> go a b
@@ -740,7 +452,7 @@ instSub c a b = do
 --   a <: b
 
 -- | Γ ⊢ A <: B ⊣ Θ
-(<:) :: Type -> Type -> Context tag ()
+(<:) :: Type -> Type -> Context ()
 TUnit <: TUnit = pure ()
 TInt <: TInt = pure ()
 TBool <: TBool = pure ()
@@ -795,7 +507,7 @@ a <: b = do
 --   internalinstantiateL a b
 
 -- TODO: figure out why we reverse the newly created existentials
-instantiateL :: EVar -> Type -> Context tag ()
+instantiateL :: EVar -> Type -> Context ()
 instantiateL alpha typ = do
   maybeExists <- toEVar typ
   case maybeExists of
@@ -838,7 +550,7 @@ instantiateL alpha typ = do
 --   tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
 --   internalinstantiateR a b
 
-instantiateR :: Type -> EVar -> Context tag ()
+instantiateR :: Type -> EVar -> Context ()
 instantiateR typ alpha = do
   maybeExists <- toEVar typ
   case maybeExists of
@@ -876,18 +588,18 @@ instantiateR typ alpha = do
       modifyEnv $ dropEnvAfter (Scope beta)
     go typ = solveExistential alpha typ []
 
-assertLeftOf :: EVar -> EVar -> Context tag ()
+assertLeftOf :: EVar -> EVar -> Context ()
 alpha `assertLeftOf` beta = do
   alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
   if alphaToLeft
     then pure ()
     else error (printf "TODO: expected Γ[%0$s][%1$s] but got Γ[%1$s][%2$s]" (show alpha) (show beta))
 
-occurrenceCheck :: EVar -> Type -> Context tag ()
+occurrenceCheck :: EVar -> Type -> Context ()
 occurrenceCheck alpha typ = do
   evars <- freeEVars typ
   if S.member alpha evars
-    then throwError $ InfiniteTypeConstraint alpha typ
+    then throwError $ [errInfiniteTypeConstraint alpha typ]
     else pure ()
 
 primOpType :: Prim2 -> Type
@@ -896,23 +608,31 @@ primOpType Minus   = (TInt :=> (TInt :=> TInt))
 primOpType Times   = (TInt :=> (TInt :=> TInt))
 primOpType Less    = (TInt :=> (TInt :=> TBool))
 primOpType Greater = (TInt :=> (TInt :=> TBool))
-primOpType Equal   = error "TODO: support polymorphic equality"
+primOpType Equal   = (TForall (TV "a") ((TVar $ TV "a") :=> ((TVar $ TV "a") :=> TBool))) -- TODO: proper fresh name
 primOpType And     = (TBool :=> (TBool :=> TBool))
 
-checkSub :: Expr a -> Type -> Context a (Core a)
+primToUnpoly c = go $ primOpType c
+  where
+    go (TForall _ t) = go t
+    go (_ :=> (_ :=> t)) = t
+    go _ = error "primOpType on a prim which is not a binary function"
+
+
+checkSub :: (Located a) => Expr a -> Type -> Context (Core a)
 checkSub e t1 = do
   (c, t2) <- synthesize e
   env <- getEnv
   instSub c (applyEnv env t2) (applyEnv env t1)
 
-typeCheckLet
-  :: Bind a
-  -> Sig a
-  -> Expr a
-  -> Expr a
-  -> a
-  -> (AnnBind a -> Core a -> Expr a -> a -> Context a b)
-  -> Context a b
+typeCheckLet ::
+  (Located a) =>
+  Bind a ->
+  Sig a ->
+  Expr a ->
+  Expr a ->
+  a ->
+  (AnnBind a -> Core a -> Expr a -> a -> Context b) ->
+  Context b
 typeCheckLet binding Infer e1 e2 tag handleBody = do
   alpha <- generateExistential
   let evar = EVar alpha
@@ -961,7 +681,7 @@ typeCheckLet binding (Assume rType) e1 e2 tag handleBody = do
 
 -- | Carries out Hindley-Milner style let generalization on the existential variable.
 -- Also substitutes for all existentials that were added as annotations
-letGeneralize :: Type -> Core a -> TypeEnv -> Context a (Type, Core a)
+letGeneralize :: Type -> Core a -> TypeEnv -> Context (Type, Core a)
 letGeneralize t c env = do
   let preGeneralizedFun = applyEnv env t
   freeExistentials <- freeEVars preGeneralizedFun
@@ -977,18 +697,11 @@ letGeneralize t c env = do
   let abstractedFun = insertTAbs generalizedType c
   pure (generalizedType, subst substitution abstractedFun)
 
-synthesizeApp :: Type -> Core a -> Expr a -> a -> Context a (Core a, Type)
-synthesizeApp tFun cFun eArg tag = do
-  (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
-  env <- getEnv
-  let cApplication = subst (envToSubst env) $ CApp cInstantiatedFun cArg tag
-  pure (cApplication, resultType)
-
 selectorToPrim :: Field -> a -> Core a
 selectorToPrim Zero tag = CPrim Pi0 tag
 selectorToPrim One tag = CPrim Pi1 tag
 
-selectorToType :: Field -> Context a Type
+selectorToType :: Field -> Context Type
 selectorToType Zero = do
   tvar0 <- TV <$> refreshId "a"
   tvar1 <- TV <$> refreshId "b"
@@ -998,7 +711,7 @@ selectorToType One = do
   tvar1 <- TV <$> refreshId "b"
   pure $ TForall tvar0 (TForall tvar1 (TPair (TVar tvar0) (TVar tvar1) :=> TVar tvar1))
 
-checkRType :: RType Expr a -> Context a (RType Core a)
+checkRType :: (Located a) => RType Expr a -> Context (RType Core a)
 checkRType (RBase bind typ refinement) = do
   let binding = VarBind (bindId bind) typ
   modifyEnv $ extendEnv [binding]
@@ -1031,7 +744,7 @@ checkRType (RUnrefined typ) = pure $ RUnrefined typ
 -- If this new solution introduces new existentials
 -- these are added immediately before the existential we are solving.
 -- Errors if the existential does not exist or has already been solved.
-solveExistential :: EVar -> Type -> [EVar] -> Context tag ()
+solveExistential :: EVar -> Type -> [EVar] -> Context ()
 solveExistential evar partialSolution newEvars = do
   (TypeEnv env) <- getEnv
   newEnv <- replaceUnsolved env
@@ -1043,10 +756,10 @@ solveExistential evar partialSolution newEvars = do
                                `mappend` [Solved evar partialSolution]
                                `mappend` parts
     replaceUnsolved (Solved evar' _:_)
-      | evar' == evar = throwError SolvingSolvedExistential
+      | evar' == evar = throwError $ [errSolvingSolvedExistential]
     replaceUnsolved (part:parts) = (part:) <$> replaceUnsolved parts
 
-freeEVars :: Type -> Context tag (S.Set EVar)
+freeEVars :: Type -> Context (S.Set EVar)
 freeEVars typ = eVars typ
   where
     eVars t@(TVar tvar) = do
@@ -1066,23 +779,19 @@ insertTAbs :: Type -> Core a -> Core a
 insertTAbs (TForall tvar typ) c = CTAbs tvar (insertTAbs typ c) (extractC c)
 insertTAbs _ c = c
 
-
 --------------------------------------------------------------------------------
--- Type checker errors ---------------------------------------------------------
+-- | Error Constructors
 --------------------------------------------------------------------------------
 
-type TypingEither a = Either (TypingError a)
+condError :: Bool -> UserError -> [UserError]
+condError True  e = [e]
+condError False _ = []
 
-data TypingError a
-  = MiscErr
-  | UnboundIdErr Id a
-  | SolvingSolvedExistential -- TODO: error message
-  | ApplyNonFunction Type -- TODO: error message
-  | InfiniteTypeConstraint EVar Type -- TODO: error message
-
-instance Show (TypingError a) where
-  show MiscErr = "Miscellaneous error"
-  show (UnboundIdErr id _) = printf "Unbound id: %s" (show id)
-  show SolvingSolvedExistential = printf "TODO: attempting to resolved solved existential variable"
-  show (ApplyNonFunction t) = printf "TODO: attempting to use non-function type as a function: %s" (show t)
-  show (InfiniteTypeConstraint evar typ) = printf "TODO: infinite type constraint: %s ~ %s" (show evar) (show typ)
+errDupBind x = mkError (printf "Shadow binding '%s'" (bindId x)) (sourceSpan x)
+errLargeNum l n = mkError (printf "Number '%d' is too large" n) l
+errUnboundVar l x = mkError (printf "Unbound variable '%s'" x) l
+errUnboundFun l f = mkError (printf "Function '%s' is not defined" f) l
+errUnannRecursiveBinder l x = mkError (printf "Recursive function %s must be annotated" (show x)) l
+errSolvingSolvedExistential = error "TODO: solving solved existential"
+errApplyNonFunction _ = error "TODO: applying non-function"
+errInfiniteTypeConstraint _ _ = error "TODO: infinite type constraint"

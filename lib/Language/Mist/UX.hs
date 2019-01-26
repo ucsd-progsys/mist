@@ -20,7 +20,7 @@ module Language.Mist.UX
   , UserError
   , eMsg
   , eSpan
-  , Result 
+  , Result
 
   -- * Throwing & Handling Errors
   , mkError
@@ -67,11 +67,11 @@ data SourceSpan = SS
   deriving (Eq, Show)
 
 instance Semigroup SourceSpan where
-  s1 <> s2 = mappendSpan s1 s2 
+  s1 <> s2 = mappendSpan s1 s2
 
 instance Monoid SourceSpan where
   mempty  = junkSpan
-  -- mappend x y = x <> y 
+  -- mappend x y = x <> y
 
 mappendSpan :: SourceSpan -> SourceSpan -> SourceSpan
 mappendSpan s1 s2
@@ -225,5 +225,3 @@ renderError e = do
 
 pprintMany :: (PPrint a) => [a] -> Text
 pprintMany xs = L.intercalate ", " (map pprint xs)
-
-

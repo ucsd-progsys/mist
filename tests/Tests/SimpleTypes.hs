@@ -48,6 +48,8 @@ module Tests.SimpleTypes
   ) where
 
 import qualified Language.Mist.Types as T
+import qualified Language.Mist.UX as UX
+import Text.Megaparsec.Pos (initialPos)
 
 pattern Number i = T.Number i ()
 pattern Boolean b = T.Boolean b ()
@@ -83,3 +85,9 @@ pattern CTAbs t e = T.CTAbs t e ()
 pattern AnnBind x t = T.AnnBind { T.aBindId = x
                                 , T.aBindType = t
                                 , T.aBindLabel = ()}
+
+instance UX.Located () where
+  sourceSpan () = UX.SS
+    { UX.ssBegin = initialPos "test"
+    , UX.ssEnd = initialPos "test"
+    }

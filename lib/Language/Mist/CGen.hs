@@ -20,7 +20,7 @@ module Language.Mist.CGen
 
 import           Language.Mist.Types
 import           Language.Mist.Names
-import           Language.Mist.Checker (prim2Unpoly)
+import           Language.Mist.Checker (primToUnpoly)
 import           Control.Monad.State.Strict
 -- import qualified Language.Fixpoint.Types as F
 
@@ -89,7 +89,7 @@ synth _ e@CUnit{}    = prim e TUnit
 synth _ e@CNumber{}  = prim e TInt
 synth _ e@CBoolean{} = prim e TBool
 --- is this right? Shouldn't this be a lookup or something?
-synth _ e@(CPrim2 o _ _ _) = prim e $ prim2Unpoly o
+synth _ e@(CPrim2 o _ _ _) = prim e $ primToUnpoly o
 synth γ (CId x _   ) = single γ x
 
 synth γ (CApp f y _) = do

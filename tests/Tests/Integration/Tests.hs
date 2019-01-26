@@ -9,45 +9,52 @@ import System.FilePath
 import System.IO.Error
 import System.IO
 
+import Text.Printf
+
 import Test.Tasty
 import Test.Tasty.HUnit
 
 import Tests.Utils
 
 import Language.Mist.Runner
+import Language.Mist.UX (Result, SourceSpan)
+import Language.Mist.Types (Core)
 
 integrationTests = testGroupM "Integration"
-  [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos"    ExitSuccess
-  , testGroup "neg" <$> dirTests "tests/Tests/Integration/neg"    (ExitFailure 1)
+  [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" mistSuccess
+  , testGroup "neg" <$> dirTests "tests/Tests/Integration/neg" mistFailure
   ]
 
-
 ---------------------------------------------------------------------------
-dirTests :: FilePath -> ExitCode -> IO [TestTree]
+dirTests :: FilePath -> (Result (Core SourceSpan) -> Assertion) -> IO [TestTree]
 ---------------------------------------------------------------------------
-dirTests root code = do
+dirTests root testPred = do
   files    <- walkDirectory root
   let tests = [ rel | f <- files, isTest f, let rel = makeRelative root f ]
-  return    $ mkTest code root <$> tests
+  return    $ mkTest testPred root <$> tests
 
 isTest   :: FilePath -> Bool
 isTest f = takeExtension f `elem` [".hs"]
 
 ---------------------------------------------------------------------------
-mkTest :: ExitCode -> FilePath -> FilePath -> TestTree
+mkTest :: (Result (Core SourceSpan) -> Assertion) -> FilePath -> FilePath -> TestTree
 ---------------------------------------------------------------------------
-mkTest code dir file = testCase file $ do
+mkTest testPred dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
   withFile log WriteMode $ \h -> do
     ec <- runMist h test
-    assertEqual "Wrong exit code" code (resultExitCode ec)
+    testPred ec
   where
     test = dir </> file
     log  = let (d, f) = splitFileName file in dir </> d </> ".liquid" </> f <.> "log"
 
--- resultExitCode :: Result -> ExitCode
-resultExitCode (Left _)  = ExitFailure 1
-resultExitCode (Right _) = ExitSuccess
+mistSuccess :: Result a -> Assertion
+mistSuccess (Right _) = pure ()
+mistSuccess (Left errors) = assertFailure (printf "expected success but got errors: %s" (show errors))
+
+mistFailure :: Result a -> Assertion
+mistFailure (Right _) = assertFailure "expected failure but Mist succeeded"
+mistFailure (Left _) = pure ()
 
 ----------------------------------------------------------------------------------------
 walkDirectory :: FilePath -> IO [FilePath]
