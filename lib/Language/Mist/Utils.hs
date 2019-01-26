@@ -5,6 +5,7 @@ import qualified Data.List as L
 -- import           Data.Monoid
 import           Data.Maybe (fromMaybe)
 import           Data.Char (isSpace)
+import           Data.Monoid
 import           Control.Exception
 import           Control.Monad
 import           Text.Printf
@@ -81,3 +82,15 @@ getRange :: Int -> Int -> [a] -> [a]
 getRange i1 i2
   = take (i2 - i1 + 1)
   . drop (i1 - 1)
+
+findMap :: Foldable t => (a -> Maybe b) -> t a -> Maybe b
+findMap f = getFirst . foldMap (First . f)
+
+-- | Splices new elements into the list the first time pred holds.
+-- Replaces the element where pred is true.
+spliceWhen :: (a -> Bool) -> [a] -> [a] -> [a]
+spliceWhen _pred _newElements [] = []
+spliceWhen pred newElements (x:xs) =
+  if pred x
+    then newElements `mappend` xs
+    else x:spliceWhen pred newElements xs

@@ -35,6 +35,7 @@ module Language.Mist.Types
   , isVarAnf
   , extract
   , extractC
+  , unTV
 
 
   -- * Smart Constructors
@@ -49,6 +50,7 @@ module Language.Mist.Types
   , bkRType
   , eraseRType
   , reftRType
+  , typeToCoreRType
 
     -- * Environments
   , Env
@@ -91,6 +93,7 @@ data Prim2
 data Expr a
   = Number  !Integer                                a
   | Boolean !Bool                                   a
+  | Unit                                            a
   | Id      !Id                                     a
   | Prim2   !Prim2    !(Expr a) !(Expr a)           a
   | If      !(Expr a) !(Expr a) !(Expr a)           a
@@ -100,7 +103,6 @@ data Expr a
   | App     !(Expr a) !(Expr a)                     a
   | Lam     !(Bind a) !(Expr a)                     a
   -- | KVar    !KVar     ![Id]                         a
-  | Unit                                            a
     deriving (Show, Functor, Read)
 
 -- | Core are expressions with explicit TAbs and TApp
@@ -115,7 +117,7 @@ data Core a
   | CTuple   !(Core a)    !(Core a)           a
   | CPrim    !Prim                            a
   | CApp     !(Core a)    !(Core a)           a
-  | CLam     !(AnnBind a) !(Core a)           a      -- TODO: change to single argument functions
+  | CLam     !(AnnBind a) !(Core a)           a
   | CTApp    !(Core a)    !Type               a      -- TODO: should the type instantiation be a Type or an RType?
   | CTAbs    TVar         !(Core a)           a
   | CUnit                                     a
@@ -427,6 +429,7 @@ fromListEnv bs = Env bs n
 -- | τ ::= { v:τ | r }   -- a refinement on an RType
 -- |     | { v:b | r }   -- a refinement on a base Type
 -- |     | x:τ -> τ      -- a pi type
+-- |     | ∀a.τ
 -- | ```
 -- |
 -- | This allows us to bind functions as in LH `--higherorder`
@@ -453,6 +456,9 @@ newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 
+unTV :: TVar -> Id
+unTV (TV t) = t
+
 class Strengthable e a | a -> e where
   strengthen :: e -> a -> a
 
@@ -466,7 +472,7 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
   strengthen q (RBase v t p) = RBase v t (strengthen q p)
   strengthen q (RRTy v t p) = RRTy v t (strengthen q p)
   strengthen q (RFun v t p) = RFun v (strengthen q t) p
-  strengthen q (RForall tvs rt) = RForall tvs $ strengthen q rt
+  strengthen q (RForall tv rt) = RForall tv $ strengthen q rt
 
 class Boolable a l where
     true :: l -> a
@@ -513,6 +519,12 @@ tagRType (RRTy (Bind _ l) _ _)  = l
 tagRType (RBase (Bind _ l) _ _)  = l
 tagRType (RForall _ rt) = tagRType rt
 tagRType (RFun (Bind _ l) _ _) = l
+
+-- TODO: should a function go to an RBase or an RFun?
+-- NOTE: KVars are inescapable:
+-- If you try to make do without them, you still need to mark let bindings with unknown refinements.
+typeToCoreRType :: Type -> a -> RType Core a
+typeToCoreRType _typ _extra = error "TODO: this should insert a kvar?"
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor
