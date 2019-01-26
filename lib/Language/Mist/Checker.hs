@@ -667,7 +667,9 @@ synthesizeSpine funType cFun eArg = do
       evar <- generateExistential
       modifyEnv $ extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      synthesizeSpine newFunType (CTApp cFun (EVar evar) (extractC cFun)) eArg -- TODO: when do we substitute things? In synthesizeApp?
+      -- TODO: when do we substitute things? In synthesizeApp?
+      -- TODO: do we add the KVar now and again later?
+      synthesizeSpine newFunType (CTApp cFun (EVar evar) (extractC cFun)) eArg
     go t = throwError $ ApplyNonFunction t
 
 
@@ -966,6 +968,7 @@ checkRType (RForall tvar rtype) = do
   newRType <- checkRType rtype
   modifyEnv $ dropEnvAfter binding
   pure $ RForall tvar newRType
+checkRType (RUnrefined typ) = pure $ RUnrefined typ
 
 -- | Solves an unsolved existential.
 -- If this new solution introduces new existentials

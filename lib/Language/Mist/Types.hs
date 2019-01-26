@@ -119,7 +119,7 @@ data Core a
   | CPrim    !Prim                            a
   | CApp     !(Core a)    !(Core a)           a
   | CLam     !(AnnBind a) !(Core a)           a
-  | CTApp    !(Core a)    !Type               a      -- TODO: should the type instantiation be a Type or an RType?
+  | CTApp    !(Core a)    !Type               a      -- TODO: type instantiation should be at an RType
   | CTAbs    TVar         !(Core a)           a
   deriving (Show, Functor, Read)
 
@@ -312,6 +312,7 @@ instance PPrint (e a) => PPrint (RType e a) where
   pprint (RRTy b t e) =
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
+  pprint (RUnrefined typ) = pprint typ
 
 --------------------------------------------------------------------------------
 -- | `isAnf e` is True if `e` is an A-Normal Form
@@ -440,6 +441,11 @@ data RType e a
   | RFun !(Bind a) !(RType e a) !(RType e a)
   | RRTy !(Bind a) !(RType e a) !(e a)
   | RForall TVar !(RType e a)
+  | RUnrefined Type -- NOTE: this should be refactored such that the type of an
+                    -- Expr or Core can be parameterized over the type data
+                    -- e.g. parse     :: -> Expr (Either RType Infer)
+                    --      elaborate :: -> Expr (Either RType Type)
+                    --      cgen      :: -> Expr RType
   deriving (Show, Functor, Read)
 
 data Type = TVar TVar           -- a
@@ -473,6 +479,7 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
   strengthen q (RRTy v t p) = RRTy v t (strengthen q p)
   strengthen q (RFun v t p) = RFun v (strengthen q t) p
   strengthen q (RForall tv rt) = RForall tv $ strengthen q rt
+  strengthen _q (RUnrefined _t) = error "TODO: Anish"
 
 class Boolable a l where
     true :: l -> a
@@ -504,6 +511,7 @@ eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
+eraseRType (RUnrefined t) = t
 
 -- | Returns the refinement of an RType
 reftRType :: (Strengthable (e a) (e a), Boolable (e a) a)
@@ -524,7 +532,7 @@ tagRType (RFun (Bind _ l) _ _) = l
 -- NOTE: KVars are inescapable:
 -- If you try to make do without them, you still need to mark let bindings with unknown refinements.
 typeToCoreRType :: Type -> a -> RType Core a
-typeToCoreRType _typ _extra = error "TODO: this should insert a kvar?"
+typeToCoreRType typ _extra = RUnrefined typ
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor

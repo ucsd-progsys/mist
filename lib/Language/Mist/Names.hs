@@ -104,6 +104,7 @@ instance Subable (e a) (e a) => Subable (e a) (RType e a) where
     RRTy bind (subst su rtype) (subst (M.delete (bindId bind) su) expr)
   subst su (RForall tvars r) =
     RForall tvars (subst su r)
+  subst _su rtype@(RUnrefined _) = rtype
 
 --- subst types for tyvars
 instance Subable Type Type where
@@ -153,6 +154,8 @@ instance Subable Type (e a) => Subable Type (RType e a) where
     RRTy bind (subst su rtype) (subst su expr)
   subst su (RForall tvar r) =
     RForall tvar (subst (M.delete (unTV tvar) su) r)
+  subst su (RUnrefined t) =
+    RUnrefined (subst su t)
 
 -- TODO Subst for Exprs
 
@@ -267,6 +270,8 @@ instance Freshable (e a) => Freshable (RType e a) where
   refresh (RForall tvar r) =
     (RForall <$> uniquifyBindingTVar tvar <*> refresh r)
     <* (const popId) tvar
+  refresh (RUnrefined t) =
+    RUnrefined <$> refresh t
 
 instance Freshable Type where
   refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
