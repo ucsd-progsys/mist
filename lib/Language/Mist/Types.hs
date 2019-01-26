@@ -504,6 +504,7 @@ bindRType (RBase (Bind x _) _ _) = x
 bindRType (RFun  (Bind x _) _ _) = x
 bindRType (RRTy  (Bind x _) _ _) = x
 bindRType (RForall _ rt) =  bindRType rt
+bindRType (RUnrefined _) = error "TODO: Anish"
 
 -- | Returns the base type for an RType
 eraseRType :: RType e a -> Type
@@ -520,6 +521,7 @@ reftRType (RRTy _ rt r)  = strengthen r (reftRType rt)
 reftRType (RBase _ _ r)  = r
 reftRType (RForall _ rt) = reftRType rt
 reftRType (RFun (Bind _ l) _ _) = true l
+reftRType (RUnrefined _) = error "TODO: Anish"
 
 tagRType :: (Strengthable (e a) (e a), Boolable (e a) a)
          => RType e a -> a
@@ -527,6 +529,7 @@ tagRType (RRTy (Bind _ l) _ _)  = l
 tagRType (RBase (Bind _ l) _ _)  = l
 tagRType (RForall _ rt) = tagRType rt
 tagRType (RFun (Bind _ l) _ _) = l
+tagRType (RUnrefined _) = error "TODO: Anish"
 
 -- TODO: should a function go to an RBase or an RFun?
 -- NOTE: KVars are inescapable:
