@@ -77,7 +77,7 @@ instance Subable (Core a) (Core a) where
   subst _  e@CUnit{} = e
   subst _  e@CPrim{} = e
   subst su (CPrim2 op e1 e2 l) =
-    CPrim2 op (subst su e1)(subst su e2) l
+    CPrim2 op (subst su e1) (subst su e2) l
   subst su (CIf e1 e2 e3 l) =
     CIf (subst su e1) (subst su e2) (subst su e3) l
   subst su (CTuple e1 e2 l) =
@@ -105,6 +105,24 @@ instance Subable (e a) (e a) => Subable (e a) (RType e a) where
   subst su (RForall tvars r) =
     RForall tvars (subst su r)
   subst _su rtype@(RUnrefined _) = rtype
+
+instance Subable (RType e a) (RType e a) where
+  subst su (RBase bind typ expr) =
+    case flip M.lookup su =<< tvar typ of
+        Nothing -> RBase bind typ expr
+        Just rt -> RRTy bind rt expr
+  subst su (RFun bind rtype1 rtype2) =
+    RFun bind (subst su rtype1) (subst su rtype2)
+-- the types of refinements don't matter, expect that we check that they're
+-- Bool, hopefully before we get here.
+  subst su (RRTy bind rtype expr) =
+    RRTy bind (subst su rtype) expr
+  subst su (RForall tvar r) =
+    RForall tvar (subst (M.delete (unTV tvar) su) r)
+
+tvar :: Type -> Maybe Id
+tvar (TVar (TV t)) = Just t
+tvar _ = Nothing
 
 --- subst types for tyvars
 instance Subable Type Type where

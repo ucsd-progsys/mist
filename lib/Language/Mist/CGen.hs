@@ -2,6 +2,8 @@
 -- | (see Cosman and Jhala, ICFP '17)
 
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE TupleSections #-}
 -- Extensions only needed for (Show (CG a e)) (for debugging)
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -21,116 +23,142 @@ module Language.Mist.CGen
 import           Language.Mist.Types
 import           Language.Mist.Names
 import           Language.Mist.Checker (primToUnpoly)
-import           Control.Monad.State.Strict
--- import qualified Language.Fixpoint.Types as F
 
 -------------------------------------------------------------------------------
 -- Data Structures
 -------------------------------------------------------------------------------
-
 -- TODO: Break up function types, st these are only RRTy or RBase
 -- | SubC Γ α β is the constraint  Γ |- α <: β
-data SubC a = SubC (CGEnv a) (RType Core a) (RType Core a)
+data SubC a = SAll Id (RType Core a) (SubC a) | SAnd (SubC a) (SubC a) | SHead (Core a)
   deriving (Show, Functor)
+
+instance Boolable (SubC a) a where
+  true a = SHead (true a)
+  false a = SHead (false a)
+
+type CGEnv a = [(Id, RType Core a)]
 newtype CGInfo a = CGInfo { subCs :: [SubC a] }
   deriving Show
 
--- | Constraint Generation Monad
-type CG a = StateT (CGInfo a) Fresh
-type CGEnv a = [(Id, RType Core a)]
+subC :: RType Core a -> RType Core a -> SubC a
+subC (RFun (Bind x l) s s') (RFun (Bind y _) t t') =
+    SAnd (subC t s)
+         (SAll y t (subC (subst1 (CId y l) x s') t'))
+ -- check the base types?
+subC rtin@(RBase (Bind x l) _ _) (RBase (Bind y _) _ rout) =
+    SAll x rtin (SHead $ subst1 (CId x l) y rout)
+subC (RRTy _tin1 _tin2 _tin3) (RRTy _tout1 _tout2 _tout3) = undefined
+-- TODO: polymorphism
+subC (RForall _tin1 _tin2) (RForall _tout1 _tout2) = undefined
+subC _ _ = undefined
 
-instance MonadFresh (CG a) where
-  refreshId = lift . refreshId
-  popId     = lift popId
-  lookupId  = lift . lookupId
+freshKV :: a -> Type -> Fresh (RType Core a)
+freshKV l = fresh l []
 
-instance Semigroup (CGInfo a) where
-  CGInfo a <> CGInfo b = CGInfo (a <> b)
-instance Monoid (CGInfo a) where
-  mempty = CGInfo mempty
+fresh :: a -> [(Id, Type)] -> Type -> Fresh (RType Core a)
+fresh l γ (tau1 :=> tau2) = do
+  t1 <- fresh l γ tau1
+  x <- refreshId "karg#"
+  t2 <- fresh l ((x,tau1):γ) tau2
+  pure $ RFun (Bind x l) t1 t2
 
-addC :: CGEnv a -> RType Core a -> RType Core a -> CG a ()
-addC γ t t' = modify $ \(CGInfo scs) -> CGInfo (SubC γ t t':scs)
+-- TODO : polymorphism
+fresh _l _γ (TForall _tau1 _tau2) = undefined
+fresh _l _γ (TVar _tau) = undefined
 
-addBind :: AnnBind a -> CGEnv a -> CGEnv a
-addBind (AnnBind x t _) γ = (x, t) : γ
-
--- Just for Debugging
-instance (Show a, Show e, Monoid a) => Show (CG a e) where
- show sa = show $ runFresh $ runStateT sa mempty
+fresh l _γ b = do
+  vv <- Bind <$> refreshId "kVV#" <*> pure l
+  k <- refreshId "k$"
+  pure $ RBase vv b (undefined k)
 
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
 -------------------------------------------------------------------------------
-generateConstraints :: Core a -> CGInfo a
-generateConstraints = runFresh . flip execStateT mempty . synth []
+generateConstraints :: Core a -> SubC a
+generateConstraints = fst . runFresh . synth []
 
 -- run doctests with
 --    stack build --copy-compiler-tool doctest
 --    stack exec -- doctest -ilib lib/Language/Mist/CGen.hs
+instance Show a => Show (Fresh a) where
+    show = show . runFresh
 
 -- $
 -- >>> synth [] (CUnit ())
--- (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ()),CGInfo {subCs = []})
+-- (SHead (CBoolean True ()),RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ()))
 -- >>> synth [] (CNumber 1 ())
--- (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CNumber 1 ()) ()),CGInfo {subCs = []})
+-- (SHead (CBoolean True ()),RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CNumber 1 ()) ()))
 -- >>> let rInt = RBase (Bind "VV" ()) TInt (CBoolean True ())
--- >>> synth [] (CLam (AnnBind "x" rInt ()) (CId "x" ()) ())
--- (RFun (Bind {bindId = "x", bindLabel = ()}) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())),CGInfo {subCs = []})
 -- >>> synth [] (CPrim2 Plus (CNumber 1 ()) (CNumber 2 ()) ())
--- (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CPrim2 Plus (CNumber 1 ()) (CNumber 2 ()) ()) ()),CGInfo {subCs = []})
+-- (SHead (CBoolean True ()),RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CPrim2 Plus (CNumber 1 ()) (CNumber 2 ()) ()) ()))
+-- >>> synth [] (CLam (AnnBind "x" rInt ()) (CId "x" ()) ())
+-- (SHead (CBoolean True ()),RFun (Bind {bindId = "x", bindLabel = ()}) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())))
+
+-- TODO:
 -- >>> synth [] (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
 -- (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()),CGInfo {subCs = [SubC [("y",RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))] (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))]})
 -- >>> generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
 -- CGInfo {subCs = [SubC [("y",RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))] (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))]}
 
-synth :: CGEnv a -> Core a -> CG a (RType Core a)
-synth _ e@CUnit{}    = prim e TUnit
-synth _ e@CNumber{}  = prim e TInt
-synth _ e@CBoolean{} = prim e TBool
+synth :: CGEnv a -> Core a -> Fresh (SubC a, RType Core a)
+-- Constants
+synth _ e@(CUnit l)       = (true l,) <$> prim e TUnit
+synth _ e@(CNumber  _ l)  = (true l,) <$> prim e TInt
+synth _ e@(CBoolean _ l)  = (true l,) <$> prim e TBool
 --- is this right? Shouldn't this be a lookup or something?
-synth _ e@(CPrim2 o _ _ _) = prim e $ primToUnpoly o
-synth γ (CId x _   ) = single γ x
+synth _ e@(CPrim2 o _ _ l) = (true l,) <$> prim e (primToUnpoly o)
+
+-- vars, abstraction, application, let
+synth γ (CId x l) = (true l,) <$> single γ x
+
+-- The case where x has no annotation is slightly more complex. Read the
+-- second equation first.
+synth γ (CLam (AnnBind x (RUnrefined tau) l) e _)
+  = do tHat <- freshKV l tau
+       fmap (bindsRType (AnnBind x tHat l)) <$> synth ((x,tHat):γ) e
+synth γ (CLam b@(AnnBind x t _l) e _)
+  = fmap (bindsRType b) <$> synth ((x,t):γ) e
 
 synth γ (CApp f y _) = do
-  RFun x t t' <- synth γ f
-  addC γ <$> synth γ y <*> pure t
-  pure $ subst1 y (bindId x) t'
+  (c, RFun x t t') <- synth γ f
+  (_, ty) <- synth γ y
+  let cy = subC ty t
+  pure (SAnd c cy, subst1 y (bindId x) t')
 
-synth γ (CTAbs a e _) = do
-  RForall a <$> synth γ e
+synth γ (CLet (AnnBind x (RUnrefined _) _) e1 e2 l)
+  = do (c1, t1) <- synth γ e1
+       (c2, t2) <- synth ((x,t1):γ) e2
+       tHat <- freshKV l (eraseRType t2)
+       pure (SAnd (SAnd c1 (subC t2 tHat)) (SAll x t1 c2), tHat)
+synth γ (CLet (AnnBind x tx _) e1 e2 l)
+  = do (c1, t1) <- synth γ e1
+       (c2, t2) <- synth ((x,tx):γ) e2
+       tHat <- freshKV l (eraseRType t2)
+       pure (SAnd (SAnd (SAnd c1 (subC t1 tx)) (subC t2 tHat)) (SAll x tx c2), tHat)
 
-synth γ (CTApp e tau _) = do
+-- Polymorphism
+synth γ (CTAbs a e _) =
+  fmap (RForall a) <$> synth γ e
+
+synth γ (CTApp e tau l) = do
   -- if this blows up it's Checker's fault
-  RForall (TV a) t <- synth γ e
-  -- TODO: tau should be fresh (that is, has its own kvar)
-  -- (add at checker time and make CTApp :: Core -> RType -> Core (?) )
-  pure $ subst1 tau a t
+  (c, RForall (TV a) t) <- synth γ e
+  tHat <- freshKV l tau
+  pure (c, subst1 tHat a t)
 
 -- Fake ADT stuff
 synth _γ (CTuple _e1 _e2 _) = undefined
 synth _γ (CPrim _prim _)    = undefined
 synth _γ (CIf _b _e1 _e2 _) = undefined
 
--- "Bidirectional" "portal" that's made redudant by the fact that we insert
--- all the KVARs at Checker time
-synth γ (CLam x e _)
-  = bindsRType x <$>
-    synth (addBind x γ) e
-synth γ (CLet b@(AnnBind _ t1 _) e1 e2 _)
-  = do let γ' = addBind b γ
-       te1 <- synth γ' e1
-       addC γ' te1 t1
-       synth γ' e2
-
-prim :: Core a -> Type -> CG a (RType Core a)
+prim :: Core a -> Type -> Fresh (RType Core a)
 prim e t = do
   let l = extractC e
   vv <- refreshId "VV#"
   let reft = CPrim2 Equal (CId vv l) e l
   pure $ RBase (Bind vv l) t reft
 
-single :: CGEnv a -> Id -> CG a (RType Core a)
+single :: CGEnv a -> Id -> Fresh (RType Core a)
 single γ x = case lookup x γ of
   Just rt@(RBase (Bind v l) _ _)
   -- `x` is already bound, so instead of "re-binding" x we should selfify

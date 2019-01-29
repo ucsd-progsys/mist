@@ -2,7 +2,6 @@
 module Language.Mist.ToFixpoint
   (
     solve
-  , insert
   ) where
 
 import Data.String (fromString)
@@ -21,14 +20,18 @@ import qualified Language.Fixpoint.Horn.Solve as S
 
 -- |
 -- >>> let rInt = RBase (M.Bind "VV" ()) TInt (CBoolean True ())
--- >>> let MC.CGInfo scs = MC.generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
--- >>> let hc = foldl insert (Head (HC.Reft F.PTrue) ()) scs
--- >>> S.solve defConfig (Query [] [] hc)
+-- >>> let cs = MC.generateConstraints (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CNumber 2 ()) ())
+-- >>> solve cs
 -- Result {resStatus = Safe, resSolution = fromList [], gresSolution = }
 
-solve :: [MC.SubC a] -> IO (F.Result Integer)
-solve scs = S.solve defConfig (Query [] [] hc)
-  where hc = foldl insert (Head (HC.Reft F.PTrue) ()) (void <$> scs)
+-- TODO:
+-- >>> let cs = MC.generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
+-- >>> solve cs
+-- Result {resStatus = Safe, resSolution = fromList [], gresSolution = }
+
+solve :: MC.SubC a -> IO (F.Result Integer)
+solve sc = S.solve defConfig (Query [] [] hc)
+  where hc = void $ toHC sc
 
 --------------------------------------------------------------------
 -- NNF Horn Clauses as tries of subCs
@@ -44,59 +47,19 @@ deriving instance Show a => Show (Cstr a)
 
 -- |
 -- >>> let rt x  = RBase (M.Bind {bindId = x, bindLabel = ()}) TUnit (CPrim2 Equal (CId x  ()) (CUnit ()) ())
--- >>> let c = insert (Head (HC.Reft F.PTrue) ()) (MC.SubC [] (rt "v") (rt "v"))
--- >>> let c' = insert c (MC.SubC [("x", rt "x")] (rt "v") (rt "v"))
--- >>> let c'' = insert c'  (MC.SubC [("x", rt "x"),("y", rt "y")] (rt "v") (rt "v"))
--- >>> c''
--- CAnd [Head (Reft (PAnd [])) (),All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "()"))) ()),All (Bind {bSym = "x", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "x") (EVar "()"))}) (CAnd [All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "()"))) ()),All (Bind {bSym = "y", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "y") (EVar "()"))}) (All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "()"))) ()))])]
+-- >>>  let h = MC.SHead $ CPrim2 Equal (CId "v" ()) (CId "v"()) ()
+-- >>>  let c = MC.SAll "x" (rt "x") $ MC.SAnd (MC.SAll "y" (rt "y") (MC.SAll "v" (rt "v") h)) (MC.SAll "v" (rt "v") h)
+-- >>> toHC c
+-- All (Bind {bSym = "x", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "x") (EVar "()"))}) (CAnd [All (Bind {bSym = "y", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "y") (EVar "()"))}) (All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "v"))) ())),All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "v"))) ())])
 
-insert :: Cstr a -> MC.SubC a -> Cstr a
-insert
-  c
-  sc@(MC.SubC [] _ _)
-  = addNode c sc
+toHC (MC.SAll x rt c) = HC.All (HC.Bind (fromString x) (typeToSort tau) (Reft $ coreToFixpoint $ MN.subst1 (CId x l) y p)) (toHC c)
+  where (y, tau, p, l) = bkRType rt
+toHC (MC.SHead e) = HC.Head (HC.Reft $ coreToFixpoint e) (extractC e)
+toHC c@MC.SAnd{} = HC.CAnd $ toHC <$> bkSAnd c
 
-insert
-  c'@(HC.All b@(HC.Bind x _ _) c)
-  sc@(MC.SubC ((x',_):xs) l r)
-  = if x == fromString x'
-      then HC.All b (insert c (MC.SubC xs l r))
-      else addNode c' sc
-
-insert
-  (HC.CAnd cs)
-  sc@(MC.SubC ((x',_):_) _ _)
-  = CAnd $ insertOne (fromString x') sc cs
-
-insert
-  c@HC.Head{}
-  sc
-  = addNode c sc
-
-insertOne :: F.Symbol -> MC.SubC a -> [Cstr a] -> [Cstr a]
-insertOne x sc (c@(HC.All (HC.Bind x' _ _) _):cs) =
-    if x == x' then insert c sc : cs
-               else c : insertOne x sc cs
-insertOne x sc (c@Head{}:cs) =  c : insertOne x sc cs
--- CAnd should never be followed by another CAnd
-insertOne _x _sc (_c@CAnd{}:_cs) = error "CAnd followed by CAnd" -- c : insertOne x sc cs
-insertOne _ sc [] = [subCtoHC sc]
-
-addNode :: Cstr a -> MC.SubC a -> Cstr a
-addNode (HC.CAnd xs) sc = HC.CAnd $ subCtoHC sc : xs
-addNode c sc = HC.CAnd [c, subCtoHC sc]
-
-subCtoHC (MC.SubC [] l r) = HC.All (HC.Bind (fromString lid) (typeToSort lsort) lpred) hd
-    where -- vv = refreshId "VV##" lid
-          (lid, lsort, lreft, tag)  = bkRType l
-          (_rid, _rsort, rreft, _) = bkRType r -- TODO: assert that r has the same sort?
-          lpred = HC.Reft $ coreToFixpoint $ lreft -- subst1 lid vv lreft
-          rpred = HC.Reft $ coreToFixpoint $ rreft -- subst1 rid vv rreft
-          hd = Head rpred tag
-subCtoHC (MC.SubC ((x,rt):bs) l r) = HC.All (HC.Bind (fromString x) sort pred) (subCtoHC (MC.SubC bs l r))
-      where sort = typeToSort $ eraseRType rt
-            pred = HC.Reft $ coreToFixpoint reft
-            reft = reftRType rt
+bkSAnd (MC.SAnd c1 c2) = bkSAnd c1 ++ bkSAnd c2
+bkSAnd c@MC.SAll{} = pure c
+bkSAnd c@MC.SHead{} = pure c
 
 --------------------------------------------------------------------
 -- | Translate base `Type`s to `Sort`s

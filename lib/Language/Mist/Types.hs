@@ -102,8 +102,7 @@ data Expr a
   | GetItem !(Expr a) !Field                        a
   | App     !(Expr a) !(Expr a)                     a
   | Lam     !(Bind a) !(Expr a)                     a
-  -- | KVar    !KVar     ![Id]                         a
-    deriving (Show, Functor, Read)
+  deriving (Show, Functor, Read)
 
 -- | Core are expressions with explicit TAbs and TApp
 -- and every binding annotated.
@@ -483,15 +482,15 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
 
 class Boolable a l where
     true :: l -> a
-    _false :: l -> a
+    false :: l -> a
 
 instance Boolable (Core a) a where
     true = CBoolean True
-    _false = CBoolean False
+    false = CBoolean False
 
 instance Boolable (Expr a) a where
     true = Boolean True
-    _false = Boolean False
+    false = Boolean False
 
 
 -- | Breaks up an RType into an binder, sort, and refinement
