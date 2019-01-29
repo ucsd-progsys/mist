@@ -7,6 +7,8 @@ import System.IO
 import Language.Mist.Types
 import Language.Mist.Parser
 import Language.Mist.Checker
+import Language.Mist.CGen
+import Language.Mist.ToFixpoint
 
 -- import Debug.Trace (trace, traceM)
 
@@ -23,7 +25,9 @@ act h f = do
   e    <- parse f s
   let r = mist e
   case r of
-    Right t -> hPutStrLn h ("Elaborated: " ++ pprint t)
+    Right t -> hPutStrLn h ("Elaborated: " ++ show t) >>
+               let c = generateConstraints t in
+                 (print c >> solve c >>= print)
     Left _  -> return ()
   return r
 
