@@ -15,6 +15,7 @@ import           Language.Fixpoint.Types.Config (defConfig)
 import qualified Language.Fixpoint.Types      as F
 import           Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Horn.Solve as S
+import qualified Data.HashMap.Strict       as Map
 
 -- | Solves the subtyping constraints we got from CGen.
 
@@ -23,8 +24,6 @@ import qualified Language.Fixpoint.Horn.Solve as S
 -- >>> let cs = MC.generateConstraints (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CNumber 2 ()) ())
 -- >>> solve cs
 -- Result {resStatus = Safe, resSolution = fromList [], gresSolution = }
-
--- TODO:
 -- >>> let cs = MC.generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
 -- >>> solve cs
 -- Result {resStatus = Safe, resSolution = fromList [], gresSolution = }
@@ -134,6 +133,11 @@ coreToFixpoint (CTuple e1 e2 _)    =
                (coreToFixpoint e1))
        (coreToFixpoint e2)
 coreToFixpoint (CPrim prim _)      = primToFixpoint prim
+coreToFixpoint (KVar k vs _)       =
+  F.PKVar (fromString k)
+          (F.Su $ Map.fromList
+            (zip (fromString . (k ++) . show <$> [1..])
+                 (coreToFixpoint <$> vs)))
 coreToFixpoint (CLam _bs _e2 _)    = error "TODO coreToFixpoint"
 coreToFixpoint (CTApp e tau _)     = F.ETApp (coreToFixpoint e) (typeToSort tau)
 coreToFixpoint (CTAbs _as e _)     = F.ETAbs (coreToFixpoint e) (error "TODO coreToFixpoint TVar")

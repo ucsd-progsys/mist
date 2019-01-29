@@ -120,6 +120,7 @@ data Core a
   | CLam     !(AnnBind a) !(Core a)           a
   | CTApp    !(Core a)    !Type               a      -- TODO: type instantiation should be at an RType
   | CTAbs    TVar         !(Core a)           a
+  | KVar     !Id          ![Core a]           a
   deriving (Show, Functor, Read)
 
 data Sig a
@@ -216,6 +217,7 @@ extractC (CLam _ _ l)     = l
 extractC (CUnit  l)       = l
 extractC (CTApp _ _ l)    = l
 extractC (CTAbs _ _ l)    = l
+extractC (KVar _ _ l)     = l
 
 --------------------------------------------------------------------------------
 -- | Dynamic Errors

@@ -66,10 +66,12 @@ fresh l γ (tau1 :=> tau2) = do
 fresh _l _γ (TForall _tau1 _tau2) = undefined
 fresh _l _γ (TVar _tau) = undefined
 
-fresh l _γ b = do
+fresh l γ b = do
   vv <- Bind <$> refreshId "kVV#" <*> pure l
   k <- refreshId "k$"
-  pure $ RBase vv b (undefined k)
+  -- TODO: use actual ids from γ (see coreToFixpoint KVar)
+  let vs = (`CId` l) . (k ++) . show <$> (zipWith const [1..] γ)
+  pure $ RBase vv b (KVar k vs l)
 
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
@@ -93,12 +95,10 @@ instance Show a => Show (Fresh a) where
 -- (SHead (CBoolean True ()),RBase (Bind {bindId = "VV###0", bindLabel = ()}) TInt (CPrim2 Equal (CId "VV###0" ()) (CPrim2 Plus (CNumber 1 ()) (CNumber 2 ()) ()) ()))
 -- >>> synth [] (CLam (AnnBind "x" rInt ()) (CId "x" ()) ())
 -- (SHead (CBoolean True ()),RFun (Bind {bindId = "x", bindLabel = ()}) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())))
-
--- TODO:
 -- >>> synth [] (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
--- (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()),CGInfo {subCs = [SubC [("y",RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))] (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))]})
+-- (SAnd (SAnd (SAnd (SHead (CBoolean True ())) (SAll "VV###0" (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (SHead (CBoolean True ())))) (SAll "VV" (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (SHead (KVar "k$##2" [] ())))) (SAll "y" (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (SAnd (SHead (CBoolean True ())) (SAll "VV" (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (SHead (CBoolean True ()))))),RBase (Bind {bindId = "kVV###1", bindLabel = ()}) TInt (KVar "k$##2" [] ()))
 -- >>> generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
--- CGInfo {subCs = [SubC [("y",RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))] (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ()))]}
+-- SAnd (SAnd (SAnd (SHead (CBoolean True ())) (SAll "VV###0" (RBase (Bind {bindId = "VV###0", bindLabel = ()}) TUnit (CPrim2 Equal (CId "VV###0" ()) (CUnit ()) ())) (SHead (CBoolean True ())))) (SAll "VV" (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (SHead (KVar "k$##2" [] ())))) (SAll "y" (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (SAnd (SHead (CBoolean True ())) (SAll "VV" (RBase (Bind {bindId = "VV", bindLabel = ()}) TInt (CBoolean True ())) (SHead (CBoolean True ())))))
 
 synth :: CGEnv a -> Core a -> Fresh (SubC a, RType Core a)
 -- Constants
@@ -150,6 +150,8 @@ synth γ (CTApp e tau l) = do
 synth _γ (CTuple _e1 _e2 _) = undefined
 synth _γ (CPrim _prim _)    = undefined
 synth _γ (CIf _b _e1 _e2 _) = undefined
+
+synth _ KVar{} = error "absurd"
 
 prim :: Core a -> Type -> Fresh (RType Core a)
 prim e t = do

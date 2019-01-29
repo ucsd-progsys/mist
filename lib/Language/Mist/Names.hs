@@ -88,6 +88,8 @@ instance Subable (Core a) (Core a) where
     CTApp (subst su e) t l
   subst su (CTAbs tvs e l) =
     CTAbs tvs (subst su e) l
+  subst su (KVar k vs l) =
+    KVar k (subst su <$> vs) l
 
 instance Subable (Core a) (AnnBind a) where
   subst su (AnnBind name t l) = AnnBind name (subst su t) l
@@ -119,6 +121,7 @@ instance Subable (RType e a) (RType e a) where
     RRTy bind (subst su rtype) expr
   subst su (RForall tvar r) =
     RForall tvar (subst (M.delete (unTV tvar) su) r)
+  subst _  (RUnrefined tau) = RUnrefined tau
 
 tvar :: Type -> Maybe Id
 tvar (TVar (TV t)) = Just t
@@ -269,6 +272,8 @@ instance Freshable (Core a) where
     CTApp <$> refresh e <*> pure t <*> pure l
   refresh (CTAbs tvs e l) =
     CTAbs tvs <$> refresh e <*> pure l
+  refresh (KVar k vs l) =
+    KVar k <$> mapM refresh vs <*> pure l
 
 instance Freshable (Sig a) where
   refresh Infer = pure Infer
