@@ -14,11 +14,14 @@ module Language.Mist.Names
   , MonadFresh (..)
   , FreshT
   , Fresh
+  , FreshState
   , evalFreshT
   , runFresh
 
   , Subable (..)
+  , Subst
   , subst1
+  , emptyFreshState
   ) where
 
 import qualified Data.Map.Strict as M
@@ -53,6 +56,7 @@ type Subst e = M.Map Id e
 subst1 :: Subable e a => e -> Id -> a -> a
 subst1 ex x e = subst (M.singleton x ex) e
 
+-- TODO: clarify if this is a parallel substitution
 -- | substitutes an e in a
 class Subable e a where
   subst :: Subst e -> a -> a
@@ -100,6 +104,7 @@ instance Subable (e a) (e a) => Subable (e a) (RType e a) where
     RRTy bind (subst su rtype) (subst (M.delete (bindId bind) su) expr)
   subst su (RForall tvars r) =
     RForall tvars (subst su r)
+  subst _su rtype@(RUnrefined _) = rtype
 
 --- subst types for tyvars
 instance Subable Type Type where
@@ -124,16 +129,21 @@ instance Subable Type (Core a) where
     CTAbs tv (subst (M.delete (unTV tv) su) e) l
   subst su (CLet bind e1 e2 l) =
     CLet (subst su bind) (subst su e1) (subst su e2) l
-  subst su (CLam bs body l) =
-    CLam (subst su bs) (subst su body) l
+  subst su (CLam b body l) =
+    CLam (subst su b) (subst su body) l
+  subst su (CIf e1 e2 e3 l) =
+    CIf (subst su e1) (subst su e2) (subst su e3) l
+  subst su (CTuple e1 e2 l) =
+    CTuple (subst su e1) (subst su e2) l
+  subst su (CApp e1 e2 l) =
+    CApp (subst su e1) (subst su e2) l
+  subst su (CPrim2 op e1 e2 l) =
+    CPrim2 op (subst su e1) (subst su e2) l
 
   subst _ e = e
 
 instance Subable Type (AnnBind a) where
   subst su (AnnBind name t l) = AnnBind name (subst su t) l
-
-unTV :: TVar -> Id
-unTV (TV t) = t
 
 instance Subable Type (e a) => Subable Type (RType e a) where
   subst su (RBase bind typ p) =
@@ -144,6 +154,8 @@ instance Subable Type (e a) => Subable Type (RType e a) where
     RRTy bind (subst su rtype) (subst su expr)
   subst su (RForall tvar r) =
     RForall tvar (subst (M.delete (unTV tvar) su) r)
+  subst su (RUnrefined t) =
+    RUnrefined (subst su t)
 
 -- TODO Subst for Exprs
 
@@ -258,6 +270,8 @@ instance Freshable (e a) => Freshable (RType e a) where
   refresh (RForall tvar r) =
     (RForall <$> uniquifyBindingTVar tvar <*> refresh r)
     <* (const popId) tvar
+  refresh (RUnrefined t) =
+    RUnrefined <$> refresh t
 
 instance Freshable Type where
   refresh (TVar tvar) = TVar <$> uniquifyTVar tvar

@@ -303,8 +303,8 @@ baseType
 
 mkArrow :: [Type] -> Type
 mkArrow [t] = t
-mkArrow (_:_) = foldr (:=>) t ts'
-  where t:ts' = L.reverse ts'
+mkArrow ts@(_:_) = foldr (:=>) t ts'
+  where t:ts' = L.reverse ts
 mkArrow _  = error "impossible: mkArrow"
 
 tvar :: Parser TVar

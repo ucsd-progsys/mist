@@ -35,6 +35,7 @@ module Language.Mist.Types
   , isVarAnf
   , extract
   , extractC
+  , unTV
 
 
   -- * Smart Constructors
@@ -49,6 +50,7 @@ module Language.Mist.Types
   , bkRType
   , eraseRType
   , reftRType
+  , typeToCoreRType
 
     -- * Environments
   , Env
@@ -91,6 +93,7 @@ data Prim2
 data Expr a
   = Number  !Integer                                a
   | Boolean !Bool                                   a
+  | Unit                                            a
   | Id      !Id                                     a
   | Prim2   !Prim2    !(Expr a) !(Expr a)           a
   | If      !(Expr a) !(Expr a) !(Expr a)           a
@@ -100,7 +103,6 @@ data Expr a
   | App     !(Expr a) !(Expr a)                     a
   | Lam     !(Bind a) !(Expr a)                     a
   -- | KVar    !KVar     ![Id]                         a
-  | Unit                                            a
     deriving (Show, Functor, Read)
 
 -- | Core are expressions with explicit TAbs and TApp
@@ -108,6 +110,7 @@ data Expr a
 data Core a
   = CNumber  !Integer                         a
   | CBoolean !Bool                            a
+  | CUnit                                     a
   | CId      !Id                              a
   | CPrim2   !Prim2       !(Core a) !(Core a) a
   | CIf      !(Core a)    !(Core a) !(Core a) a
@@ -115,10 +118,9 @@ data Core a
   | CTuple   !(Core a)    !(Core a)           a
   | CPrim    !Prim                            a
   | CApp     !(Core a)    !(Core a)           a
-  | CLam     !(AnnBind a) !(Core a)           a      -- TODO: change to single argument functions
-  | CTApp    !(Core a)    !Type               a      -- TODO: should the type instantiation be a Type or an RType?
+  | CLam     !(AnnBind a) !(Core a)           a
+  | CTApp    !(Core a)    !Type               a      -- TODO: type instantiation should be at an RType
   | CTAbs    TVar         !(Core a)           a
-  | CUnit                                     a
   deriving (Show, Functor, Read)
 
 data Sig a
@@ -257,6 +259,7 @@ instance PPrint Field where
 instance PPrint (Expr a) where
   pprint (Number n _)    = show n
   pprint (Boolean b _)   = pprint b
+  pprint (Unit _)        = "()"
   pprint (Id x _)        = x
   pprint (Prim2 o l r _) = printf "%s %s %s"                (pprint l)      (pprint o) (pprint r)
   pprint (If    c t e _) = printf "(if %s then %s else %s)" (pprint c)      (pprint t) (pprint e)
@@ -265,7 +268,6 @@ instance PPrint (Expr a) where
   pprint (Tuple e1 e2 _) = printf "(%s, %s)"                (pprint e1)     (pprint e2)
   pprint (GetItem e i _) = printf "(%s[%s])"                (pprint e)      (pprint i)
   pprint (Lam x e _)     = printf "(\\ %s -> %s)"           (pprint x)      (pprint e)
-  pprint (Unit _)        = "skip"
 
 instance PPrint (Core a) where
   pprint (CNumber n _)    = show n
@@ -310,6 +312,7 @@ instance PPrint (e a) => PPrint (RType e a) where
   pprint (RRTy b t e) =
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
+  pprint (RUnrefined typ) = pprint typ
 
 --------------------------------------------------------------------------------
 -- | `isAnf e` is True if `e` is an A-Normal Form
@@ -427,6 +430,7 @@ fromListEnv bs = Env bs n
 -- | τ ::= { v:τ | r }   -- a refinement on an RType
 -- |     | { v:b | r }   -- a refinement on a base Type
 -- |     | x:τ -> τ      -- a pi type
+-- |     | ∀a.τ
 -- | ```
 -- |
 -- | This allows us to bind functions as in LH `--higherorder`
@@ -437,6 +441,11 @@ data RType e a
   | RFun !(Bind a) !(RType e a) !(RType e a)
   | RRTy !(Bind a) !(RType e a) !(e a)
   | RForall TVar !(RType e a)
+  | RUnrefined Type -- [note-RUnrefined] this should be refactored such that the type of an
+                    -- Expr or Core can be parameterized over the type data
+                    -- e.g. parse     :: -> Expr (Maybe RType)
+                    --      elaborate :: -> Expr (Either RType Type)
+                    --      cgen      :: -> Expr RType
   deriving (Show, Functor, Read)
 
 data Type = TVar TVar           -- a
@@ -453,6 +462,9 @@ newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 
+unTV :: TVar -> Id
+unTV (TV t) = t
+
 class Strengthable e a | a -> e where
   strengthen :: e -> a -> a
 
@@ -466,7 +478,8 @@ instance Strengthable (e a) (e a) => Strengthable (e a) (RType e a) where
   strengthen q (RBase v t p) = RBase v t (strengthen q p)
   strengthen q (RRTy v t p) = RRTy v t (strengthen q p)
   strengthen q (RFun v t p) = RFun v (strengthen q t) p
-  strengthen q (RForall tvs rt) = RForall tvs $ strengthen q rt
+  strengthen q (RForall tv rt) = RForall tv $ strengthen q rt
+  strengthen _q (RUnrefined _t) = error "Tried to strengthend KVar hole. See Mist.Types.[note-RUnrefined]"
 
 class Boolable a l where
     true :: l -> a
@@ -491,6 +504,7 @@ bindRType (RBase (Bind x _) _ _) = x
 bindRType (RFun  (Bind x _) _ _) = x
 bindRType (RRTy  (Bind x _) _ _) = x
 bindRType (RForall _ rt) =  bindRType rt
+bindRType (RUnrefined _) = error "TODO: Anish"
 
 -- | Returns the base type for an RType
 eraseRType :: RType e a -> Type
@@ -498,6 +512,7 @@ eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
+eraseRType (RUnrefined t) = t
 
 -- | Returns the refinement of an RType
 reftRType :: (Strengthable (e a) (e a), Boolable (e a) a)
@@ -506,6 +521,7 @@ reftRType (RRTy _ rt r)  = strengthen r (reftRType rt)
 reftRType (RBase _ _ r)  = r
 reftRType (RForall _ rt) = reftRType rt
 reftRType (RFun (Bind _ l) _ _) = true l
+reftRType (RUnrefined _) = error "TODO: Anish"
 
 tagRType :: (Strengthable (e a) (e a), Boolable (e a) a)
          => RType e a -> a
@@ -513,6 +529,13 @@ tagRType (RRTy (Bind _ l) _ _)  = l
 tagRType (RBase (Bind _ l) _ _)  = l
 tagRType (RForall _ rt) = tagRType rt
 tagRType (RFun (Bind _ l) _ _) = l
+tagRType (RUnrefined _) = error "TODO: Anish"
+
+-- TODO: should a function go to an RBase or an RFun?
+-- NOTE: KVars are inescapable:
+-- If you try to make do without them, you still need to mark let bindings with unknown refinements.
+typeToCoreRType :: Type -> a -> RType Core a
+typeToCoreRType typ _extra = RUnrefined typ
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor

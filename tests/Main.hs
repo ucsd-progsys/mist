@@ -13,6 +13,7 @@ import Tests.Utils
 
 import Tests.Integration.Tests
 import Tests.Language.Mist.Names
+import Tests.Language.Mist.Checker
 
 main :: IO ()
 main = runTests
@@ -29,6 +30,7 @@ runTests = run =<< testGroupM "Tests" [integrationTests, pure unitTests]
 
 unitTests = testGroup "Unit"
   [ namesTests
+  , checkerTests
   ]
 
 testRunner :: Ingredient

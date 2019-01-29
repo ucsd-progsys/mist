@@ -68,7 +68,10 @@ test-suite test
                     tasty-rerun,
                     tasty-ant-xml,
                     text,
+                    megaparsec,
                     mist
   other-modules:    Tests.Utils,
                     Tests.Integration.Tests,
                     Tests.Language.Mist.Names
+                    Tests.Language.Mist.Checker
+                    Tests.SimpleTypes
