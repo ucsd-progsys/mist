@@ -9,40 +9,50 @@ import Language.Mist.Parser
 import Language.Mist.Checker
 import Language.Mist.CGen
 import Language.Mist.ToFixpoint
+import Language.Mist.Normalizer
+import qualified Language.Fixpoint.Horn.Types as HC
 
--- import Debug.Trace (trace, traceM)
+type R = HC.Pred
 
 ---------------------------------------------------------------------------
-runMist :: Handle -> FilePath -> IO (Result (Core SourceSpan))
+runMist :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
 ---------------------------------------------------------------------------
 runMist h f = act h f
                 `Ex.catch`
                    esHandle h (return . Left)
 
-act :: Handle -> FilePath -> IO (Result (Core SourceSpan))
-act h f = do
+act :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
+act _h f = do
   s    <- readFile f
   e    <- parse f s
   let r = mist e
   case r of
-    Right t -> hPutStrLn h ("Elaborated: " ++ show t) >>
-               let c = generateConstraints t in
-                 (print c >> solve c >>= print)
-    Left _  -> return ()
-  return r
+    Right t -> do
+      -- hPutStrLn h ("Elaborated: " ++ show t) >>
+      --(print c >> solve c >>= print)
+      let c = generateConstraints t -- TODO: move this into the mist function
+      _ <- solve c
+      return r
+    Left _ -> return r
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
 esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 
 -----------------------------------------------------------------------------------
-mist :: Bare -> Result (Core SourceSpan)
+mist :: BareExpr -> Result (ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
-mist = check
+mist expr = do
+  let predExpr = parsedExprPredToFixpoint expr
+  elaboratedExpr <- check predExpr
+  pure $ anormal elaboratedExpr
+
+  -- check predExpr >>= fmap anormal
+  -- pure >> fmap parsedExprPredToFixpoint -- >> check >> anormal
 
 --------------------------------------------------------------------------------
-check :: Bare -> Result (Core SourceSpan)
+check :: ParsedExpr r SourceSpan -> Result (ElaboratedExpr r SourceSpan)
 --------------------------------------------------------------------------------
-check p =
-  case wellFormed p of
-    [] -> elaborate p
+check expr =
+  case wellFormed expr of
+    [] -> elaborate expr
     errors -> Left errors

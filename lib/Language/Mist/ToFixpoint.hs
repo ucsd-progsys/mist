@@ -1,64 +1,43 @@
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveFunctor #-}
+
 module Language.Mist.ToFixpoint
-  (
-    solve
+  ( solve
+  , exprToFixpoint
+  , parsedExprPredToFixpoint
   ) where
 
 import Data.String (fromString)
-import Control.Monad (void)
+import Data.Bifunctor
 
-import           Language.Mist.Types     as M
-import qualified Language.Mist.CGen      as MC
-import qualified Language.Mist.Names     as MN
+import Language.Mist.Types as M
+import Language.Mist.Checker (primToUnpoly) -- TODO(Matt): move primToUnpoly to a better place
+import qualified Language.Mist.Names as MN
 
-import           Language.Fixpoint.Types.Config (defConfig)
-import qualified Language.Fixpoint.Types      as F
-import           Language.Fixpoint.Horn.Types as HC
+import Language.Fixpoint.Types.Config (defConfig)
+import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Horn.Solve as S
-import qualified Data.HashMap.Strict       as Map
 
 -- | Solves the subtyping constraints we got from CGen.
 
--- |
--- >>> let rInt = RBase (M.Bind "VV" ()) TInt (CBoolean True ())
--- >>> let cs = MC.generateConstraints (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CNumber 2 ()) ())
--- >>> solve cs
--- Result {resStatus = Safe, resSolution = fromList [], gresSolution = }
--- >>> let cs = MC.generateConstraints (CLet (AnnBind "y" rInt ()) (CUnit ()) (CApp (CLam (AnnBind "x" rInt ()) (CId "x" ()) ()) (CId "y" ()) ()) ())
--- >>> solve cs
--- Result {resStatus = Safe, resSolution = fromList [], gresSolution = }
+solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
+solve constraints = S.solve defConfig (HC.Query [] [] (toHornClause constraints))
 
-solve :: MC.SubC a -> IO (F.Result Integer)
-solve sc = S.solve defConfig (Query [] [] hc)
-  where hc = void $ toHC sc
 
---------------------------------------------------------------------
--- NNF Horn Clauses as tries of subCs
---------------------------------------------------------------------
--- We can build one out of a bunch of SubCs. SubCs here should only
--- contain RRTy and RBase
+-- TODO: HC.solve requires () but should take any a
+toHornClause :: Constraint HC.Pred -> HC.Cstr ()
+toHornClause (Head r) = HC.Head r ()
+toHornClause (CAnd cs) =
+  HC.CAnd (fmap toHornClause cs)
+toHornClause (All x typ r c) =
+  HC.All (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause c)
 
-deriving instance Show HC.Pred
-deriving instance Show HC.Bind
-deriving instance Show a => Show (Cstr a)
-
--- | Adds a subtyping constraint to an exsiting NNF HC
-
--- |
--- >>> let rt x  = RBase (M.Bind {bindId = x, bindLabel = ()}) TUnit (CPrim2 Equal (CId x  ()) (CUnit ()) ())
--- >>>  let h = MC.SHead $ CPrim2 Equal (CId "v" ()) (CId "v"()) ()
--- >>>  let c = MC.SAll "x" (rt "x") $ MC.SAnd (MC.SAll "y" (rt "y") (MC.SAll "v" (rt "v") h)) (MC.SAll "v" (rt "v") h)
--- >>> toHC c
--- All (Bind {bSym = "x", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "x") (EVar "()"))}) (CAnd [All (Bind {bSym = "y", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "y") (EVar "()"))}) (All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "v"))) ())),All (Bind {bSym = "v", bSort = FObj "Unit", bPred = Reft (PAtom Eq (EVar "v") (EVar "()"))}) (Head (Reft (PAtom Eq (EVar "v") (EVar "v"))) ())])
-
-toHC (MC.SAll x rt c) = HC.All (HC.Bind (fromString x) (typeToSort tau) (Reft $ coreToFixpoint $ MN.subst1 (CId x l) y p)) (toHC c)
-  where (y, tau, p, l) = bkRType rt
-toHC (MC.SHead e) = HC.Head (HC.Reft $ coreToFixpoint e) (extractC e)
-toHC c@MC.SAnd{} = HC.CAnd $ toHC <$> bkSAnd c
-
-bkSAnd (MC.SAnd c1 c2) = bkSAnd c1 ++ bkSAnd c2
-bkSAnd c@MC.SAll{} = pure c
-bkSAnd c@MC.SHead{} = pure c
+  -- = Head  !Pred a               -- ^ p
+  -- | CAnd  ![(Cstr a)]           -- ^ c1 /\ ... /\ cn
+  -- | All   !Bind  !(Cstr a)      -- ^ \all x:t. p => c 
 
 --------------------------------------------------------------------
 -- | Translate base `Type`s to `Sort`s
@@ -74,7 +53,7 @@ typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
 -- the constructor for Map for everything. Later we should make this work
 -- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
 -- with FTyCon right now.
-typeToSort (TPair t1 t2) = F.FApp (F.FApp (F.FTC F.mapFTyCon) (typeToSort t1)) (typeToSort t2)
+-- typeToSort (TPair t1 t2) = F.FApp (F.FApp (F.FTC F.mapFTyCon) (typeToSort t1)) (typeToSort t2)
 typeToSort (TCtor _ t2) = foldr F.FApp (F.FTC F.mapFTyCon) (typeToSort <$> t2)
 typeToSort (TForall{}) = error "TODO?"
 
@@ -82,8 +61,7 @@ typeToSort (TForall{}) = error "TODO?"
 --------------------------------------------------------------------
 -- Expressions
 --------------------------------------------------------------------
-_exprToFixpoint = exprToFixpoint
-exprToFixpoint :: M.Expr a -> F.Expr
+exprToFixpoint :: M.Expr r a -> F.Expr
 exprToFixpoint (Number n _)       = F.ECon (F.I n)
 exprToFixpoint (Boolean True _)   = F.PTrue
 exprToFixpoint (Boolean False _)  = F.PFalse
@@ -99,52 +77,19 @@ exprToFixpoint (App f x _)        =
 exprToFixpoint Let{}              =
   error "lets are currently unsupported inside reifnements"
 exprToFixpoint (Unit _)           = F.EVar (fromString "()")
-exprToFixpoint (Tuple e1 e2 _)    =
-  F.EApp (F.EApp (F.EVar $ fromString "(,)")
-                 (exprToFixpoint e1))
-       (exprToFixpoint e2)
-exprToFixpoint (GetItem e Zero _) =
-  F.EApp (F.EVar $ fromString "Pi0") (exprToFixpoint e)
-exprToFixpoint (GetItem e One _)  =
-  F.EApp (F.EVar $ fromString "Pi1") (exprToFixpoint e)
-  -- To translate Lambdas we need to keep around the sorts of each Expr. We
-  -- can do this in Core, but doing it in Expr seems like it's not work it.
+-- exprToFixpoint (Tuple e1 e2 _)    =
+--   F.EApp (F.EApp (F.EVar $ fromString "(,)")
+--                  (exprToFixpoint e1))
+--        (exprToFixpoint e2)
+-- exprToFixpoint (GetItem e Zero _) =
+--   F.EApp (F.EVar $ fromString "Pi0") (exprToFixpoint e)
+-- exprToFixpoint (GetItem e One _)  =
+--   F.EApp (F.EVar $ fromString "Pi1") (exprToFixpoint e)
+--   -- To translate Lambdas we need to keep around the sorts of each Expr. We
+--   -- can do this in Core, but doing it in Expr seems like it's not work it.
 exprToFixpoint (Lam _bs _e2 _)      = error "TODO exprToFixpoint"
-
-coreToFixpoint :: Core a -> F.Expr
-coreToFixpoint (CNumber n _)       = F.ECon (F.I n)
-coreToFixpoint (CBoolean True _)   = F.PTrue
-coreToFixpoint (CBoolean False _)  = F.PFalse
-coreToFixpoint (CId x _)           = F.EVar (fromString x)
-coreToFixpoint (CPrim2 And e1 e2 _)= F.PAnd [coreToFixpoint e1, coreToFixpoint e2]
-coreToFixpoint (CPrim2 o e1 e2 _)  =
-  case prim2ToFixpoint o of
-    Left brel -> F.PAtom brel (coreToFixpoint e1) (coreToFixpoint e2)
-    Right bop -> F.EBin bop (coreToFixpoint e1) (coreToFixpoint e2)
-coreToFixpoint (CIf e1 e2 e3 _)    =
-  F.EIte (coreToFixpoint e1) (coreToFixpoint e2) (coreToFixpoint e3)
-coreToFixpoint (CApp f x _)        =
-  F.EApp (coreToFixpoint f) (coreToFixpoint x)
-coreToFixpoint CLet{}              =
-  error "lets are currently unsupported inside reifnements"
-coreToFixpoint (CUnit _)           = F.EVar (fromString "()")
-coreToFixpoint (CTuple e1 e2 _)    =
-  F.EApp (F.EApp (F.EVar $ fromString "(,)")
-               (coreToFixpoint e1))
-       (coreToFixpoint e2)
-coreToFixpoint (CPrim prim _)      = primToFixpoint prim
-coreToFixpoint (KVar k vs _)       =
-  F.PKVar (fromString k)
-          (F.Su $ Map.fromList
-            (zip (fromString . (k ++) . show <$> [1..])
-                 (coreToFixpoint <$> vs)))
-coreToFixpoint (CLam _bs _e2 _)    = error "TODO coreToFixpoint"
-coreToFixpoint (CTApp e tau _)     = F.ETApp (coreToFixpoint e) (typeToSort tau)
-coreToFixpoint (CTAbs _as e _)     = F.ETAbs (coreToFixpoint e) (error "TODO coreToFixpoint TVar")
-
-primToFixpoint :: Prim -> F.Expr
-primToFixpoint Pi0 = F.EVar $ fromString "Pi0"
-primToFixpoint Pi1 = F.EVar $ fromString "Pi1"
+exprToFixpoint (TApp _e _typ _)      = error "TODO exprToFixpoint"
+exprToFixpoint (TAbs _tvar _e _)      = error "TODO exprToFixpoint"
 
 prim2ToFixpoint :: Prim2 -> Either F.Brel F.Bop
 prim2ToFixpoint M.Plus  = Right F.Plus
@@ -154,3 +99,34 @@ prim2ToFixpoint Less    = Left F.Lt
 prim2ToFixpoint Greater = Left F.Gt
 prim2ToFixpoint Equal   = Left F.Eq
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
+
+instance Predicate HC.Pred where
+  true = HC.Reft F.PTrue
+  false = HC.Reft F.PFalse
+  varsEqual x y = HC.Reft $ F.PAtom F.Eq (F.EVar $ fromString x) (F.EVar $ fromString y)
+  strengthen p1 p2 = HC.PAnd [p1, p2]
+  buildKvar x params = HC.Var (fromString x) (fmap fromString params)
+
+  varSubst x y (HC.Reft fexpr) =
+    HC.Reft $ F.subst1 fexpr (fromString y, F.EVar $ fromString x)
+  varSubst x y (HC.Var k params) =
+    HC.Var k $ fmap (\param -> if param == fromString y then fromString x else param) params
+  varSubst x y (HC.PAnd ps) =
+    HC.PAnd $ fmap (varSubst x y) ps
+
+  prim e@Unit{} = equalityPrim e TUnit
+  prim e@Number{} = equalityPrim e TInt
+  prim e@Boolean{} = equalityPrim e TBool
+  prim e@(Prim2 op _ _ _) = equalityPrim e (primToUnpoly op)
+  prim _ = error "prim on non primitive"
+
+equalityPrim :: (MonadFresh m) => Expr r a -> Type -> m (RType HC.Pred a)
+equalityPrim e typ = do
+  let l = extract e
+  vv <- refreshId "VV#"
+  let reft = HC.Reft $ F.PAtom F.Eq (exprToFixpoint (Id vv l)) (exprToFixpoint e)
+  pure $ RBase (M.Bind vv l) typ reft
+
+-- | Converts a ParsedExpr's predicates from Exprs to Fixpoint Exprs
+parsedExprPredToFixpoint :: ParsedExpr (Expr r a) a -> ParsedExpr HC.Pred a
+parsedExprPredToFixpoint = first $ first (HC.Reft . exprToFixpoint)

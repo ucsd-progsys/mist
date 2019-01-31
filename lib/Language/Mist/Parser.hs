@@ -1,8 +1,13 @@
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE TupleSections         #-}
 {-# LANGUAGE FlexibleContexts      #-}
 
-module Language.Mist.Parser ( parse, parseFile ) where
+module Language.Mist.Parser
+  (
+    parse
+  , parseFile
+  , BareExpr
+  , BareRefinement
+  ) where
 
 import qualified Control.Exception          as Ex
 import           Control.Monad (void)
@@ -15,8 +20,35 @@ import           Text.Megaparsec.Expr
 import qualified Data.List as L
 import           Language.Mist.Types
 
+
+-- TODO: use Fixpoint Expr parser for refinements
+
+
+-- | parsed syntax elements with parsed expressions as the refinement
+-- | Top level expressions
+type Bare t = Expr t SourceSpan
+type BareRefinement = Bare ()
+type BareExpr = Bare (ParsedType BareRefinement SourceSpan)
+type BareDef = ParsedDef BareRefinement SourceSpan
+type BareType = ParsedType BareRefinement SourceSpan
+type BareRType = RType BareRefinement SourceSpan
+type BareBind = Bind SourceSpan
+
+-- TODO: better name
+-- | A typeclass for filling in a missing annotation.
+-- used for refinements (unit for all annotations)
+-- and expressions (ParsedInfer for missing annotations)
+class Unannotated a where
+  missingAnnotation :: a
+
+instance Unannotated () where
+  missingAnnotation = ()
+
+instance Unannotated (ParsedType r a) where
+  missingAnnotation = ParsedInfer
+
 --------------------------------------------------------------------------------
-parse :: FilePath -> Text -> IO Bare
+parse :: FilePath -> Text -> IO BareExpr
 --------------------------------------------------------------------------------
 parse = parseWith (topExprs <* eof)
 
@@ -41,7 +73,7 @@ instance ShowErrorComponent SourcePos where
 --   pprint = show
 
 --------------------------------------------------------------------------------
-parseFile :: FilePath -> IO Bare
+parseFile :: FilePath -> IO BareExpr
 --------------------------------------------------------------------------------
 parseFile f = parse f =<< readFile f
 
@@ -130,14 +162,14 @@ identStart start = lexeme (p >>= check)
                 then fail $ "keyword " ++ show x ++ " cannot be an identifier"
                 else return x
 
--- | `binder` parses BareBind, used for let-binds and function parameters.
+-- | `binder` parses BareAnnBind, used for let-binds and function parameters.
 binder :: Parser BareBind
 binder = uncurry Bind <$> identifier
 
 freshBinder :: Parser BareBind
 freshBinder = uncurry Bind <$> (lexeme $ ("fresh" ++) . show <$> lift get)
 
-stretch :: (Monoid a) => [Expr a] -> a
+stretch :: (Monoid a) => [Expr t a] -> a
 stretch = mconcat . fmap extract
 
 withSpan' :: Parser (SourceSpan -> a) -> Parser a
@@ -154,7 +186,7 @@ withSpan p = do
   p2 <- getPosition
   return (x, SS p1 p2)
 
-topExprs :: Parser Bare
+topExprs :: Parser BareExpr
 topExprs = defsExpr <$> topDefs
 
 topDefs :: Parser [BareDef]
@@ -163,15 +195,15 @@ topDefs = many topDef
 topDef :: Parser BareDef
 topDef = do
   f  <- binder
-  s  <- typeSig
+  ann <- typeSig
   _f' <- binder <* symbol "="
-  e  <- expr
-  return (f, s, e) -- (mkDef f s f' [e])
+  e <- expr
+  return (annotateBinding f ann, e)
 
-expr :: Parser Bare
+expr :: (Unannotated a) => Parser (Bare a)
 expr = makeExprParser expr0 binops
 
-expr0 :: Parser Bare
+expr0 :: (Unannotated a) => Parser (Bare a)
 expr0 =  try letExpr
      <|> try ifExpr
      <|> try lamExpr
@@ -179,10 +211,10 @@ expr0 =  try letExpr
      <|> try idExpr
      <|> try (mkApps <$> parens (sepBy1 expr sc))
 
-mkApps :: [Bare] -> Bare
+mkApps :: (Unannotated a) => [(Bare a)] -> (Bare a)
 mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2]))
 
-binops :: [[Operator Parser Bare]]
+binops :: (Unannotated a) => [[Operator Parser (Bare a)]]
 binops =
   [ [ InfixL (symbol "*"  *> pure (op Times))
     ]
@@ -197,16 +229,16 @@ binops =
   where
     op o e1 e2 = Prim2 o e1 e2 (stretch [e1, e2])
 
-idExpr :: Parser Bare
+idExpr :: (Unannotated a) => Parser (Bare a)
 idExpr = uncurry Id <$> identifier
 
-constExpr :: Parser Bare
+constExpr :: (Unannotated a) => Parser (Bare a)
 constExpr
    =  (uncurry Number <$> integer)
   <|> (Boolean True   <$> rWord "True")
   <|> (Boolean False  <$> rWord "False")
 
-letExpr :: Parser Bare
+letExpr :: (Unannotated a) => Parser (Bare a)
 letExpr = withSpan' $ do
   rWord "let"
   bs <- sepBy1 bind comma
@@ -214,10 +246,10 @@ letExpr = withSpan' $ do
   e  <- expr
   return (bindsExpr bs e)
 
-bind :: Parser (BareBind, Bare)
+bind :: (Unannotated a) => Parser (BareBind, (Bare a))
 bind = (,) <$> binder <* symbol "=" <*> expr
 
-ifExpr :: Parser Bare
+ifExpr :: (Unannotated a) => Parser (Bare a)
 ifExpr = withSpan' $ do
   rWord "if"
   b  <- expr
@@ -225,20 +257,20 @@ ifExpr = withSpan' $ do
   e2 <- expr
   return (If b e1 e2)
 
-lamExpr :: Parser Bare
+lamExpr :: (Unannotated a) => Parser (Bare a)
 lamExpr = withSpan' $ do
   -- rWord "lambda"
   char '\\' <* sc
   -- xs    <- parens (sepBy binder comma) <* symbol "->"
   xs    <- sepBy binder sc <* symbol "->"
   e     <- expr
-  return (\span -> (foldr (\x e -> Lam x e span) e xs))
+  return (\span -> (foldr (\x e -> Lam (annotateBinding x missingAnnotation) e span) e xs))
 
-typeSig :: Parser BareSig
+typeSig :: Parser BareType
 typeSig
-  =   try (Assume <$> (rWord "as" *> scheme))
-  <|> try (Check  <$> (dcolon     *> scheme))
-  <|> pure Infer
+  =   try (ParsedAssume <$> (rWord "as" *> scheme))
+  <|> try (ParsedCheck <$> (dcolon *> scheme))
+  <|> pure ParsedInfer
 
 scheme :: Parser BareRType
 scheme
@@ -298,7 +330,7 @@ baseType
   =  try (rWord "Int"   *> pure TInt)
  <|> try (rWord "Bool"  *> pure TBool)
  <|> try (TVar <$> tvar)
- <|> try (withSpan' (mkPairType <$> types))
+ -- <|> try (withSpan' (mkPairType <$> types))
  <|> ctorType
 
 mkArrow :: [Type] -> Type
@@ -310,8 +342,8 @@ mkArrow _  = error "impossible: mkArrow"
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier
 
-types :: Parser [Type]
-types = parens (sepBy1 typeType comma)
+_types :: Parser [Type]
+_types = parens (sepBy1 typeType comma)
 
 ctorType :: Parser Type
 ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
@@ -319,7 +351,28 @@ ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
 ctor :: Parser Ctor
 ctor = CT . fst <$> identStart upperChar
 
-mkPairType :: [Type] -> SourceSpan -> Type
-mkPairType [t]      _ = t
-mkPairType [t1, t2] _ = TPair t1 t2
-mkPairType _        l = panic "Mist only supports pairs types" l
+-- mkPairType :: [Type] -> SourceSpan -> Type
+-- mkPairType [t]      _ = t
+-- mkPairType [t1, t2] _ = TPair t1 t2
+-- mkPairType _        l = panic "Mist only supports pairs types" l
+
+defsExpr :: [BareDef] -> BareExpr
+defsExpr [] = error "list of defintions is empty"
+defsExpr bs@((b,_):_)   = go (bindLabel b) bs
+  where
+    go l [] = Unit l
+    go _ ((b, e) : ds) = Let b e (go l ds) l
+      where l = bindLabel b
+
+-- | Constructing `Bare` from let-binds
+bindsExpr :: (Unannotated a) => [(BareBind, (Bare a))] -> Bare a -> SourceSpan -> Bare a
+bindsExpr bs e l = foldr (\(x, e1) e2 ->
+                            Let (annotateBinding x missingAnnotation) e1 e2 l)
+                   e bs
+
+annotateBinding :: Bind a -> t -> AnnBind t a
+annotateBinding bind typ =
+  AnnBind { _aBindId = bindId bind
+          , _aBindType = typ
+          , _aBindLabel = bindLabel bind
+          }
