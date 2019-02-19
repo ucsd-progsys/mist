@@ -1,4 +1,5 @@
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE StandaloneDeriving #-}
 
 module Language.Mist.Runner where
 
@@ -10,9 +11,12 @@ import Language.Mist.Checker
 import Language.Mist.CGen
 import Language.Mist.ToFixpoint
 import Language.Mist.Normalizer
+import Language.Mist.Names
 import qualified Language.Fixpoint.Horn.Types as HC
 
 type R = HC.Pred
+
+deriving instance Show HC.Pred -- NOTE: just for debugging
 
 ---------------------------------------------------------------------------
 runMist :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
@@ -30,8 +34,8 @@ act _h f = do
     Right t -> do
       -- hPutStrLn h ("Elaborated: " ++ show t) >>
       --(print c >> solve c >>= print)
-      let c = generateConstraints t -- TODO: move this into the mist function
-      _ <- solve c
+      let c = generateConstraints (anormal t) -- TODO: move this into the mist function
+      print c >> solve c
       return r
     Left _ -> return r
 
@@ -42,9 +46,9 @@ esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 mist :: BareExpr -> Result (ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
 mist expr = do
-  let predExpr = parsedExprPredToFixpoint expr
-  elaboratedExpr <- check predExpr
-  pure $ anormal elaboratedExpr
+  let refreshedExpr = uniquify expr
+  let predExpr = parsedExprPredToFixpoint refreshedExpr
+  check predExpr
 
   -- check predExpr >>= fmap anormal
   -- pure >> fmap parsedExprPredToFixpoint -- >> check >> anormal

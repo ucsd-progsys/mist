@@ -9,7 +9,6 @@
 -- | (see Cosman and Jhala, ICFP '17)
 --------------------------------------------------------------------------------
 
-
 module Language.Mist.CGen
   ( generateConstraints
   , Constraint (..)
@@ -31,11 +30,11 @@ type Env r a = [(Id, RType r a)]
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
 -------------------------------------------------------------------------------
-generateConstraints :: (Predicate r) => ElaboratedExpr r a -> Constraint r
+generateConstraints :: (Predicate r) => AnfExpr (ElaboratedType r a) a -> Constraint r
 generateConstraints = fst . runFresh . cgen []
 
 cgen :: (Predicate r) =>
-        Env r a -> ElaboratedExpr r a -> Fresh (Constraint r, RType r a)
+        Env r a -> AnfExpr (ElaboratedType r a) a -> Fresh (Constraint r, RType r a)
 cgen _ e@Unit{} = (Head true,) <$> prim e
 cgen _ e@Number{} = (Head true,) <$> prim e
 cgen _ e@Boolean{} = (Head true,) <$> prim e
@@ -45,20 +44,20 @@ cgen env (Id x _) = (Head true,) <$> single env x
 cgen _env (If _e1 _e2 _e3 _) = error "TODO"
 
 -- TODO: recursive let?
-cgen env (Let bind@AnnBind{_aBindType = Right _} e1 e2 _) = do
-  let x = bindId bind
-  (c1, t1) <- cgen env e1
-  (c2, t2) <- cgen ((x, t1):env) e2
-  tHat <- fresh (eraseRType t2) (extract e2)
-  let c = CAnd [c1, (generalizedImplication x t1 c2)]
-  pure (CAnd [c, (t2 `sub` tHat)], tHat)
-cgen env (Let bind@AnnBind{_aBindType = Left tx} e1 e2 _) = do
+cgen env (Let bind@AnnBind{_aBindType = Just (Left tx)} e1 e2 _) = do
   let x = bindId bind
   (c1, t1) <- cgen env e1
   (c2, t2) <- cgen ((x, tx):env) e2
   tHat <- fresh (eraseRType t2) (extract e2)
   let c = CAnd [c1, (generalizedImplication x tx c2)]
   pure (CAnd [c, (t1 `sub` tx), (t2 `sub` tHat)], tHat)
+cgen env (Let bind e1 e2 _) = do
+  let x = bindId bind
+  (c1, t1) <- cgen env e1
+  (c2, t2) <- cgen ((x, t1):env) e2
+  tHat <- fresh (eraseRType t2) (extract e2)
+  let c = CAnd [c1, (generalizedImplication x t1 c2)]
+  pure (CAnd [c, (t2 `sub` tHat)], tHat)
 
 cgen env (App e (Id y _) _) = do
   (c, RFun x t t') <- cgen env e
@@ -66,12 +65,13 @@ cgen env (App e (Id y _) _) = do
   let cy = ty `sub` t
   pure (CAnd [c, cy], substReftPred1 y (bindId x) t')
 cgen _ (App _ _ _) = error "argument is non-variable"
-cgen env (Lam bind@AnnBind{_aBindType = Right typ} e _) = do
+cgen _env (Lam _bind@AnnBind{_aBindType = Nothing} _e _) = error "should not occur"
+cgen env (Lam bind@AnnBind{_aBindType = Just (Right typ)} e _) = do
   let x = bindId bind
   tHat <- fresh typ (bindLabel bind)
   (c, t) <- cgen ((x, tHat):env) e
   pure (generalizedImplication x tHat c, RFun Bind{_bindId = x, _bindLabel = bindLabel bind} tHat t)
-cgen env (Lam bind@AnnBind{_aBindType = Left tx} e _) = do
+cgen env (Lam bind@AnnBind{_aBindType = Just (Left tx)} e _) = do
   let x = bindId bind
   (c, t) <- cgen ((x, tx):env) e
   pure (generalizedImplication x tx c, RFun Bind{_bindId = x, _bindLabel = bindLabel bind} tx t)
@@ -88,7 +88,7 @@ single env x = case lookup x env of
   Just (RBase (Bind _ l) baseType _) -> do
   -- `x` is already bound, so instead of "re-binding" x we should selfify
   -- (al la Ou et al. IFIP TCS '04)
-    v <- refreshId "VV#"
+    v <- refreshId $ "VV" ++ cSEPARATOR
     pure $ RBase (Bind v l) baseType (varsEqual v x)
   Just rt -> pure rt
   Nothing -> error $ "Unbound Variable " ++ show x
@@ -96,13 +96,15 @@ single env x = case lookup x env of
 fresh :: (Predicate r) => Type -> a -> Fresh (RType r a)
 fresh typ l = go [] typ
   where
-    go _ (TVar alpha) = pure $ RTVar alpha
+    go _ (TVar alpha) = do
+      x <- refreshId $ "karg" ++ cSEPARATOR
+      pure $ RBase (Bind x l) (TVar alpha) true
     go env TUnit = freshBaseType env TUnit l
     go env TInt = freshBaseType env TInt l
     go env TBool = freshBaseType env TBool l
     go env (typ1 :=> typ2) = do
       rtype1 <- go env typ1
-      x <- refreshId "karg#"
+      x <- refreshId $ "karg" ++ cSEPARATOR
       rtype2 <- go ((x,typ1):env) typ2
       pure $ RFun (Bind x l) rtype1 rtype2
     go _env (TCtor _ctor _types) = error "TODO: fresh at constructor type. Same as base type?"
@@ -112,8 +114,8 @@ fresh typ l = go [] typ
 
 freshBaseType :: (Predicate r) => [(Id, Type)] -> Type -> a -> Fresh (RType r a)
 freshBaseType env baseType l = do
-  kappa <- refreshId "kvar#"
-  v <- refreshId "VV#"
+  kappa <- refreshId $ "kvar" ++ cSEPARATOR
+  v <- refreshId $ "VV" ++ cSEPARATOR
   let k = buildKvar kappa (v:(map fst env))
   pure $ RBase (Bind v l) baseType k
 
@@ -125,9 +127,6 @@ sub (RFun (Bind x _) s s') (RFun (Bind y _) t t') = CAnd [c, generalizedImplicat
   where
     c = sub t s
     c' = sub (substReftPred1 y x s') t'
-sub (RTVar alpha) (RTVar beta)
-  | alpha == beta = Head true
-  | otherwise = error "Constraint generation subtyping error"
 sub (RForall alpha t1) (RForall beta t2)
   | alpha == beta = sub t1 t2
   | otherwise = error "Constraint generation subtyping error"

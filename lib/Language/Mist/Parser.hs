@@ -34,18 +34,8 @@ type BareType = ParsedType BareRefinement SourceSpan
 type BareRType = RType BareRefinement SourceSpan
 type BareBind = Bind SourceSpan
 
--- TODO: better name
--- | A typeclass for filling in a missing annotation.
--- used for refinements (unit for all annotations)
--- and expressions (ParsedInfer for missing annotations)
-class Unannotated a where
-  missingAnnotation :: a
-
 instance Unannotated () where
   missingAnnotation = ()
-
-instance Unannotated (ParsedType r a) where
-  missingAnnotation = ParsedInfer
 
 --------------------------------------------------------------------------------
 parse :: FilePath -> Text -> IO BareExpr
@@ -363,16 +353,3 @@ defsExpr bs@((b,_):_)   = go (bindLabel b) bs
     go l [] = Unit l
     go _ ((b, e) : ds) = Let b e (go l ds) l
       where l = bindLabel b
-
--- | Constructing `Bare` from let-binds
-bindsExpr :: (Unannotated a) => [(BareBind, (Bare a))] -> Bare a -> SourceSpan -> Bare a
-bindsExpr bs e l = foldr (\(x, e1) e2 ->
-                            Let (annotateBinding x missingAnnotation) e1 e2 l)
-                   e bs
-
-annotateBinding :: Bind a -> t -> AnnBind t a
-annotateBinding bind typ =
-  AnnBind { _aBindId = bindId bind
-          , _aBindType = typ
-          , _aBindLabel = bindLabel bind
-          }

@@ -43,7 +43,7 @@ toHornClause (All x typ r c) =
 -- | Translate base `Type`s to `Sort`s
 --------------------------------------------------------------------
 typeToSort :: M.Type -> F.Sort
-typeToSort (TVar (TV t)) = F.FVar (MN.varNum t)
+typeToSort (TVar (TV t)) = F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed
 typeToSort TUnit = F.FObj $ fromString "Unit"
 typeToSort TInt = F.FInt
 typeToSort TBool = undefined
@@ -123,7 +123,7 @@ instance Predicate HC.Pred where
 equalityPrim :: (MonadFresh m) => Expr r a -> Type -> m (RType HC.Pred a)
 equalityPrim e typ = do
   let l = extract e
-  vv <- refreshId "VV#"
+  vv <- refreshId $ "VV" ++ MN.cSEPARATOR
   let reft = HC.Reft $ F.PAtom F.Eq (exprToFixpoint (Id vv l)) (exprToFixpoint e)
   pure $ RBase (M.Bind vv l) typ reft
 

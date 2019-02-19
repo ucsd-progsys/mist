@@ -674,7 +674,7 @@ letGeneralize t c env = do
   freeExistentials <- freeEVars preGeneralizedFun
   let unsolvedAlphas = filter (`elem` freeExistentials) (unsolvedExistentials env)
   pairedNewTvars <- mapM (\alpha -> do
-                             a <- TV <$> refreshId "a" -- TODO: special character for inferred type variables
+                             a <- TV <$> refreshId ("a" ++ cSEPARATOR) -- TODO: special character for inferred type variables
                              pure (alpha, a))
                     unsolvedAlphas
   let substitution = M.fromList $ fmap (\(alpha, a) -> (unTV alpha, TVar a)) pairedNewTvars

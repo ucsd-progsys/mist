@@ -5,15 +5,18 @@
 module Language.Mist.Normalizer ( anormal ) where
 
 import Language.Mist.Types
+import Language.Mist.Names
 
-type Binds t a = [(Bind a, (AnfExpr t a, a))]
+import Data.Bifunctor
+
+type Binds t a = [(Bind a, (AnfExpr t a, a))] -- TODO: is there a reason for this not to be a triple?
 
 --------------------------------------------------------------------------------
 -- | Convert an Expr into A-Normal Form
 --------------------------------------------------------------------------------
 anormal :: Expr t a -> AnfExpr t a
 --------------------------------------------------------------------------------
-anormal e = snd (anf 0 e)
+anormal e = runFresh (anf e)
 
 --------------------------------------------------------------------------------
 -- | `anf i e` takes as input a "start" counter `i` and expression `e` and
@@ -21,32 +24,26 @@ anormal e = snd (anf 0 e)
 --   * `i'` is the output counter (i.e. i' - i) anf-variables were generated,
 --   * `e'` is equivalent to `e` but is in A-Normal Form.
 --------------------------------------------------------------------------------
-anf :: Int -> Expr t a -> (Int, AnfExpr t a)
+anf :: (MonadFresh m) => Expr t a -> m (AnfExpr t a)
 --------------------------------------------------------------------------------
-anf i (Unit l)          = (i, Unit l)
-
-anf i (Number n l)      = (i, Number n l)
-
-anf i (Boolean b l)     = (i, Boolean b l)
-
-anf i (Id     x l)      = (i, Id     x l)
-
-anf i (Let x e b l)   = (i'', Let x e' b' l)
-  where
-    (i',  e')           = anf i e
-    (i'', b')           = anf i' b
-
-anf i (Prim2 o e1 e2 l) = (i'', stitch bs'' (Prim2 o e1' e2' l))
-  where
-    bs''                = bs' ++ bs
-    (i' , bs , e1')     = imm i  e1
-    (i'', bs', e2')     = imm i' e2
-
-anf i (If c e1 e2 l)    = (i''', stitch bs  (If c' e1' e2' l))
-  where
-    (i'  , bs, c')      = imm i   c
-    (i'' ,     e1')     = anf i'  e1
-    (i''',     e2')     = anf i'' e2
+anf (Unit l) = pure $ Unit l
+anf (Number n l) = pure $ Number n l
+anf (Boolean b l) = pure $ Boolean b l
+anf (Id x l) = pure $ Id x l
+anf (Let x e b l) = do
+  e' <- anf e
+  b' <- anf b
+  pure $ Let (first Just x) e' b' l
+anf (Prim2 o e1 e2 l) = do
+  (bs, e1') <- imm e1
+  (bs', e2') <- imm e2
+  let bs'' = bs' ++ bs
+  pure $ stitch bs'' (Prim2 o e1' e2' l)
+anf (If c e1 e2 l) = do
+  (bs, c') <- imm c
+  e1' <- anf e1
+  e2' <- anf e2
+  pure $ stitch bs (If c' e1' e2' l)
 
 -- anf i (Tuple e1 e2 l)   = (i', stitch bs (Tuple e1' e2' l))
 --   where
@@ -56,21 +53,13 @@ anf i (If c e1 e2 l)    = (i''', stitch bs  (If c' e1' e2' l))
 --   where
 --     (i', bs, e1')       = imm i e1
 
-anf i (App e1 e2 l)      = (i', stitch bs (App e1' e2' l))
-  where
-    (i', bs, [e1',e2']) = imms i [e1, e2]
-
-anf i (Lam xs e l)      = (i', Lam xs e' l)
-  where
-    (i',  e')           = anf i e
-
-anf i (TApp e t l)      = (i', TApp e' t l)
-  where
-    (i', e')            = anf i e
-
-anf i (TAbs alpha e l)  = (i', TAbs alpha e' l)
-  where
-    (i', e')            = anf i e
+anf (App e1 e2 l) = do
+  (bs, e1') <- imm e1
+  (bs', e2') <- imm e2
+  pure $ stitch (bs ++ bs') (App e1' e2' l)
+anf (Lam x e l) = Lam (first Just x) <$> anf e <*> pure l
+anf (TApp e t l) = TApp <$> anf e <*> pure t <*> pure l
+anf (TAbs alpha e l) = TAbs alpha <$> anf e <*> pure l
 
 
 --------------------------------------------------------------------------------
@@ -80,46 +69,27 @@ anf i (TAbs alpha e l)  = (i', TAbs alpha e' l)
 --------------------------------------------------------------------------------
 stitch :: Binds t a -> AnfExpr t a -> AnfExpr t a
 --------------------------------------------------------------------------------
--- stitch bs e = bindsExpr [ (x, e) | (x, (e, _)) <- reverse bs] e (extract e)
-stitch _bs _e = error "TODO: figure out where anormal is used"
-
---------------------------------------------------------------------------------
--- | `imms i es` takes as input a "start" counter `i` and expressions `es`, and
---   and returns an output `(i', bs, es')` where
---   * `i'` is the output counter (i.e. i'- i) anf-variables were generated
---   * `bs` are the temporary binders needed to convert `es` to immediate vals
---   * `es'` are the immediate values  equivalent to es
---------------------------------------------------------------------------------
-imms :: Int -> [AnfExpr t a] -> (Int, Binds t a, [ImmExpr t a])
---------------------------------------------------------------------------------
-imms i []           = (i, [], [])
-imms i (e:es)       = (i'', bs' ++ bs, e' : es' )
-  where
-    (i' , bs , e' ) = imm  i  e
-    (i'', bs', es') = imms i' es
+stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extract e)
 
 --------------------------------------------------------------------------------
 -- | `imm i e` takes as input a "start" counter `i` and expression `e` and
 --   returns an output `(i', bs, e')` where
 --   * `i'` is the output counter (i.e. i' - i) anf-variables were generated,
 --   * `bs` are the temporary binders needed to render `e` in ANF, and
---   * `e'` is an `imm` value (Id or Number) equivalent to `e`.
+--   * `e'` is an `imm` value Id equivalent to `e`.
 --------------------------------------------------------------------------------
-imm :: Int -> AnfExpr t a -> (Int, Binds t a, ImmExpr t a)
+imm :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
 --------------------------------------------------------------------------------
-imm i (Unit l)          = (i  , [], Unit l)
-
-imm i (Number n l)      = (i  , [], Number n l)
-
-imm i (Boolean b  l)    = (i  , [], Boolean b l)
-
-imm i (Id x l)          = (i  , [], Id x l)
-
-imm i (Prim2 o e1 e2 l) = (i'', bs', mkId x l)
-  where
-    (i', bs, [v1, v2])  = imms i [e1, e2]
-    (i'', x)            = fresh l i'
-    bs'                 = (x, (Prim2 o v1 v2 l, l)) : bs
+imm e@Unit{} = immExp e
+imm e@Number{} = immExp e
+imm e@Boolean{} = immExp e
+imm (Id x l) = pure ([], Id x l)
+imm (Prim2 o e1 e2 l) = do
+  (bs, v1) <- imm e1
+  (bs', v2) <- imm e2
+  x <- freshBind l
+  let bs'' = (x, (Prim2 o v1 v2 l, l)) : (bs ++ bs')
+  pure (bs'', mkId x l)
 
 -- imm i (Tuple e1 e2 l)   = (i'', bs', mkId x l)
 --   where
@@ -133,40 +103,35 @@ imm i (Prim2 o e1 e2 l) = (i'', bs', mkId x l)
 --     (i'', x)            = fresh l i'
 --     bs'                 = (x, (GetItem v1 f l, l)) : bs
 
-imm i (App e1 e2 l)      = (i'', bs', mkId x l)
-  where
-    (i', bs, [v1, v2])  = imms  i [e1, e2]
-    (i'', x)            = fresh l i'
-    bs'                 = (x, (App v1 v2 l, l)) : bs
+imm (App e1 e2 l) = do
+  (bs, v1) <- imm e1
+  (bs', v2) <- imm e2
+  x <- freshBind l
+  let bs'' = (x, (App v1 v2 l, l)) : (bs ++ bs')
+  pure (bs'', mkId x l)
+imm e@If{} = immExp e
+imm e@Let{} = immExp e
+imm e@Lam{} = immExp e
+imm e@TApp{} = immExp e
+imm e@TAbs{} = immExp e
 
-imm i e@(If _ _ _  l)   = immExp i e l
+immExp :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
+immExp e = do
+  let l = extract e
+  e' <- anf e
+  v <- freshBind l
+  let bs = [(v, (e', l))]
+  pure (bs, mkId v l)
 
-imm i e@(Let _ _ _ l) = immExp i e l
+freshBind :: (MonadFresh m) => a -> m (Bind a)
+freshBind l = do
+  x <- refreshId $ "anf" ++ cSEPARATOR
+  pure Bind { _bindId = x
+            , _bindLabel = l
+            }
 
-imm i e@(Lam _ _ l)     = immExp i e l
-
-imm i e@(TApp _ _ l)    = immExp i e l
-
-imm i e@(TAbs _ _ l)    = immExp i e l
-
-immExp :: Int -> AnfExpr t a -> a -> (Int, Binds t a, ImmExpr t a)
-immExp i e l  = (i'', bs, mkId v l)
-  where
-    (i' , e') = anf i e
-    (i'', v)  = fresh l i'
-    bs        = [(v, (e', l))]
-
-mkId :: Bind a -> a -> Expr t a
+mkId :: (Binder b) => b a -> a -> Expr t a
 mkId x l = Id (bindId x) l
-
---------------------------------------------------------------------------------
--- | `fresh i` returns a temp-var named `i` and "increments" the counter
---------------------------------------------------------------------------------
-fresh :: a -> Int -> (Int, Bind a)
---------------------------------------------------------------------------------
-fresh l i = (i + 1, Bind x l)
-  where
-    x     = "anf" ++ show i
 
 
 {-

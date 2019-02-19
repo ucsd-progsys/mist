@@ -9,6 +9,8 @@ module Language.Mist.Names
   ( uniquify
   , refresh
 
+  , cSEPARATOR
+
   , varNum
 
   , FreshT
@@ -48,7 +50,8 @@ import Control.Monad.Reader
 import Control.Monad.Cont
 import Control.Monad.Fail
 
-
+-- TODO: make this a part of refresh somehow
+-- TODO: this needs to be fixed
 cSEPARATOR = "##"
 varNum :: Id -> Int
 varNum = read . last . splitOn cSEPARATOR
@@ -66,59 +69,51 @@ subst1 ex x e = subst (M.singleton x ex) e
 
 -- | Substitutes in the predicates of an RType
 substReftPred :: (Subable e r) => Subst e -> RType r a -> RType r a
-substReftPred = error "TODO"
+substReftPred su (RBase bind typ expr) =
+  RBase bind typ (subst (M.delete (bindId bind) su) expr)
+substReftPred su (RFun bind rtype1 rtype2) =
+  RFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
+substReftPred su (RRTy bind rtype expr) =
+  RRTy bind (substReftPred su rtype) (subst (M.delete (bindId bind) su) expr)
+substReftPred su (RForall tvars r) =
+  RForall tvars (substReftPred su r)
 
 substReftPred1 :: (Subable e r) => e -> Id -> RType r a -> RType r a
-substReftPred1 = error "TODO"
+substReftPred1 e x rtype = substReftPred (M.singleton x e) rtype
 
 -- | Substitutes in the Types of an RType
 substReftType :: (Subable t Type) => Subst t -> RType r a -> RType r a
-substReftType = error "TODO"
+substReftType su (RBase bind typ p) =
+  RBase bind (subst su typ) p
+substReftType su (RFun bind rtype1 rtype2) =
+  RFun bind (substReftType su rtype1) (substReftType su rtype2)
+substReftType su (RRTy bind rtype expr) =
+  RRTy bind (substReftType su rtype) expr
+substReftType su (RForall tvar r) =
+  RForall tvar (substReftType (M.delete (unTV tvar) su) r)
 
 substReftType1 :: (Subable t Type) => t -> Id -> RType r a -> RType r a
-substReftType1 = error "TODO"
+substReftType1 t x rtype = substReftType (M.singleton x t) rtype
 
 -- | Substitutes an RType for an RType
 substReftReft :: Subst (RType r a) -> RType r a -> RType r a
-substReftReft = error "TODO"
+substReftReft su (RBase bind typ expr) =
+  case flip M.lookup su =<< toTVar typ of
+      Nothing -> RBase bind typ expr
+      Just rt -> RRTy bind rt expr
+substReftReft su (RFun bind rtype1 rtype2) =
+  RFun bind (substReftReft su rtype1) (substReftReft su rtype2)
+substReftReft su (RRTy bind rtype expr) =
+  RRTy bind (substReftReft su rtype) expr
+substReftReft su (RForall tvar r) =
+  RForall tvar (substReftReft (M.delete (unTV tvar) su) r)
 
 substReftReft1 :: RType r a -> Id -> RType r a -> RType r a
-substReftReft1 = error "TODO"
+substReftReft1 rtype1 x rtype2 = substReftReft (M.singleton x rtype1) rtype2
 
--- instance Subable e r => Subable e (RType r a) where
---   _subst su (RBase bind typ expr) =
---     RBase bind typ (_subst (M.delete (bindId bind) su) expr)
---   _subst su (RFun bind rtype1 rtype2) =
---     RFun bind (_subst su rtype1) (_subst (M.delete (bindId bind) su) rtype2)
---   _subst su (RRTy bind rtype expr) =
---     RRTy bind (_subst su rtype) (_subst (M.delete (bindId bind) su) expr)
---   _subst su (RForall tvars r) =
---     RForall tvars (_subst su r)
-
--- instance Subable Type (RType r a) where
---   _subst su (RBase bind typ p) =
---     RBase bind (_subst su typ) p
---   _subst su (RFun bind rtype1 rtype2) =
---     RFun bind (_subst su rtype1) (_subst su rtype2)
---   _subst su (RRTy bind rtype expr) =
---     RRTy bind (_subst su rtype) expr
---   _subst su (RForall tvar r) =
---     RForall tvar (_subst (M.delete (unTV tvar) su) r)
-
--- instance Subable (RType r a) (RType r a) where
---   _subst su (RBase bind typ expr) =
---     case flip M.lookup su =<< tvar typ of
---         Nothing -> RBase bind typ expr
---         Just rt -> RRTy bind rt expr
---   _subst su (RFun bind rtype1 rtype2) =
---     RFun bind (_subst su rtype1) (_subst su rtype2)
--- -- the types of refinements don't matter, expect that we check that they're
--- -- Bool, hopefully before we get here.
---   _subst su (RRTy bind rtype expr) =
---     RRTy bind (_subst su rtype) expr
---   _subst su (RForall tvar r) =
---     RForall tvar (_subst (M.delete (unTV tvar) su) r)
-
+toTVar :: Type -> Maybe Id
+toTVar (TVar (TV t)) = Just t
+toTVar _ = Nothing
 
 subst :: Subable a b => Subst a -> b -> b
 subst su e
@@ -257,8 +252,6 @@ instance Freshable e => Freshable (RType e a) where
   refresh (RForall tvar r) =
     (RForall <$> uniquifyBindingTVar tvar <*> refresh r)
     <* (const popId) tvar
-  refresh (RTVar alpha) =
-    RTVar <$> uniquifyTVar alpha
 
 instance Freshable Type where
   refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
@@ -272,6 +265,14 @@ instance Freshable Type where
   refresh (TForall tvar t) =
     TForall <$> uniquifyBindingTVar tvar <*> refresh t
     <* (const popId) tvar
+
+instance Freshable r => Freshable (ParsedType r a) where
+  refresh (ParsedCheck rtype) = ParsedCheck <$> refresh rtype
+  refresh (ParsedAssume rtype) = ParsedAssume <$> refresh rtype
+  refresh ParsedInfer = pure ParsedInfer
+
+instance Freshable () where
+  refresh _ = pure ()
 
 instance Freshable (Bind a) where
   refresh (Bind name l) = Bind <$> refreshId name <*> pure l

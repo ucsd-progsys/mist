@@ -28,8 +28,12 @@ module Language.Mist.Types
   , pattern ElabUnrefined, pattern ElabRefined
   , ElaboratedExpr, ElaboratedAnnBind
 
-  , AnfExpr, ImmExpr
+  , AnfType
+  , AnfExpr, AnfAnnBind
+  , ImmExpr
   , isAnf
+
+  , Unannotated (..)
 
   , AnnBind (..)
   , aBindType
@@ -41,6 +45,8 @@ module Language.Mist.Types
   , extract
   , unTV
 
+  , bindsExpr
+  , annotateBinding
   -- * Smart Constructors
   -- , bindsRType
 
@@ -136,6 +142,9 @@ pattern ElabUnrefined t = Right t
 type ElaboratedExpr r a = Expr (ElaboratedType r a) a
 type ElaboratedAnnBind r a = AnnBind (ElaboratedType r a) a
 
+type AnfType t a = Maybe t
+type AnfAnnBind t a = AnnBind (AnfType t a ) a
+
 data Field
   = Zero
   | One
@@ -176,6 +185,29 @@ instance Binder (AnnBind t) where
 
 type Def t a = (AnnBind t a, Expr t a)
 
+-- TODO: better name
+-- | A typeclass for filling in a missing annotation.
+class Unannotated t where
+  missingAnnotation :: t
+
+instance Unannotated (ParsedType r a) where
+  missingAnnotation = ParsedInfer
+
+instance Unannotated (AnfType t a) where
+  missingAnnotation = Nothing
+
+-- | Constructing `Bare` from let-binds
+bindsExpr :: (Unannotated t) => [(Bind a, (Expr t a))] -> Expr t a -> a -> Expr t a
+bindsExpr bs e l = foldr (\(x, e1) e2 ->
+                            Let (annotateBinding x missingAnnotation) e1 e2 l)
+                   e bs
+
+annotateBinding :: Bind a -> t -> AnnBind t a
+annotateBinding bind typ =
+  AnnBind { _aBindId = bindId bind
+          , _aBindType = typ
+          , _aBindLabel = bindLabel bind
+          }
 
 -- | Constructing a function declaration
 -- dec :: Bind a -> Sig -> [Bind a] -> Expr a -> Expr a -> a -> Expr a
@@ -291,7 +323,6 @@ instance PPrint e => PPrint (RType e a) where
   pprint (RRTy b t e) =
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
-  pprint (RTVar alpha) = pprint alpha
 
 --------------------------------------------------------------------------------
 -- | `isAnf e` is True if `e` is an A-Normal Form
@@ -318,10 +349,11 @@ isImm (Id      _ _) = True
 isImm _             = False
 
 {-@ type AnfExpr a = {v:Expr a| isAnf v} @-}
-type AnfExpr = Expr
+type AnfExpr r a = Expr (AnfType r a) a
 
+-- TODO: this should become VarExpr
 {-@ type ImmExpr a = {v:Expr a | isImm v} @-}
-type ImmExpr = Expr
+type ImmExpr r a = Expr (AnfType r a) a
 
 -- {-@ measure isVarAnf @-}
 -- isVarAnf :: Expr t a -> Bool
@@ -372,7 +404,6 @@ data RType r a
   | RFun !(Bind a) !(RType r a) !(RType r a)
   | RRTy !(Bind a) !(RType r a) r
   | RForall TVar !(RType r a)
-  | RTVar TVar -- TODO: patch up RTVar and TVar
   deriving (Show, Functor, Read)
 
 data Type = TVar TVar           -- a
@@ -398,7 +429,6 @@ eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
-eraseRType (RTVar alpha) = TVar alpha
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor
@@ -445,9 +475,9 @@ prTVar (TV a) = PP.text a
 -- | NNF Constraints
 data Constraint r
   = Head r                             -- ^ p
-  | CAnd [Constraint r]              -- ^ c1 /\ c2
+  | CAnd [Constraint r]                -- ^ c1 /\ c2
   | All Id Type r (Constraint r)       -- ^ ∀x:τ.p => c
-  deriving (Functor)
+  deriving (Show, Functor)
 
 -- | Type class to represent predicates
 class Predicate r where
@@ -539,4 +569,3 @@ instance Bifunctor RType where
   first f (RFun b rt1 rt2) = RFun b (first f rt1) (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)
   first f (RForall tvar rt) = RForall tvar (first f rt)
-  first _ (RTVar tvar) = RTVar tvar
