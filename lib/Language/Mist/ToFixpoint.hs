@@ -11,6 +11,8 @@ module Language.Mist.ToFixpoint
 
 import Data.String (fromString)
 import Data.Bifunctor
+import qualified Data.Map.Strict as MAP
+import Data.Maybe (fromJust)
 
 import Language.Mist.Types as M
 import Language.Mist.Checker (primToUnpoly) -- TODO(Matt): move primToUnpoly to a better place
@@ -24,10 +26,11 @@ import qualified Language.Fixpoint.Horn.Solve as S
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
-solve constraints = S.solve defConfig (HC.Query [] [] (toHornClause constraints))
+solve constraints = S.solve defConfig (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint)
+  where
+    fixpointConstraint = toHornClause constraints
 
-
--- TODO: HC.solve requires () but should take any a
+-- TODO: HC.solve requires () but should take any type
 toHornClause :: Constraint HC.Pred -> HC.Cstr ()
 toHornClause (Head r) = HC.Head r ()
 toHornClause (CAnd cs) =
@@ -35,9 +38,18 @@ toHornClause (CAnd cs) =
 toHornClause (All x typ r c) =
   HC.All (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause c)
 
-  -- = Head  !Pred a               -- ^ p
-  -- | CAnd  ![(Cstr a)]           -- ^ c1 /\ ... /\ cn
-  -- | All   !Bind  !(Cstr a)      -- ^ \all x:t. p => c 
+collectKVars :: HC.Cstr a -> [HC.Var ()]
+collectKVars cstr = go MAP.empty cstr
+  where
+    go env (HC.Head pred _) = goPred env pred
+    go env (HC.CAnd constraints) = concatMap (go env) constraints
+    go env (HC.All bind constraint) = go (MAP.insert (HC.bSym bind) (HC.bSort bind) env) constraint
+
+    goPred env (HC.Var k args) = [HC.HVar k argSorts ()]
+      where
+        argSorts = map (\arg -> fromJust $ MAP.lookup arg env) args
+    goPred env (HC.PAnd preds) = concatMap (goPred env) preds
+    goPred _ (HC.Reft _) = []
 
 --------------------------------------------------------------------
 -- | Translate base `Type`s to `Sort`s
