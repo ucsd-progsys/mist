@@ -494,11 +494,8 @@ class Predicate r where
 -- | A MonadFresh encompasses the operations for generating fresh, scoped names
 --------------------------------------------------------------------------------
 class Monad m => MonadFresh m where
-  refreshId :: Id -> m Id         -- ^ generate a fresh name for the argument
-  popId     :: m ()               -- ^ removes the most recent scoped version of a fresh name
-  lookupId  :: Id -> m (Maybe Id) -- ^ gets the assigned fresh name
+  refreshId :: Id -> m Id
 
--- TODO: remove popId and lookupId
 -- TODO: figure out how to put this back in Names.hs
 
 -------------------------------------------------------------------------------
@@ -507,33 +504,21 @@ class Monad m => MonadFresh m where
 
 instance (Monoid w, MonadFresh m) => MonadFresh (WriterT w m) where
   refreshId = lift . refreshId
-  popId = lift popId
-  lookupId = lift . lookupId
 
 instance MonadFresh m => MonadFresh (IdentityT m) where
   refreshId = lift . refreshId
-  popId = lift popId
-  lookupId = lift . lookupId
 
 instance MonadFresh m => MonadFresh (ExceptT e m) where
   refreshId = lift . refreshId
-  popId = lift popId
-  lookupId = lift . lookupId
 
 instance MonadFresh m => MonadFresh (StateT s m) where
   refreshId = lift . refreshId
-  popId = lift popId
-  lookupId = lift . lookupId
 
 instance MonadFresh m => MonadFresh (ReaderT r m) where
   refreshId = lift . refreshId
-  popId = lift popId
-  lookupId = lift . lookupId
 
 instance MonadFresh m => MonadFresh (ContT r m) where
   refreshId = lift . refreshId
-  popId = lift popId
-  lookupId = lift . lookupId
 
 -------------------------------------------------------------------------------
 -- Bifunctor instances --------------------------------------------------------

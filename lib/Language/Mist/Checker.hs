@@ -415,7 +415,7 @@ synthesizePrim2 Equal e1 e2 tag = do
   c2 <- check e2 (applyEnv env (EVar alpha))
   pure (Prim2 Equal c1 c2 tag, TBool)
 synthesizePrim2 operator e1 e2 tag = do
-  let (typ1 :=> (typ2 :=> typ3)) = primOpType operator
+  (typ1 :=> (typ2 :=> typ3)) <- primOpType operator
   c1 <- check e1 typ1
   c2 <- check e2 typ2
   pure (Prim2 operator c1 c2 tag, typ3)
@@ -601,16 +601,18 @@ occurrenceCheck alpha typ = do
     then throwError $ [errInfiniteTypeConstraint alpha typ]
     else pure ()
 
-primOpType :: Prim2 -> Type
-primOpType Plus    = (TInt :=> (TInt :=> TInt))
-primOpType Minus   = (TInt :=> (TInt :=> TInt))
-primOpType Times   = (TInt :=> (TInt :=> TInt))
-primOpType Less    = (TInt :=> (TInt :=> TBool))
-primOpType Greater = (TInt :=> (TInt :=> TBool))
-primOpType Equal   = (TForall (TV "a") ((TVar $ TV "a") :=> ((TVar $ TV "a") :=> TBool))) -- TODO: proper fresh name
-primOpType And     = (TBool :=> (TBool :=> TBool))
+primOpType :: (MonadFresh m) => Prim2 -> m Type
+primOpType Plus    = pure $ TInt :=> (TInt :=> TInt)
+primOpType Minus   = pure $ TInt :=> (TInt :=> TInt)
+primOpType Times   = pure $ TInt :=> (TInt :=> TInt)
+primOpType Less    = pure $ TInt :=> (TInt :=> TBool)
+primOpType Greater = pure $ TInt :=> (TInt :=> TBool)
+primOpType Equal   = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
+primOpType And     = pure $ TBool :=> (TBool :=> TBool)
 
-primToUnpoly c = go $ primOpType c
+primToUnpoly c = go $ (runFresh $ primOpType c)
   where
     go (TForall _ t) = go t
     go (_ :=> (_ :=> t)) = t

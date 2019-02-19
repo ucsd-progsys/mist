@@ -46,17 +46,9 @@ esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 mist :: BareExpr -> Result (ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
 mist expr = do
-  let refreshedExpr = uniquify expr
-  let predExpr = parsedExprPredToFixpoint refreshedExpr
-  check predExpr
-
-  -- check predExpr >>= fmap anormal
-  -- pure >> fmap parsedExprPredToFixpoint -- >> check >> anormal
-
---------------------------------------------------------------------------------
-check :: ParsedExpr r SourceSpan -> Result (ElaboratedExpr r SourceSpan)
---------------------------------------------------------------------------------
-check expr =
   case wellFormed expr of
-    [] -> elaborate expr
+    [] -> do
+      let uniqueExpr = uniquify expr
+      let predExpr = parsedExprPredToFixpoint uniqueExpr
+      elaborate predExpr
     errors -> Left errors

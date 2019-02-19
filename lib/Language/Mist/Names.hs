@@ -4,12 +4,14 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Mist.Names
-  ( uniquify
-  , refresh
+  (
+    uniquify
 
   , cSEPARATOR
+
 
   , varNum
 
@@ -32,15 +34,16 @@ module Language.Mist.Names
   , substReftReft1
 
   , emptyFreshState
+
+  , Uniqable
   ) where
 
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.List.Split (splitOn)
 import Control.Applicative (Alternative)
 
 import Language.Mist.Types
-import Language.Mist.Utils (safeTail)
 
 import Control.Monad.State
 import Control.Monad.Writer
@@ -172,10 +175,8 @@ instance Predicate r => Subable Id r where
   _subst su r = M.foldrWithKey (\x y r' -> varSubst x y r') r su
 
 
-
-
 --------------------------------------------------------------------------------
-data FreshState = FreshState { nameMap :: M.Map Id [Id], freshInt :: Integer, ctx :: [Id] }
+data FreshState = FreshState { freshInt :: Integer }
 
 newtype FreshT m a = FreshT { unFreshT :: StateT FreshState m a }
   deriving (Functor, Applicative, Alternative, Monad, MonadPlus, MonadTrans,
@@ -190,17 +191,17 @@ type Fresh = FreshT Identity
 
 instance Monad m => MonadFresh (FreshT m) where
   refreshId name = do
-    FreshState m n g <- FreshT get
+    FreshState n <- FreshT get
     let name' = createInternalName name n
         n' = n + 1
-    FreshT (put $ FreshState (M.insertWith (++) name [name'] m) n' g)
+    FreshT (put $ FreshState n')
     return name'
-  popId = FreshT (modify $ \(FreshState m n g) ->
-    FreshState (M.adjust safeTail (head g) m) n (tail g))
-  lookupId name = FreshT (gets $ fmap head . M.lookup name . nameMap)
+  -- popId = FreshT (modify $ \(FreshState m n g) ->
+  --   FreshState (M.adjust safeTail (head g) m) n (tail g))
+  -- lookupId name = FreshT (gets $ fmap head . M.lookup name . nameMap)
 
 emptyFreshState :: FreshState
-emptyFreshState = FreshState { nameMap = M.empty, freshInt = 0, ctx = [] }
+emptyFreshState = FreshState { freshInt = 0 }
 
 evalFreshT :: Monad m => FreshT m a -> FreshState -> m a
 evalFreshT freshT initialNames = evalStateT (unFreshT freshT) initialNames
@@ -209,80 +210,127 @@ runFresh :: Fresh a -> a
 runFresh m = runIdentity $ evalFreshT m emptyFreshState
 --------------------------------------------------------------------------------
 
-uniquify :: Freshable a => a -> a
-uniquify = runFresh . refresh
+uniquify :: Uniqable a => a -> a
+uniquify e = runFresh $ evalStateT (unique e) emptyNameEnv
 
-class Freshable a where
-  refresh :: MonadFresh m => a -> m a
+type UniqableContext = StateT NameEnv Fresh
 
-instance (Freshable t) => Freshable (Expr t a) where
-  refresh (Lam b body l) =
-    (Lam <$> refresh b <*> refresh body <*> pure l)
-    <* (const popId) b
-  refresh (Let bind e1 e2 l) =
-    (Let <$> refresh bind <*> refresh e1 <*> refresh e2 <*> pure l)
-    <* popId
-  refresh (Id id l) = Id . fromMaybe id <$> lookupId id <*> pure l
+type NameEnv = M.Map Id [Id]
+emptyNameEnv = M.empty
 
-  refresh e@Number{} = pure e
-  refresh e@Boolean{} = pure e
-  refresh e@Unit{} = pure e
-  refresh (Prim2 op e1 e2 l) =
-    Prim2 op <$> refresh e1 <*> refresh e2 <*> pure l
-  refresh (If e1 e2 e3 l) =
-    If <$> refresh e1 <*> refresh e2 <*> refresh e3 <*> pure l
-  refresh (App e1 e2 l) =
-    App <$> refresh e1 <*> refresh e2 <*> pure l
-  refresh (TApp e t l) =
-    TApp <$> refresh e <*> refresh t <*> pure l
-  refresh (TAbs tvar e l) = do
-    TAbs <$> uniquifyTVar tvar <*> refresh e <*> pure l
-    <* popId
+pushNewName :: Id -> Id -> NameEnv -> NameEnv
+pushNewName x x' env = M.alter (\case
+                                   Nothing -> Just [x']
+                                   (Just xs) -> Just (x':xs)) x env
 
-instance Freshable e => Freshable (RType e a) where
-  refresh (RBase bind typ expr) =
-    (RBase <$> refresh bind <*> refresh typ <*> refresh expr)
-    <* popId
-  refresh (RFun bind rtype1 rtype2) =
-    (RFun <$> refresh bind <*> refresh rtype1 <*> refresh rtype2)
-    <* popId
-  refresh (RRTy bind rtype expr) =
-    (RRTy <$> refresh bind <*> refresh rtype <*> refresh expr)
-    <* popId
-  refresh (RForall tvar r) =
-    (RForall <$> uniquifyBindingTVar tvar <*> refresh r)
-    <* (const popId) tvar
+-- | removes the innermost bound new name for an identifier
+popNewName :: Id -> NameEnv -> NameEnv
+popNewName x env = M.adjust tail x env
 
-instance Freshable Type where
-  refresh (TVar tvar) = TVar <$> uniquifyTVar tvar
-  refresh TInt = pure TInt
-  refresh TBool = pure TBool
-  refresh TUnit = pure TUnit
-  refresh (domain :=> codomain) =
-    (:=>) <$> refresh domain <*> refresh codomain
-  refresh (TCtor c ts) =
-    TCtor c <$> mapM refresh ts
-  refresh (TForall tvar t) =
-    TForall <$> uniquifyBindingTVar tvar <*> refresh t
-    <* (const popId) tvar
+-- | looks up the innermost bound new name for an identifier
+lookupNewName :: Id -> NameEnv -> Maybe Id
+lookupNewName x env = fmap head $ M.lookup x env
 
-instance Freshable r => Freshable (ParsedType r a) where
-  refresh (ParsedCheck rtype) = ParsedCheck <$> refresh rtype
-  refresh (ParsedAssume rtype) = ParsedAssume <$> refresh rtype
-  refresh ParsedInfer = pure ParsedInfer
+class Uniqable a where
+  unique :: a -> UniqableContext a
 
-instance Freshable () where
-  refresh _ = pure ()
+instance (Uniqable t) => Uniqable (Expr t a) where
+  unique (Lam b body l) = do
+    b' <- unique b
+    body' <- unique body
+    modify $ popNewName (bindId b)
+    pure $ Lam b' body' l
+  unique (Let bind e1 e2 l) = do
+    bind' <- unique bind
+    e1' <- unique e1
+    e2' <- unique e2
+    modify $ popNewName (bindId bind)
+    pure $ Let bind' e1' e2' l
+  unique (Id id l) = Id . fromJust <$> gets (lookupNewName id) <*> pure l
 
-instance Freshable (Bind a) where
-  refresh (Bind name l) = Bind <$> refreshId name <*> pure l
+  unique e@Number{} = pure e
+  unique e@Boolean{} = pure e
+  unique e@Unit{} = pure e
+  unique (Prim2 op e1 e2 l) =
+    Prim2 op <$> unique e1 <*> unique e2 <*> pure l
+  unique (If e1 e2 e3 l) =
+    If <$> unique e1 <*> unique e2 <*> unique e3 <*> pure l
+  unique (App e1 e2 l) =
+    App <$> unique e1 <*> unique e2 <*> pure l
+  unique (TApp e t l) =
+    TApp <$> unique e <*> unique t <*> pure l
+  unique (TAbs tvar e l) = do
+    tvar' <- uniquifyBindingTVar tvar
+    e' <- unique e
+    modify $ popNewName (unTV tvar)
+    pure $ TAbs tvar' e' l
 
-instance Freshable t => Freshable (AnnBind t a) where
-  refresh (AnnBind name t l) = AnnBind <$> refreshId name <*> refresh t <*> pure l
+instance Uniqable e => Uniqable (RType e a) where
+  unique (RBase bind typ expr) = do
+    bind' <- unique bind
+    typ' <- unique typ
+    expr' <- unique expr
+    modify $ popNewName (bindId bind)
+    pure $ RBase bind' typ' expr'
+  unique (RFun bind rtype1 rtype2) = do
+    bind' <- unique bind
+    rtype1' <- unique rtype1
+    rtype2' <- unique rtype2
+    modify $ popNewName (bindId bind)
+    pure $ RFun bind' rtype1' rtype2'
+  unique (RRTy bind rtype expr) = do
+    bind' <- unique bind
+    rtype' <- unique rtype
+    expr' <- unique expr
+    modify $ popNewName (bindId bind)
+    pure $ RRTy bind' rtype' expr'
+  unique (RForall tvar rtype) = do
+    tvar' <- uniquifyBindingTVar tvar
+    rtype' <- unique rtype
+    modify $ popNewName (unTV tvar)
+    pure $ RForall tvar' rtype'
 
+instance Uniqable Type where
+  unique (TVar tvar) = TVar <$> uniquifyTVar tvar
+  unique TInt = pure TInt
+  unique TBool = pure TBool
+  unique TUnit = pure TUnit
+  unique (domain :=> codomain) =
+    (:=>) <$> unique domain <*> unique codomain
+  unique (TCtor c ts) =
+    TCtor c <$> mapM unique ts
+  unique (TForall tvar t) = do
+    tvar' <- uniquifyBindingTVar tvar
+    t' <- unique t
+    modify $ popNewName (unTV tvar)
+    pure $ TForall tvar' t'
 
-uniquifyBindingTVar :: (MonadFresh m) => TVar -> m TVar
-uniquifyBindingTVar (TV name) = TV <$> refreshId name
+instance Uniqable r => Uniqable (ParsedType r a) where
+  unique (ParsedCheck rtype) = ParsedCheck <$> unique rtype
+  unique (ParsedAssume rtype) = ParsedAssume <$> unique rtype
+  unique ParsedInfer = pure ParsedInfer
 
-uniquifyTVar :: (MonadFresh m) => TVar -> m TVar
-uniquifyTVar (TV name) = TV <$> (fromMaybe name <$> lookupId name)
+instance Uniqable () where
+  unique _ = pure ()
+
+instance Uniqable (Bind a) where
+  unique (Bind name l) = do
+    name' <- refreshId name
+    modify $ pushNewName name name'
+    pure $ Bind name' l
+
+instance Uniqable t => Uniqable (AnnBind t a) where
+  unique (AnnBind name t l) = do
+    name' <- refreshId name
+    t' <- unique t
+    modify $ pushNewName name name'
+    pure $ AnnBind name' t' l
+
+uniquifyBindingTVar :: TVar -> UniqableContext TVar
+uniquifyBindingTVar (TV name) = do
+  name' <- refreshId name
+  modify $ pushNewName name name'
+  pure $ TV name'
+
+uniquifyTVar :: TVar -> UniqableContext TVar
+uniquifyTVar (TV name) = TV . fromJust <$> gets (lookupNewName name)
