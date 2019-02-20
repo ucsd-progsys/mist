@@ -17,8 +17,6 @@ module Language.Mist.CGen
 -- TODO: Do we need to run a Uniqify pass before we run this module?
 -- Matt: We should uniquify at the beginning and then maintain the unique names property
 
--- TODO: flatten RRTy
-
 import Language.Mist.Types
 import Language.Mist.Names
 
@@ -120,19 +118,35 @@ freshBaseType env baseType l = do
   pure $ RBase (Bind v l) baseType k
 
 sub :: (Predicate r) => RType r a -> RType r a -> Constraint r
-sub (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
-  | b1 == b2 = All x1 b1 p1 (Head $ varSubst x1 x2 p2) -- TODO: check whether the guard is correct/needed
-  | otherwise = error "error?"
-sub (RFun (Bind x _) s s') (RFun (Bind y _) t t') = CAnd [c, generalizedImplication y t c']
+sub rtype1 rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
   where
-    c = sub t s
-    c' = sub (substReftPred1 y x s') t'
-sub (RForall alpha t1) (RForall beta t2)
-  | alpha == beta = sub t1 t2
-  | otherwise = error "Constraint generation subtyping error"
-sub _ _ = error "CGen subtyping error"
+    go (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
+      | b1 == b2 = All x1 b1 p1 (Head $ varSubst x1 x2 p2) -- TODO: check whether the guard is correct/needed
+      | otherwise = error "error?"
+    go (RFun (Bind x _) s s') (RFun (Bind y _) t t') = CAnd [c, generalizedImplication y t c']
+      where
+        c = sub t s
+        c' = sub (substReftPred1 y x s') t'
+    go (RForall alpha t1) (RForall beta t2)
+      | alpha == beta = sub t1 t2
+      | otherwise = error "Constraint generation subtyping error"
+    go _ _ = error $ "CGen subtyping error"
 
 -- | (x :: t) => c
-generalizedImplication :: (Predicate r) => Id -> (RType r a) -> Constraint r -> Constraint r
+generalizedImplication :: (Predicate r) => Id -> RType r a -> Constraint r -> Constraint r
 generalizedImplication x (RBase (Bind y _) b p) c = All x b (varSubst x y p) c
 generalizedImplication _ _ c = c
+
+flattenRType :: (Predicate r) => RType r a -> RType r a
+flattenRType (RRTy b rtype reft) = strengthenRType (flattenRType rtype) b reft
+flattenRType rtype = rtype
+
+strengthenRType :: (Predicate r) => RType r a -> Bind a -> r -> RType r a
+strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedReft')
+  where
+    renamedReft' = varSubst (bindId b) (bindId b') reft'
+strengthenRType (RFun _ _ _) _ _ = error "TODO"
+strengthenRType (RRTy b rtype reft) b' reft' = RRTy b rtype (strengthen reft renamedReft')
+  where
+    renamedReft' = varSubst (bindId b) (bindId b') reft'
+strengthenRType (RForall _ _) _ _ = error "TODO"
