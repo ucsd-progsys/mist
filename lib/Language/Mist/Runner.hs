@@ -13,6 +13,9 @@ import Language.Mist.ToFixpoint
 import Language.Mist.Normalizer
 import Language.Mist.Names
 import qualified Language.Fixpoint.Horn.Types as HC
+import qualified Language.Fixpoint.Types as F
+
+import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
 type R = HC.Pred
 
@@ -35,8 +38,10 @@ act _h f = do
       -- hPutStrLn h ("Elaborated: " ++ show t) >>
       --(print c >> solve c >>= print)
       let c = generateConstraints (anormal t) -- TODO: move this into the mist function
-      print c >> solve c
-      return r
+      solverResult <- print c >> solve c
+      case F.resStatus solverResult of
+        F.Safe -> return r
+        _ -> return $ Left [mkError "solver failed" (SS {ssBegin = initialPos "file", ssEnd = initialPos "file"})] -- TODO: proper error
     Left _ -> return r
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
