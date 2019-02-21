@@ -35,13 +35,12 @@ act _h f = do
   let r = mist e
   case r of
     Right t -> do
-      -- hPutStrLn h ("Elaborated: " ++ show t) >>
-      --(print c >> solve c >>= print)
-      let c = generateConstraints (anormal t) -- TODO: move this into the mist function
+      let c = generateConstraints (anormal t)
       solverResult <- print c >> solve c
+      print solverResult
       case F.resStatus solverResult of
         F.Safe -> return r
-        _ -> return $ Left [mkError "solver failed" (SS {ssBegin = initialPos "file", ssEnd = initialPos "file"})] -- TODO: proper error
+        _ -> return $ Left [mkError ("solver failed: " ++ show solverResult) (SS {ssBegin = initialPos "file", ssEnd = initialPos "file"})] -- TODO: proper error
     Left _ -> return r
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a

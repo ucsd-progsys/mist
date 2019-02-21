@@ -42,20 +42,21 @@ cgen env (Id x _) = (Head true,) <$> single env x
 cgen _env (If _e1 _e2 _e3 _) = error "TODO"
 
 -- TODO: recursive let?
+-- TODO: this implementation of let differs significantly from the paper: is it correct?
 cgen env (Let bind@AnnBind{_aBindType = Just (Left tx)} e1 e2 _) = do
   let x = bindId bind
   (c1, t1) <- cgen env e1
   (c2, t2) <- cgen ((x, tx):env) e2
   tHat <- fresh (eraseRType t2) (extract e2)
-  let c = CAnd [c1, (generalizedImplication x tx c2)]
-  pure (CAnd [c, (t1 `sub` tx), (t2 `sub` tHat)], tHat)
+  let c = generalizedImplication x tx (CAnd [c2, t2 `sub` tHat])
+  pure (CAnd [c1, (t1 `sub` tx), c], tHat)
 cgen env (Let bind e1 e2 _) = do
   let x = bindId bind
   (c1, t1) <- cgen env e1
   (c2, t2) <- cgen ((x, t1):env) e2
   tHat <- fresh (eraseRType t2) (extract e2)
-  let c = CAnd [c1, (generalizedImplication x t1 c2)]
-  pure (CAnd [c, (t2 `sub` tHat)], tHat)
+  let c = generalizedImplication x t1 (CAnd [c2, t2 `sub` tHat])
+  pure (CAnd [c1, c], tHat)
 
 cgen env (App e (Id y _) _) = do
   (c, RFun x t t') <- cgen env e
