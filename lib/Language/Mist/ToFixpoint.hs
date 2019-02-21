@@ -43,7 +43,11 @@ collectKVars cstr = go MAP.empty cstr
   where
     go env (HC.Head pred _) = goPred env pred
     go env (HC.CAnd constraints) = concatMap (go env) constraints
-    go env (HC.All bind constraint) = go (MAP.insert (HC.bSym bind) (HC.bSort bind) env) constraint
+    go env (HC.All bind constraint) = bindKVars ++ constraintKVars
+      where
+        env' = MAP.insert (HC.bSym bind) (HC.bSort bind) env
+        bindKVars = goPred env' (HC.bPred bind)
+        constraintKVars = go env' constraint
 
     goPred env (HC.Var k args) = [HC.HVar k argSorts ()]
       where
@@ -116,7 +120,12 @@ instance Predicate HC.Pred where
   true = HC.Reft F.PTrue
   false = HC.Reft F.PFalse
   varsEqual x y = HC.Reft $ F.PAtom F.Eq (F.EVar $ fromString x) (F.EVar $ fromString y)
+
+  strengthen (HC.PAnd p1s) (HC.PAnd p2s) = HC.PAnd (p1s ++ p2s)
+  strengthen (HC.PAnd p1s) p2 = HC.PAnd (p2:p1s)
+  strengthen p1 (HC.PAnd p2s) = HC.PAnd (p1:p2s)
   strengthen p1 p2 = HC.PAnd [p1, p2]
+
   buildKvar x params = HC.Var (fromString x) (fmap fromString params)
 
   varSubst x y (HC.Reft fexpr) =

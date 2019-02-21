@@ -284,7 +284,8 @@ instance PPrint Field where
   pprint Zero  = "0"
   pprint One   = "1"
 
-instance PPrint (Expr t a) where
+-- TODO: better instance
+instance (Show t) => PPrint (Expr t a) where
   pprint (Number n _) = show n
   pprint (Boolean b _) = pprint b
   pprint (Unit _) = "()"
@@ -293,7 +294,7 @@ instance PPrint (Expr t a) where
   pprint (If c t e _) = printf "(if %s then %s else %s)" (pprint c) (pprint t) (pprint e)
   -- pprint e@Let{} = printf "(let %s in %s)" (ppDefs ds) (pprint e')
   --   where (ds, e') = exprDefs e
-  pprint Let{} = error "TODO"
+  pprint (Let bind e1 e2 _) = printf "(let %s : %s = %s in %s)" (bindId bind) (show $ aBindType bind) (pprint e1) (pprint e2)-- TODO: make better
   pprint (App e1 e2 _) = printf "(%s %s)" (pprint e1) (pprint e2)
   pprint (Lam x e _) = printf "(\\ %s -> %s)" (pprint x) (pprint e)
   pprint (TApp e t _) = printf "(%s@%s)" (pprint e) (pprint t)
