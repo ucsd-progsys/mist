@@ -12,13 +12,13 @@ module Language.Mist.ToFixpoint
 import Data.String (fromString)
 import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
-import Data.Maybe (fromJust)
+import Data.Maybe (fromMaybe)
 
 import Language.Mist.Types as M
 import Language.Mist.Checker (primToUnpoly) -- TODO(Matt): move primToUnpoly to a better place
 import qualified Language.Mist.Names as MN
 
-import Language.Fixpoint.Types.Config (defConfig)
+import qualified Language.Fixpoint.Types.Config as C
 import qualified Language.Fixpoint.Types as F
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Horn.Solve as S
@@ -26,9 +26,10 @@ import qualified Language.Fixpoint.Horn.Solve as S
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
-solve constraints = S.solve defConfig (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint)
+solve constraints = S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint)
   where
     fixpointConstraint = toHornClause constraints
+    cfg = C.defConfig { C.eliminate = C.Some , C.save = True }
 
 -- TODO: HC.solve requires () but should take any type
 toHornClause :: Constraint HC.Pred -> HC.Cstr ()
@@ -52,7 +53,7 @@ collectKVars cstr = go MAP.empty cstr
 
     goPred env (HC.Var k args) = [HC.HVar k argSorts ()]
       where
-        argSorts = map (\arg -> fromJust $ MAP.lookup arg env) args
+        argSorts = map (\arg -> fromMaybe (error (show arg)) $ MAP.lookup arg env) args
     goPred env (HC.PAnd preds) = concatMap (goPred env) preds
     goPred _ (HC.Reft _) = []
 
