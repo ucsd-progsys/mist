@@ -2,6 +2,8 @@
 -- | This module contains the code for converting an `Expr` to a "A-Normal" form.
 --------------------------------------------------------------------------------
 
+-- TODO make this a typed normalization (preserve t that we get)
+
 module Language.Mist.Normalizer ( anormal ) where
 
 import Language.Mist.Types
