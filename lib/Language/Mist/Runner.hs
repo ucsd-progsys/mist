@@ -19,8 +19,6 @@ import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
 type R = HC.Pred
 
-deriving instance Show HC.Pred -- NOTE: just for debugging
-
 ---------------------------------------------------------------------------
 runMist :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
 ---------------------------------------------------------------------------

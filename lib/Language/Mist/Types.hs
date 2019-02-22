@@ -95,7 +95,7 @@ data Prim2
   | Greater
   | Equal
   | And
-  deriving (Show, Read)
+  deriving (Show, Read, Eq)
 
 -- | Mist expressions
 -- Parameterized by the type of type annotations
@@ -115,7 +115,7 @@ data Expr t a
 
   -- | Tuple   !(Expr a t)    !(Expr a t)             a
   -- | GetItem !(Expr a t)    !Field                  a
-  deriving (Show, Functor, Read)
+  deriving (Show, Functor, Read, Eq)
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
@@ -159,7 +159,7 @@ data Bind a = Bind
   { _bindId :: !Id
   , _bindLabel :: a
   }
-  deriving (Show, Functor, Read)
+  deriving (Show, Functor, Read, Eq)
 
 -- | Annotated Bindings parameterized by the type of the type annotation
 data AnnBind t a = AnnBind
@@ -167,7 +167,7 @@ data AnnBind t a = AnnBind
   , _aBindType :: t
   , _aBindLabel :: a
   }
-  deriving (Show, Functor, Read)
+  deriving (Show, Functor, Read, Eq)
 
 aBindType = _aBindType
 
@@ -478,7 +478,7 @@ data Constraint r
   = Head r                             -- ^ p
   | CAnd [Constraint r]                -- ^ c1 /\ c2
   | All Id Type r (Constraint r)       -- ^ ∀x:τ.p => c
-  deriving (Show, Functor)
+  deriving (Show, Functor, Eq)
 
 -- | Type class to represent predicates
 class Predicate r where

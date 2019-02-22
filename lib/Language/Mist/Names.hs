@@ -171,6 +171,21 @@ instance Subable Type Type where
 instance Subable Type t => Subable Type (AnnBind t a) where
   _subst su (AnnBind name t l) = AnnBind name (_subst su t) l
 
+instance Subable (Expr t a) (Expr t a) where
+  _subst _ e@Number{} = e
+  _subst _ e@Boolean{} = e
+  _subst _ e@Unit{} = e
+  _subst su e@(Id x _) = fromMaybe e $ M.lookup x su
+  _subst su (Prim2 p e1 e2 loc) = Prim2 p (_subst su e1) (_subst su e2) loc
+  _subst su (If e1 e2 e3 loc) = If (_subst su e1) (_subst su e2) (_subst su e3) loc
+  _subst su (Let b e1 e2 loc) = Let b (_subst su' e1) (_subst su' e2) loc
+    where
+      su' = M.delete (bindId b) su
+  _subst su (App e1 e2 loc) = App (_subst su e1) (_subst su e2) loc
+  _subst su (Lam b e loc) = Lam b (_subst (M.delete (bindId b) su) e) loc
+  _subst su (TApp e typ loc) = TApp (_subst su e) typ loc
+  _subst su (TAbs alpha e loc) = TAbs alpha (_subst su e) loc
+
 instance Predicate r => Subable Id r where
   _subst su r = M.foldrWithKey (\x y r' -> varSubst x y r') r su
 

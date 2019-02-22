@@ -134,6 +134,8 @@ sub rtype1 rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go _ _ = error $ "CGen subtyping error"
 
 -- | (x :: t) => c
+
+-- TODO: support higher order binders
 generalizedImplication :: (Predicate r) => Id -> RType r a -> Constraint r -> Constraint r
 generalizedImplication x (RBase (Bind y _) b p) c = All x b (varSubst x y p) c
 generalizedImplication _ _ c = c

@@ -48,6 +48,7 @@ collectKVars cstr = go MAP.empty cstr
         env' = MAP.insert (HC.bSym bind) (HC.bSort bind) env
         bindKVars = goPred env' (HC.bPred bind)
         constraintKVars = go env' constraint
+    go _ (HC.Any{}) = undefined
 
     goPred env (HC.Var k args) = [HC.HVar k argSorts ()]
       where
