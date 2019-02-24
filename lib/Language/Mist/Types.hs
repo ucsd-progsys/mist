@@ -93,6 +93,7 @@ data Prim2
   | Times
   | Less
   | Greater
+  | Lte
   | Equal
   | And
   deriving (Show, Read, Eq)
@@ -266,6 +267,7 @@ instance PPrint Prim2 where
   pprint Times   = "*"
   pprint Less    = "<"
   pprint Greater = ">"
+  pprint Lte     = ">="
   pprint Equal   = "=="
   pprint And     = "&&"
 
@@ -484,6 +486,8 @@ data Constraint r
 class Predicate r where
   true :: r
   false :: r
+  var ::  Id -> r
+  varNot ::  Id -> r
   varsEqual :: Id -> Id -> r -- ^ builds a refinement that the two variables are equivalent
   prim :: (MonadFresh m) => Expr t a -> m (RType r a) -- ^ Gives a specification to primitives
                                                       -- TODO: this is a partial function

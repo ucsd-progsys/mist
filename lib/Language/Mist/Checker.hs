@@ -607,6 +607,7 @@ primOpType Minus   = pure $ TInt :=> (TInt :=> TInt)
 primOpType Times   = pure $ TInt :=> (TInt :=> TInt)
 primOpType Less    = pure $ TInt :=> (TInt :=> TBool)
 primOpType Greater = pure $ TInt :=> (TInt :=> TBool)
+primOpType Lte     = pure $ TInt :=> (TInt :=> TBool)
 primOpType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))

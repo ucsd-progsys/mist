@@ -213,6 +213,7 @@ binops =
     ]
   , [ InfixL (symbol "==" *> pure (op Equal))
     , InfixL (symbol ">"  *> pure (op Greater))
+    , InfixL (symbol "<=" *> pure (op Lte))
     , InfixL (symbol "<"  *> pure (op Less))
     ]
   ]

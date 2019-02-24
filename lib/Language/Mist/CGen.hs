@@ -40,7 +40,19 @@ cgen _ e@Boolean{} = (Head true,) <$> prim e
 cgen _ e@Prim2{}   = (Head true,) <$> prim e -- TODO: should this be a lookup?
                                       -- how should prims be handled?
 cgen env (Id x _)  = (Head true,) <$> single env x
-cgen _env (If _e1 _e2 _e3 _) = error "TODO"
+
+cgen env (If (Id y _) e1 e2 l) = do
+    rtT <- pure $ RBase (Bind idT l) TBool $ var y
+    rtF <- pure $ RBase (Bind idF l) TBool $ varNot y
+    (c1, t1) <- cgen ((idT,rtT):env) e1
+    (c2, t2) <- cgen ((idF,rtF):env) e2
+    tHat <- fresh l (foBinds env) (eraseRType t1) -- could just as well be t2
+    let c = CAnd [mkAll idT rtT (CAnd [c1, t1 <: tHat]),
+                  mkAll idF rtF (CAnd [c2, t2 <: tHat])]
+    pure (c, tHat)
+  where idT = y<>"then"
+        idF = y<>"else"
+cgen _ (If _ _ _ _) = error "INTERNAL ERROR: if not in ANF"
 
 -- TODO: recursive let?
 -- TODO: this implementation of let differs significantly from the paper: is it correct?
@@ -61,7 +73,7 @@ cgen env (App e (Id y _) _) = do
   (c, RFun x t t') <- cgen env e
   ty <- single env y
   let cy = ty <: t
-  pure (CAnd [c, cy], substReftPred1 y (bindId x) t')
+  pure (CAnd [c, cy], substReftPred1 (bindId x) y t')
 cgen _ (App _ _ _) = error "argument is non-variable"
 
 cgen _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
@@ -132,8 +144,9 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
 
 -- | (x :: t) => c
 mkAll :: (Predicate r) => Id -> RType r a -> Constraint r -> Constraint r
-mkAll x (RBase (Bind y _) b p) c = All x b (varSubst x y p) c
-mkAll _ _ c = c
+mkAll x rt c = case flattenRType rt of
+                 (RBase (Bind y _) b p) -> All x b (varSubst x y p) c
+                 _ -> c
 
 foBinds [] = []
 foBinds ((x, (RBase (Bind _ _) t _)):ts) = (x,t) : foBinds ts

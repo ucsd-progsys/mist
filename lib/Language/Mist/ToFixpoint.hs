@@ -26,18 +26,21 @@ import qualified Language.Fixpoint.Horn.Solve as S
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
-solve constraints = S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint)
+solve constraints = S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
   where
     fixpointConstraint = toHornClause constraints
-    cfg = C.defConfig { C.eliminate = C.Some , C.save = True }
+    cfg = C.defConfig { C.eliminate = C.Horn } -- , C.save = True }
 
 -- TODO: HC.solve requires () but should take any type
 toHornClause :: Constraint HC.Pred -> HC.Cstr ()
-toHornClause (Head r) = HC.Head r ()
-toHornClause (CAnd cs) =
-  HC.CAnd (fmap toHornClause cs)
-toHornClause (All x typ r c) =
-  HC.All (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause c)
+toHornClause c = c'
+  where c' = toHornClause' c
+
+toHornClause' (Head r) = HC.Head r ()
+toHornClause' (CAnd cs) =
+  HC.CAnd (fmap toHornClause' cs)
+toHornClause' (All x typ r c) =
+  HC.All (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
 
 collectKVars :: HC.Cstr a -> [HC.Var ()]
 collectKVars cstr = go MAP.empty cstr
@@ -64,7 +67,7 @@ typeToSort :: M.Type -> F.Sort
 typeToSort (TVar (TV t)) = F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed
 typeToSort TUnit = F.FObj $ fromString "Unit"
 typeToSort TInt = F.FInt
-typeToSort TBool = undefined
+typeToSort TBool = F.boolSort
 -- is this backwards?
 typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
 -- We can't actually build arbitary TyCons in FP, so for now we just use
@@ -114,6 +117,7 @@ prim2ToFixpoint M.Plus  = Right F.Plus
 prim2ToFixpoint M.Minus = Right F.Minus
 prim2ToFixpoint M.Times = Right F.Times
 prim2ToFixpoint Less    = Left F.Lt
+prim2ToFixpoint Lte     = Left F.Le
 prim2ToFixpoint Greater = Left F.Gt
 prim2ToFixpoint Equal   = Left F.Eq
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
@@ -121,6 +125,8 @@ prim2ToFixpoint _       = error "Internal Error: prim2fp"
 instance Predicate HC.Pred where
   true = HC.Reft F.PTrue
   false = HC.Reft F.PFalse
+  var x = HC.Reft $ F.EVar $ fromString x
+  varNot x  = HC.Reft $ F.PNot $ F.EVar $ fromString x
   varsEqual x y = HC.Reft $ F.PAtom F.Eq (F.EVar $ fromString x) (F.EVar $ fromString y)
 
   strengthen (HC.PAnd p1s) (HC.PAnd p2s) = HC.PAnd (p1s ++ p2s)
