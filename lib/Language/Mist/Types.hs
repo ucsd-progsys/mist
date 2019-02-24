@@ -323,6 +323,8 @@ instance PPrint e => PPrint (RType e a) where
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
   pprint (RFun b t1 t2) =
     printf "%s:%s -> %s" (pprint b) (pprint t1) (pprint t2)
+  pprint (RIFun b t1 t2) =
+    printf "%s:%s ~> %s" (pprint b) (pprint t1) (pprint t2)
   pprint (RRTy b t e) =
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
@@ -405,6 +407,7 @@ instance (Binder b, Located a) => Located (b a) where
 data RType r a
   = RBase !(Bind a) Type !r
   | RFun !(Bind a) !(RType r a) !(RType r a)
+  | RIFun !(Bind a) !(RType r a) !(RType r a)
   | RRTy !(Bind a) !(RType r a) r
   | RForall TVar !(RType r a)
   deriving (Show, Functor, Read)
@@ -430,6 +433,7 @@ unTV (TV t) = t
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
+eraseRType (RIFun _ _t1 t2) = eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
 
@@ -480,6 +484,7 @@ data Constraint r
   = Head r                             -- ^ p
   | CAnd [Constraint r]                -- ^ c1 /\ c2
   | All Id Type r (Constraint r)       -- ^ ∀x:τ.p => c
+  | Any Id Type r (Constraint r)       -- ^ :x:τ.p => c
   deriving (Show, Functor, Eq)
 
 -- | Type class to represent predicates
@@ -557,5 +562,6 @@ instance Bifunctor RType where
   second = fmap
   first f (RBase b t r) = RBase b t (f r)
   first f (RFun b rt1 rt2) = RFun b (first f rt1) (first f rt2)
+  first f (RIFun b rt1 rt2) = RIFun b (first f rt1) (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)
   first f (RForall tvar rt) = RForall tvar (first f rt)

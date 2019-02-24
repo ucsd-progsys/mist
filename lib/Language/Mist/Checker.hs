@@ -497,7 +497,7 @@ a <: b = do
     (_, Just evar) -> do
       occurrenceCheck evar a
       instantiateR a evar
-    (_, _) -> error "TODO: this is a subtyping error"
+    (_, _) -> error $ "TODO: this is a subtyping error" ++ show a ++ show b
 
 -- DEBUGGING
 -- instantiateL a b = do
