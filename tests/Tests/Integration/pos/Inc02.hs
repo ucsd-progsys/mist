@@ -4,7 +4,7 @@ incr = ( \x -> x + 1 )
 moo :: {v:Int | v == 8}
 moo = ( incr 7 )
 
-id :: forall a. (a -> a)
+id :: forall a. {v:a | True} -> {v:a | True}
 id = ( \x -> x )
 
 bar :: {v:Int | v == 8}

@@ -1,3 +1,4 @@
+{-# LANGUAGE ScopedTypeVariables #-}
 module Tests.Language.Mist.Checker (checkerTests) where
 
 import Debug.Trace
@@ -12,10 +13,13 @@ import Tests.Utils
 import Tests.SimpleTypes
 
 import Language.Mist.Checker
+import Language.Mist.UX (Result)
 
-noPred = Boolean True
+type ElabResult = Result (ElaboratedExpr (ElaboratedType () ()) ())
 
-toRBase :: Type -> RType Expr ()
+noPred = ()
+
+toRBase :: Type -> RType () ()
 toRBase typ = RBase (Bind "vv") typ noPred
 
 (==>) :: Id -> Id -> Type
@@ -34,91 +38,84 @@ elaborationTests = testGroup "elaborate"
     testCase "let id : A -> A = λx.x in ()" $
     let result
           = elaborate (Let
-                       (Bind "id")
-                       (Check (RForall (TV "A") (toRBase $ "A" ==> "A")))
-                       (Lam (Bind "x") (Id "x"))
+                       (AnnBind "id" (ParsedCheck (RForall (TV "A") (toRBase $ "A" ==> "A"))))
+                       (Lam (AnnBind "x" ParsedInfer) (Id "x"))
                        Unit)
     in shouldCheck result
 
   , testCase "λx.y" $
-    let result = elaborate (Lam (Bind "x") (Id "y"))
+    let result :: ElabResult = elaborate (Lam (AnnBind "x" ParsedInfer) (Id "y"))
     in shouldFail result
 
   , testCase "let id : (ASSUME A -> A) = () in ()" $
     let result
           = elaborate (Let
-                       (Bind "id")
-                       (Assume (RForall (TV "A") (toRBase $ "A" ==> "A")))
+                       (AnnBind "id" (ParsedAssume (RForall (TV "A") (toRBase $ "A" ==> "A"))))
                        Unit
                        Unit)
     in shouldCheck result
 
   , testGroup "let id : A -> A = λx.x in id 1" $
-    let result@(Right (CLet
+    let result@(Right (Let
                        _
-                       (CTAbs (TV "A") _)
-                       (CApp (CTApp (CId "id") TInt) (CNumber 1))))
+                       (TAbs (TV "A") _)
+                       (App (TApp (Id "id") TInt) (Number 1))))
           = elaborate (Let
-                       (Bind "id")
-                       (Check (RForall (TV "A") (toRBase $ "A" ==> "A")))
-                       (Lam (Bind "x") (Id "x"))
+                       (AnnBind "id" (ParsedCheck (RForall (TV "A") (toRBase $ "A" ==> "A"))))
+                       (Lam (AnnBind "x" ParsedInfer) (Id "x"))
                        (App (Id "id") (Number 1)))
     in [ testCase "type checks" $ shouldCheck result
        ]
 
   , testGroup "assume id : A -> A = () in let map : (A -> B) -> A -> B = λf.λx.f x in map id 1" $
-    let result@(Right (CLet
+    let result@(Right (Let
                        _
                        _
-                       (CLet
+                       (Let
                         _
-                        (CTAbs (TV "A") (CTAbs (TV "B") _))
-                        (CApp (CApp (CTApp (CTApp (CId "map") TInt) TInt)
-                                    (CTApp (CId "id") TInt))
-                              (CNumber 1)))))
+                        (TAbs (TV "A") (TAbs (TV "B") _))
+                         (App (App (TApp (TApp (Id "map") TInt) TInt)
+                               (TApp (Id "id") TInt))
+                           (Number 1)))))
           = elaborate (Let
-                       (Bind "id")
-                       (Assume (RForall (TV "A") (toRBase $ "A" ==> "A")))
+                       (AnnBind "id" (ParsedAssume (RForall (TV "A") (toRBase $ "A" ==> "A"))))
                        Unit
                        (Let
-                        (Bind "map")
-                        (Check (RForall (TV "A") (RForall (TV "B") (toRBase $ ("A" ==> "B") :=> ("A" ==> "B")))))
-                        (Lam (Bind "f") (Lam (Bind "x") (App (Id "f") (Id "x"))))
+                        (AnnBind "map" (ParsedCheck (RForall (TV "A") (RForall (TV "B") (toRBase $ ("A" ==> "B") :=> ("A" ==> "B"))))))
+                        (Lam (AnnBind "f" ParsedInfer) (Lam (AnnBind "x" ParsedInfer) (App (Id "f") (Id "x"))))
                         (App (App (Id "map") (Id "id")) (Number 1))))
     in [ testCase "type checks" $ shouldCheck result
        ]
 
   , testGroup "assume const : A -> Int = () in let map : (A -> B) -> A -> B = λf.λx.f x in map const ()" $
-    let result@(Right (CLet
+    let result@(Right (Let
                        _
                        _
-                       (CLet
+                       (Let
                         _
-                        (CTAbs (TV "A") (CTAbs (TV "B") _))
-                        (CApp (CApp (CTApp (CTApp (CId "map") TUnit) TInt)
-                                    (CTApp (CId "const") TUnit))
-                              CUnit))))
+                        (TAbs (TV "A") (TAbs (TV "B") _))
+                        (App (App (TApp (TApp (Id "map") TUnit) TInt)
+                                    (TApp (Id "const") TUnit))
+                              Unit))))
           = elaborate (Let
-                       (Bind "const")
-                       (Assume (RForall (TV "A") (toRBase $ (TVar $ TV "A") :=> TInt)))
+                       (AnnBind "const" (ParsedAssume (RForall (TV "A") (toRBase $ (TVar $ TV "A") :=> TInt))))
                        Unit
                        (Let
-                        (Bind "map")
-                        (Check (RForall (TV "A") (RForall (TV "B") (toRBase $ ("A" ==> "B") :=> ("A" ==> "B")))))
-                        (Lam (Bind "f") (Lam (Bind "x") (App (Id "f") (Id "x"))))
+                        (AnnBind "map" (ParsedCheck (RForall (TV "A") (RForall (TV "B") (toRBase $ ("A" ==> "B") :=> ("A" ==> "B"))))))
+                        (Lam (AnnBind "f" ParsedInfer) (Lam (AnnBind "x" ParsedInfer) (App (Id "f") (Id "x"))))
                         (App (App (Id "map") (Id "const")) Unit)))
     in [ testCase "type checks" $ shouldCheck result
        ]
 
   , testGroup "let id = λx.x in ()" $
-    let result@(Right (CLet
-                       (AnnBind _ (RUnrefined (TForall (TV a1) (TVar (TV a2) :=> TVar (TV a3)))))
-                       (CTAbs (TV a4) _)
+    let result@(Right (Let
+                       (AnnBind _ (ElabUnrefined (TForall (TV a1) (TVar (TV a2) :=> TVar (TV a3)))))
+                       (TAbs (TV a4) _)
                        _))
+          :: ElabResult
           = elaborate (Let
-                       (Bind "id")
-                       Infer
-                       (Lam (Bind "x") (Id "x"))
+                       (AnnBind "id" ParsedInfer)
+                       (Lam (AnnBind "x" ParsedInfer) (Id "x"))
                        Unit)
     in [ testCase "type checks" $ shouldCheck result
        , testCase "inferred type variables" $ do

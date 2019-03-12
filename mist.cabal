@@ -76,4 +76,5 @@ test-suite test
                     Tests.Integration.Tests,
                     Tests.Language.Mist.Names
                     Tests.Language.Mist.Checker
+                    Tests.Language.Mist.CGen
                     Tests.SimpleTypes

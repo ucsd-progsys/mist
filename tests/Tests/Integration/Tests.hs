@@ -18,7 +18,6 @@ import Tests.Utils
 
 import Language.Mist.Runner
 import Language.Mist.UX (Result, SourceSpan)
-import Language.Mist.Types (Core)
 
 integrationTests = testGroupM "Integration"
   [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" mistSuccess
@@ -26,7 +25,7 @@ integrationTests = testGroupM "Integration"
   ]
 
 ---------------------------------------------------------------------------
-dirTests :: FilePath -> (Result (Core SourceSpan) -> Assertion) -> IO [TestTree]
+-- dirTests :: FilePath -> (Result (Core SourceSpan) -> Assertion) -> IO [TestTree]
 ---------------------------------------------------------------------------
 dirTests root testPred = do
   files    <- walkDirectory root
@@ -37,7 +36,7 @@ isTest   :: FilePath -> Bool
 isTest f = takeExtension f `elem` [".hs"]
 
 ---------------------------------------------------------------------------
-mkTest :: (Result (Core SourceSpan) -> Assertion) -> FilePath -> FilePath -> TestTree
+-- mkTest :: (Result (Core SourceSpan) -> Assertion) -> FilePath -> FilePath -> TestTree
 ---------------------------------------------------------------------------
 mkTest testPred dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
