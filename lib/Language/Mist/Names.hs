@@ -74,6 +74,8 @@ subst1 ex x e = subst (M.singleton x ex) e
 substReftPred :: (Subable e r) => Subst e -> RType r a -> RType r a
 substReftPred su (RBase bind typ expr) =
   RBase bind typ (subst (M.delete (bindId bind) su) expr)
+substReftPred su (RIFun bind rtype1 rtype2) =
+  RIFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
 substReftPred su (RFun bind rtype1 rtype2) =
   RFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
 substReftPred su (RRTy bind rtype expr) =
@@ -90,6 +92,8 @@ substReftType su (RBase bind typ p) =
   RBase bind (subst su typ) p
 substReftType su (RFun bind rtype1 rtype2) =
   RFun bind (substReftType su rtype1) (substReftType su rtype2)
+substReftType su (RIFun bind rtype1 rtype2) =
+  RIFun bind (substReftType su rtype1) (substReftType su rtype2)
 substReftType su (RRTy bind rtype expr) =
   RRTy bind (substReftType su rtype) expr
 substReftType su (RForall tvar r) =
@@ -106,6 +110,8 @@ substReftReft su (RBase bind typ expr) =
       Just rt -> RRTy bind rt expr
 substReftReft su (RFun bind rtype1 rtype2) =
   RFun bind (substReftReft su rtype1) (substReftReft su rtype2)
+substReftReft su (RIFun bind rtype1 rtype2) =
+  RIFun bind (substReftReft su rtype1) (substReftReft su rtype2)
 substReftReft su (RRTy bind rtype expr) =
   RRTy bind (substReftReft su rtype) expr
 substReftReft su (RForall tvar r) =
@@ -293,6 +299,12 @@ instance Uniqable e => Uniqable (RType e a) where
     rtype2' <- unique rtype2
     modify $ popNewName (bindId bind)
     pure $ RFun bind' rtype1' rtype2'
+  unique (RIFun bind rtype1 rtype2) = do
+    bind' <- unique bind
+    rtype1' <- unique rtype1
+    rtype2' <- unique rtype2
+    modify $ popNewName (bindId bind)
+    pure $ RIFun bind' rtype1' rtype2'
   unique (RRTy bind rtype expr) = do
     bind' <- unique bind
     rtype' <- unique rtype

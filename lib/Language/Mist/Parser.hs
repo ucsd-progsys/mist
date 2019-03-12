@@ -300,7 +300,12 @@ either a parser-assigned one or given explicitly. e.g.
 -}
 
 typeRType :: Parser BareRType
-typeRType = try rfun <|> unrefined <|> rbase
+typeRType = try rfun <|> try rifun <|> unrefined <|> rbase
+
+rifun :: Parser BareRType
+rifun = do id <- (binder <* colon) <|> freshBinder
+           tin <- (unrefined <|> rbase <|> parens typeRType) <* (symbol "~>")
+           RIFun id tin <$> typeRType
 
 rfun :: Parser BareRType
 rfun = do id <- (binder <* colon) <|> freshBinder

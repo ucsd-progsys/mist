@@ -22,14 +22,15 @@ import qualified Language.Fixpoint.Types.Config as C
 import qualified Language.Fixpoint.Types as F
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Horn.Solve as S
+import System.Console.CmdArgs.Verbosity
 
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
-solve constraints = S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
+solve constraints = setVerbosity Loud >> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
   where
     fixpointConstraint = toHornClause constraints
-    cfg = C.defConfig { C.eliminate = C.Horn } -- , C.save = True }
+    cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }
 
 -- TODO: HC.solve requires () but should take any type
 toHornClause :: Constraint HC.Pred -> HC.Cstr ()
@@ -41,6 +42,8 @@ toHornClause' (CAnd cs) =
   HC.CAnd (fmap toHornClause' cs)
 toHornClause' (All x typ r c) =
   HC.All (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
+toHornClause' (Any x typ r c) =
+  HC.Any (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
 
 collectKVars :: HC.Cstr a -> [HC.Var ()]
 collectKVars cstr = go MAP.empty cstr
@@ -52,7 +55,11 @@ collectKVars cstr = go MAP.empty cstr
         env' = MAP.insert (HC.bSym bind) (HC.bSort bind) env
         bindKVars = goPred env' (HC.bPred bind)
         constraintKVars = go env' constraint
-    go _ (HC.Any{}) = undefined
+    go env (HC.Any bind constraint) = bindKVars ++ constraintKVars
+      where
+        env' = MAP.insert (HC.bSym bind) (HC.bSort bind) env
+        bindKVars = goPred env' (HC.bPred bind)
+        constraintKVars = go env' constraint
 
     goPred env (HC.Var k args) = [HC.HVar k argSorts ()]
       where

@@ -1,8 +1,8 @@
-{-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE PatternGuards #-}
 
 --------------------------------------------------------------------------------
 -- | This module generates refinement type constraints
@@ -19,6 +19,7 @@ module Language.Mist.CGen
 
 import Language.Mist.Types
 import Language.Mist.Names
+import qualified Data.Map.Strict as M
 
 -------------------------------------------------------------------------------
 -- Data Structures
@@ -55,25 +56,54 @@ cgen env (If (Id y _) e1 e2 l) = do
 cgen _ (If _ _ _ _) = error "INTERNAL ERROR: if not in ANF"
 
 -- TODO: recursive let?
--- TODO: this implementation of let differs significantly from the paper: is it correct?
-cgen env (Let (AnnBind x (Just (Left tx)) _) e1 e2 _) = do
-  (c1, t1) <- cgen env e1
-  (c2, t2) <- cgen ((x, tx):env) e2
-  tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
-  let c = mkAll x tx (CAnd [c2, t2 <: tHat])
-  pure (CAnd [c1, c, t1 <: tx], tHat)
-cgen env (Let (AnnBind x _ _) e1 e2 _) = do
-  (c1, t1) <- cgen env e1
-  (c2, t2) <- cgen ((x, t1):env) e2
-  tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
-  let c = mkAll x t1 (CAnd [c2, t2 <: tHat])
-  pure (CAnd [c1, c], tHat)
+cgen env (Let b e1 e2 _)
+  -- Annotated with an RType (Implicit Parameter)
+  | (AnnBind x (Just (Left rt@(RIFun {}))) _) <- b = do
+ let (ns, tx) = splitImplicits rt
+ (c1, t1) <- cgen (ns ++ env) e1
+ (c2, t2) <- cgen ((x, rt):env) e2
+ tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
+ let c = mkAll x tx (CAnd [c2, t2 <: tHat])
+ let c' = foldr (uncurry mkAll) (CAnd [c1, t1 <: tx]) ns
+ pure (CAnd [c, c'], tHat)
+  -- Annotated with an RType
+  | (AnnBind x (Just (Left tx)) _) <- b = do
+ (c1, t1) <- cgen env e1
+ (c2, t2) <- cgen ((x, tx):env) e2
+ tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
+ let c = mkAll x tx (CAnd [c2, t2 <: tHat])
+ pure (CAnd [c1, c, t1 <: tx], tHat)
+  -- Unrefined
+  | (AnnBind x _ _) <- b = do
+ (c1, t1) <- cgen env e1
+ (c2, t2) <- cgen ((x, t1):env) e2
+ tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
+ let c = mkAll x t1 (CAnd [c2, t2 <: tHat])
+ pure (CAnd [c1, c], tHat)
 
-cgen env (App e (Id y _) _) = do
-  (c, RFun x t t') <- cgen env e
-  ty <- single env y
-  let cy = ty <: t
-  pure (CAnd [c, cy], substReftPred1 (bindId x) y t')
+cgen env (App e (Id y _) _) =
+  cgen env e >>= \case
+  (c, RFun x t t') -> do
+    ty <- single env y
+    let cy = ty <: t
+    pure (CAnd [c, cy], substReftPred1 (bindId x) y t')
+  (c, rit@RIFun{}) -> do
+    let (ns, rt) = splitImplicits rit
+    ns' <- sequence [ (,rt) <$> refreshId n | (n,rt) <- ns]
+    let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns') (fst <$> ns)) rt
+    ty <- single env y
+    tHat <- fresh (extract e) (foBinds env) (eraseRType t')
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t'<: tHat]
+    pure (CAnd [c, cy], tHat)
+  _ -> error "CGen App failed"
+-- there's a \forall fresh0##5 . true => c that's not being eliminated. We
+-- could drop useless binds like this, but I want to see where it's being
+-- generated here in the first place.
+--
+-- Seems it's the name given to the unused binder for Int -> ...
+
+
+
 cgen _ (App _ _ _) = error "argument is non-variable"
 
 cgen _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
@@ -140,13 +170,17 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go (RForall alpha t1) (RForall beta t2)
       | alpha == beta = t1 <: t2
       | otherwise = error "Constraint generation subtyping error"
-    go _ _ = error "CGen subtyping error"
+    go _ _ = error $ "CGen subtyping error. Got " ++ show rtype1 ++ " but expected " ++ show rtype2
 
 -- | (x :: t) => c
 mkAll :: (Predicate r) => Id -> RType r a -> Constraint r -> Constraint r
 mkAll x rt c = case flattenRType rt of
                  (RBase (Bind y _) b p) -> All x b (varSubst x y p) c
                  _ -> c
+mkExists xts c = foldr mkExi c xts
+  where mkExi (x,rt) c = case flattenRType rt of
+                             (RBase (Bind y _) b p) -> Any x b (varSubst x y p) c
+                             _ -> c
 
 foBinds [] = []
 foBinds ((x, (RBase (Bind _ _) t _)):ts) = (x,t) : foBinds ts
@@ -161,7 +195,13 @@ strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedRe
   where
     renamedReft' = varSubst (bindId b) (bindId b') reft'
 strengthenRType (RFun _ _ _) _ _ = error "TODO"
+strengthenRType (RIFun _ _ _) _ _ = error "TODO"
 strengthenRType (RRTy b rtype reft) b' reft' = RRTy b rtype (strengthen reft renamedReft')
   where
     renamedReft' = varSubst (bindId b) (bindId b') reft'
 strengthenRType (RForall _ _) _ _ = error "TODO"
+
+
+splitImplicits (RIFun b t t') = ((bindId b,t):bs, t'')
+    where (bs,t'') = splitImplicits t'
+splitImplicits rt = ([],rt)
