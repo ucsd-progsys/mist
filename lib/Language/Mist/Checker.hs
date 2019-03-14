@@ -41,6 +41,8 @@ import           Language.Mist.Types
 import           Language.Mist.Utils
 import           Language.Mist.Names
 
+import Debug.Trace
+
 
 --------------------------------------------------------------------------------
 -- | Well-formedness errors
@@ -135,7 +137,7 @@ instance Show TypeEnvPart where
   show (Scope evar) = ">" ++ pprint evar
   show (Unsolved evar) = pprint evar
   show (Solved evar typ) = pprint evar ++ "=" ++ pprint typ
-  show (VarBind id typ) = show id ++ ":" ++ pprint typ
+  show (VarBind id typ) = id ++ ":" ++ pprint typ
   show (BoundTVar tvar) = "$" ++ pprint tvar
 
 -- | Ordered typing environment. Grows to the right.
@@ -145,31 +147,32 @@ newtype TypeEnv = TypeEnv [TypeEnvPart]
 
 data Ctxt = Ctxt { typeEnv :: TypeEnv
                  , existentials :: S.Set TVar -- ^ The set of existential variables
+                 , solutions :: TypeEnv -- ^ Keeps discarded solutions to be substituted in annotations
                  }
 
 newtype TypingResult a = TypingResult {unTypingResult :: Result a}
   deriving (Monad, Applicative, Functor, MonadError [UserError])
 
-type Context = StateT Ctxt (FreshT TypingResult)
--- DEBUGGING
--- type Context = StateT Ctxt (FreshT (StateT String (TypingEither tag)))
+type Context = StateT Ctxt (FreshT (StateT String TypingResult))
+
+__debug = False
 
 -- DEBUGGING
--- tell :: String -> Context ()
--- tell str = lift . lift . modify $ (\stuff -> stuff ++ str ++ "\n")
+tell :: String -> Context ()
+tell str = lift . lift . modify $ (\stuff -> stuff ++ str ++ "\n")
 
 -- DEBUGGING
 -- untell :: Context String
 -- untell = lift get
 
 initialCtxt :: Ctxt
-initialCtxt = Ctxt { typeEnv = TypeEnv [], existentials = S.empty}
+initialCtxt = Ctxt { typeEnv = TypeEnv [], existentials = S.empty, solutions = TypeEnv [] }
 
 evalContext :: Context a -> FreshState -> Result a
-evalContext m freshState = unTypingResult $ evalFreshT (evalStateT m initialCtxt) freshState
+evalContext m freshState = unTypingResult $ evalStateT (evalFreshT (evalStateT m initialCtxt) freshState) ""
 
--- DEBUGGING
--- evalContext m freshState = evalStateT (evalFreshT (evalStateT m initialCtxt) freshState) ""
+runContext :: Context a -> FreshState -> Result (a, String)
+runContext m freshState = unTypingResult $ runStateT (evalFreshT (evalStateT m initialCtxt) freshState) ""
 
 getBoundType :: Id -> TypeEnv -> Maybe Type
 getBoundType id (TypeEnv env) =
@@ -197,13 +200,22 @@ getEnv :: Context TypeEnv
 getEnv = getsEnv id
 
 modifyEnv :: (TypeEnv -> TypeEnv) -> Context ()
-modifyEnv f = modify $ \ctxt@Ctxt{typeEnv = env} -> ctxt { typeEnv = f env }
+modifyEnv f = modify $ \ctxt@Ctxt{typeEnv = env} -> ctxt{typeEnv = f env}
 
 setEnv :: TypeEnv -> Context ()
 setEnv newEnv = modifyEnv $ const newEnv
 
-extendEnv :: [TypeEnvPart] -> TypeEnv -> TypeEnv
-extendEnv newParts (TypeEnv env) = TypeEnv $ env `mappend` newParts
+-- | Extends the environment adding new existentials to solutions
+extendEnv :: [TypeEnvPart] -> Context ()
+extendEnv newParts = do
+  modifyEnv $ envAppend newParts
+  modify $ \ctxt@Ctxt{solutions = sols} -> ctxt{solutions = envAppend (filter evarFilter newParts) sols}
+  where
+    envAppend newParts (TypeEnv env) = TypeEnv $ env `mappend` newParts
+
+    evarFilter Unsolved{} = True
+    evarFilter Solved{} = True
+    evarFilter _ = False
 
 -- | Γ, part, Δ -> Γ
 dropEnvAfter :: TypeEnvPart -> TypeEnv -> TypeEnv
@@ -254,79 +266,84 @@ unsolvedExistentials (TypeEnv env) = [evar | (Unsolved evar) <- env]
 -- - adds explicit type application
 -- - adds explicit type abstraction
 -- - assumes every name is unique
-elaborate :: (Located a) => ParsedExpr r a -> Result (ElaboratedExpr r a)
-elaborate e = fst <$> evalContext (synthesize e) emptyFreshState -- TODO: pass around the name state
+elaborate :: (Located a, PPrint r) => ParsedExpr r a -> Result (ElaboratedExpr r a)
+elaborate e =
+  if __debug
+  then do
+    (result, log) <- runContext (elaborateAndSubst e) emptyFreshState
+    pure $ trace log result
+  else evalContext (elaborateAndSubst e) emptyFreshState -- TODO: pass around the name state
+
+  where
+    elaborateAndSubst e = do
+      (elaborated, _) <- synthesize e
+      Ctxt{solutions = sols} <- get
+      pure $ subst (envToSubst sols) elaborated
+
 
 -- DEBUGGING
--- synthesize e = do
---   env <- getEnv
---   tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
---   internalsynthesize e
+synthesize :: (Located a, PPrint r) => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
+synthesize e = do
+  env <- getEnv
+  tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
+  _synthesize e
 
 -- TODO: add judgments for documentation
 -- | Γ ⊢ e ~> c => A ⊣ Θ
-synthesize :: (Located a) => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
-synthesize (Number i tag) = pure (Number i tag, TInt)
-synthesize (Boolean b tag) = pure (Boolean b tag, TBool)
-synthesize (Unit tag) = pure (Unit tag, TUnit)
-synthesize (Id id tag) = do
+_synthesize (Number i tag) = pure (Number i tag, TInt)
+_synthesize (Boolean b tag) = pure (Boolean b tag, TBool)
+_synthesize (Unit tag) = pure (Unit tag, TUnit)
+_synthesize (Id id tag) = do
   boundType <- getsEnv $ getBoundType id
   case boundType of
     Just typ -> pure (Id id tag, typ)
     Nothing -> throwError $ [errUnboundVar (sourceSpan tag) id]
-synthesize (Prim2 op e1 e2 tag) = synthesizePrim2 op e1 e2 tag -- TODO: fix Prim2 to allow type instantiation
-synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthesis of branching
+_synthesize (Prim2 op e1 e2 tag) = synthesizePrim2 op e1 e2 tag -- TODO: fix Prim2 to allow type instantiation
+_synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthesis of branching
   cCondition <- check condition TBool
   alpha <- generateExistential
-  modifyEnv $ extendEnv [Unsolved alpha]
+  extendEnv [Unsolved alpha]
   c1 <- check e1 (EVar alpha)
   env <- getEnv
   let firstBranchType = applyEnv env (EVar alpha)
   c2 <- check e2 firstBranchType
   env' <- getEnv
   pure (If cCondition c1 c2 tag, applyEnv env' firstBranchType)
-synthesize (Let binding e1 e2 tag) =
+_synthesize (Let binding e1 e2 tag) =
   typeCheckLet binding e1 e2 tag
   (\annBind c1 e2 tag -> do
-      (c2, inferredType) <- synthesize e2
+      (c2, inferredType) <- _synthesize e2
       pure (Let annBind c1 c2 tag, inferredType))
--- synthesize (Tuple e1 e2 tag) = do
---   (c1, t1) <- synthesize e1
---   (c2, t2) <- synthesize e2
---   pure (CTuple c1 c2 tag, TPair t1 t2)
--- synthesize (GetItem e field tag) = do
---   selectorType <- selectorToType field
---   synthesizeApp selectorType (selectorToPrim field tag) e tag
-synthesize (App e1 e2 tag) = do
+_synthesize (App e1 e2 tag) = do
   (c1, funType) <- synthesize e1
   env <- getEnv
   synthesizeApp (applyEnv env funType) c1 e2 tag
-synthesize (Lam bind e tag) = do
+_synthesize (Lam bind e tag) = do
   alpha <- generateExistential
   beta <- generateExistential
   let newBinding = VarBind (bindId bind) (EVar alpha)
-  modifyEnv $ extendEnv [Unsolved alpha, Unsolved beta, newBinding]
+  extendEnv [Unsolved alpha, Unsolved beta, newBinding]
   c <- check e (EVar beta)
   modifyEnv $ dropEnvAfter newBinding -- TODO: do we need to do something with delta' for elaboration?
   let annBind = bind{ _aBindType = ElabUnrefined (EVar alpha) }
   pure (Lam annBind c tag, EVar alpha :=> EVar beta)
-synthesize (TApp _e _typ _tag) = error "TODO"
-synthesize (TAbs _alpha _e _tag) = error "TODO"
+_synthesize (TApp _e _typ _tag) = error "TODO"
+_synthesize (TAbs _alpha _e _tag) = error "TODO"
 
 -- DEBUGGING
--- check e t = do
---   env <- getEnv
---   tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
---   internalcheck e t
+check :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+check e t = do
+  env <- getEnv
+  tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
+  _check e t
 
 -- | Γ ⊢ e ~> c <= A ⊣ Θ
-check :: (Located a) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
-check expr (TForall tvar typ) = do
-  modifyEnv $ extendEnv [BoundTVar tvar]
+_check expr (TForall tvar typ) = do
+  extendEnv [BoundTVar tvar]
   c <- check expr typ
   modifyEnv $ dropEnvAfter (BoundTVar tvar)
   pure c
-check expr typ = do
+_check expr typ = do
   maybeEVar <- toEVar typ
   case maybeEVar of
     Just _  -> checkSub expr typ
@@ -347,15 +364,10 @@ check expr typ = do
       (\annBind c1 e2 tag -> do
           c2 <- check e2 t
           pure $ Let annBind c1 c2 tag)
-    -- go (Tuple e1 e2 tag) (TPair t1 t2) = do
-    --   c1 <- check e1 t1
-    --   c2 <- check e2 t2
-    --   pure $ CTuple c1 c2 tag
-    -- go e@GetItem{} t = checkSub e t
     go e@App{} t = checkSub e t
     go (Lam bind e tag) (t1 :=> t2) = do
       let newBinding = VarBind (bindId bind) t1
-      modifyEnv $ extendEnv [newBinding]
+      extendEnv [newBinding]
       c <- check e t2
       modifyEnv $ dropEnvAfter newBinding
       let annBind = bind{ _aBindType = ElabUnrefined t1 }
@@ -363,9 +375,9 @@ check expr typ = do
     go (Unit tag) TUnit = pure $ Unit tag
     go (TApp _e _typ _tag) _ = error "TODO"
     go (TAbs _alpha _e _tag) _ = error "TODO"
-    go _ _ = error "TODO: this is a checking error"
+    go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
-synthesizeApp :: (Located a) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
+synthesizeApp :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
 synthesizeApp tFun cFun eArg tag = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
   env <- getEnv
@@ -373,14 +385,14 @@ synthesizeApp tFun cFun eArg tag = do
   pure (cApplication, resultType)
 
 -- DEBUGGING
--- synthesizeSpine funType cFun eArg = do
---   env <- getEnv
---   tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
---   internalsynthesizeSpine funType cFun eArg
+synthesizeSpine :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+synthesizeSpine funType cFun eArg = do
+  env <- getEnv
+  tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
+  _synthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
-synthesizeSpine :: (Located a) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
-synthesizeSpine funType cFun eArg = do
+_synthesizeSpine funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
     Just tvar -> synthesizeSpineExistential tvar
@@ -401,15 +413,15 @@ synthesizeSpine funType cFun eArg = do
       pure (cFun, cArg, t2)
     go (TForall (TV tv) t) = do
       evar <- generateExistential
-      modifyEnv $ extendEnv [Unsolved evar]
+      extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
       synthesizeSpine newFunType (TApp cFun (EVar evar) (extract cFun)) eArg
-    go t = throwError $ [errApplyNonFunction t]
+    go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
 
-synthesizePrim2 :: (Located a) => Prim2 -> ParsedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
+synthesizePrim2 :: (Located a, PPrint r) => Prim2 -> ParsedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
 synthesizePrim2 Equal e1 e2 tag = do
   alpha <- generateExistential
-  modifyEnv $ extendEnv [Unsolved alpha]
+  extendEnv [Unsolved alpha]
   c1 <- check e1 (EVar alpha)
   env <- getEnv
   c2 <- check e2 (applyEnv env (EVar alpha))
@@ -431,7 +443,7 @@ instSub c a@(TForall _ _) b =
   where
     go (TForall alpha a) b = do
       evar <- generateExistential
-      modifyEnv $ extendEnv [Scope evar, Unsolved evar]
+      extendEnv [Scope evar, Unsolved evar]
       instantiations <- go (subst1 (EVar evar) (unTV alpha) a) b
       (delta, delta') <- getsEnv $ splitEnvAt (Scope evar)
       setEnv delta
@@ -445,26 +457,23 @@ instSub c a b = do
   pure c
 
 -- DEBUGGING
--- a <: b = do
---   env <- getEnv
---   tell $ show env ++ " ⊢ " ++ pprint a ++ " <: " ++ pprint b
---   a <: b
+(<:) :: Type -> Type -> Context ()
+a <: b = do
+  env <- getEnv
+  tell $ show env ++ " ⊢ " ++ pprint a ++ " <: " ++ pprint b
+  a <<: b
 
 -- | Γ ⊢ A <: B ⊣ Θ
-(<:) :: Type -> Type -> Context ()
-TUnit <: TUnit = pure ()
-TInt <: TInt = pure ()
-TBool <: TBool = pure ()
-a@(TVar _) <: b@(TVar _) | a == b = pure ()
-(a1 :=> a2) <: (b1 :=> b2) = do
+(<<:) :: Type -> Type -> Context ()
+TUnit <<: TUnit = pure ()
+TInt <<: TInt = pure ()
+TBool <<: TBool = pure ()
+a@(TVar _) <<: b@(TVar _) | a == b = pure ()
+(a1 :=> a2) <<: (b1 :=> b2) = do
   b1 <: a1
   env <- getEnv
   (applyEnv env a2) <: (applyEnv env b2)
--- (TPair a1 a2) <: (TPair b1 b2) = do
---   a1 <: b1
---   env <- getEnv
---   (applyEnv env a2) <: (applyEnv env b2)
-(TCtor ctor1 as) <: (TCtor ctor2 bs)
+(TCtor ctor1 as) <<: (TCtor ctor2 bs)
   | ctor1 /= ctor2 = error "TODO: constructor mismatch"
   | otherwise =
     if length as /= length bs
@@ -473,16 +482,16 @@ a@(TVar _) <: b@(TVar _) | a == b = pure ()
                     env <- getEnv
                     (applyEnv env a) <: (applyEnv env b))
                   (zip as bs)
-(TForall alpha a) <: b = do
+(TForall alpha a) <<: b = do
   evar <- generateExistential
-  modifyEnv $ extendEnv [Scope evar, Unsolved evar]
+  extendEnv [Scope evar, Unsolved evar]
   (subst1 (EVar evar) (unTV alpha) a) <: b
   modifyEnv $ dropEnvAfter (Scope evar)
-a <: (TForall alpha b) = do
-  modifyEnv $ extendEnv [BoundTVar alpha]
+a <<: (TForall alpha b) = do
+  extendEnv [BoundTVar alpha]
   a <: b
   modifyEnv $ dropEnvAfter (BoundTVar alpha)
-a <: b = do
+a <<: b = do
   maybeAEVar <- toEVar a
   maybeBEVar <- toEVar b
   case (maybeAEVar, maybeBEVar) of
@@ -500,14 +509,15 @@ a <: b = do
     (_, _) -> error $ "TODO: this is a subtyping error" ++ show a ++ show b
 
 -- DEBUGGING
--- instantiateL a b = do
---   env <- getEnv
---   tell $ show env ++ " ⊢ " ++ pprint a ++ " <=: " ++ pprint b
---   internalinstantiateL a b
+instantiateL :: EVar -> Type -> Context ()
+instantiateL a b = do
+  env <- getEnv
+  tell $ show env ++ " ⊢ " ++ pprint a ++ " <=: " ++ pprint b
+  _instantiateL a b
 
 -- TODO: figure out why we reverse the newly created existentials
-instantiateL :: EVar -> Type -> Context ()
-instantiateL alpha typ = do
+_instantiateL :: EVar -> Type -> Context ()
+_instantiateL alpha typ = do
   maybeExists <- toEVar typ
   case maybeExists of
     Just beta -> do
@@ -523,13 +533,6 @@ instantiateL alpha typ = do
       instantiateR a alpha1
       env <- getEnv
       instantiateL alpha2 (applyEnv env b)
-    -- go (TPair a b) = do
-    --   alpha1 <- generateExistential
-    --   alpha2 <- generateExistential
-    --   solveExistential alpha (TPair (EVar alpha1) (EVar alpha2)) [alpha2, alpha1]
-    --   instantiateL alpha1 a
-    --   env <- getEnv
-    --   instantiateL alpha2 (applyEnv env b)
     go (TCtor ctor as) = do
       betas <- mapM (const generateExistential) as
       solveExistential alpha (TCtor ctor (fmap EVar betas)) (reverse betas)
@@ -538,19 +541,20 @@ instantiateL alpha typ = do
                 instantiateL beta (applyEnv env a))
             (zip betas as)
     go (TForall tvar a) = do
-      modifyEnv $ extendEnv [BoundTVar tvar]
+      extendEnv [BoundTVar tvar]
       instantiateL alpha a
       modifyEnv $ dropEnvAfter (BoundTVar tvar)
     go typ = solveExistential alpha typ []
 
 -- DEBUGGING
--- instantiateR a b = do
---   env <- getEnv
---   tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
---   internalinstantiateR a b
-
 instantiateR :: Type -> EVar -> Context ()
-instantiateR typ alpha = do
+instantiateR a b = do
+  env <- getEnv
+  tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
+  _instantiateR a b
+
+_instantiateR :: Type -> EVar -> Context ()
+_instantiateR typ alpha = do
   maybeExists <- toEVar typ
   case maybeExists of
     Just beta -> do
@@ -566,13 +570,6 @@ instantiateR typ alpha = do
       instantiateL alpha1 a
       env <- getEnv
       instantiateR (applyEnv env b) alpha2
-    -- go (TPair a b) = do
-    --   alpha1 <- generateExistential
-    --   alpha2 <- generateExistential
-    --   solveExistential alpha (TPair (EVar alpha1) (EVar alpha2)) [alpha2, alpha1]
-    --   instantiateR a alpha1
-    --   env <- getEnv
-    --   instantiateR (applyEnv env b) alpha2
     go (TCtor ctor as) = do
       betas <- mapM (const generateExistential) as
       solveExistential alpha (TCtor ctor (fmap EVar betas)) (reverse betas)
@@ -582,7 +579,7 @@ instantiateR typ alpha = do
             (zip as betas)
     go (TForall tvar a) = do
       beta <- generateExistential
-      modifyEnv $ extendEnv [Scope beta, Unsolved beta]
+      extendEnv [Scope beta, Unsolved beta]
       instantiateR (subst1 (EVar beta) (unTV tvar) a) alpha
       modifyEnv $ dropEnvAfter (Scope beta)
     go typ = solveExistential alpha typ []
@@ -620,14 +617,14 @@ primToUnpoly c = go $ (runFresh $ primOpType c)
     go _ = error "primOpType on a prim which is not a binary function"
 
 
-checkSub :: (Located a) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+checkSub :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
 checkSub e t1 = do
   (c, t2) <- synthesize e
   env <- getEnv
   instSub c (applyEnv env t2) (applyEnv env t1)
 
 typeCheckLet ::
-  (Located a) =>
+  (Located a, PPrint r) =>
   ParsedAnnBind r a ->
   ParsedExpr r a ->
   ParsedExpr r a ->
@@ -637,14 +634,13 @@ typeCheckLet ::
 typeCheckLet binding@(AnnBind{_aBindType = ParsedInfer}) e1 e2 tag handleBody = do
   alpha <- generateExistential
   let evar = EVar alpha
-  modifyEnv $ extendEnv [Scope alpha, Unsolved alpha, VarBind (bindId binding) evar]
+  extendEnv [Scope alpha, Unsolved alpha, VarBind (bindId binding) evar]
   unsubstitutedC1 <- check e1 evar
   (delta, delta') <- getsEnv $ splitEnvAt (Scope alpha)
   setEnv delta
   (boundType, c1) <- letGeneralize evar unsubstitutedC1 delta'
-  -- TODO: well-formedness error for non-annotated recursive definitions
   let newBinding = VarBind (bindId binding) boundType
-  modifyEnv $ extendEnv [newBinding]
+  extendEnv [newBinding]
   let annBind = binding{ _aBindType = ElabUnrefined boundType }
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
@@ -652,7 +648,7 @@ typeCheckLet binding@(AnnBind{_aBindType = ParsedInfer}) e1 e2 tag handleBody = 
 typeCheckLet binding@(AnnBind{_aBindType = ParsedCheck rType}) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
-  modifyEnv $ extendEnv [newBinding]
+  extendEnv [newBinding]
   unabstractedC1 <- check e1 typ
   let c1 = insertTAbs typ unabstractedC1
   let annBind = binding{ _aBindType = ElabRefined rType }
@@ -662,7 +658,7 @@ typeCheckLet binding@(AnnBind{_aBindType = ParsedCheck rType}) e1 e2 tag handleB
 typeCheckLet binding@(AnnBind{_aBindType = ParsedAssume rType}) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
-  modifyEnv $ extendEnv [newBinding]
+  extendEnv [newBinding]
   (c1, _) <- synthesize e1
   let annBind = binding{ _aBindType = ElabRefined rType }
   result <- handleBody annBind c1 e2 tag
@@ -707,10 +703,12 @@ letGeneralize t c env = do
 -- Errors if the existential does not exist or has already been solved.
 solveExistential :: EVar -> Type -> [EVar] -> Context ()
 solveExistential evar partialSolution newEvars = do
-  (TypeEnv env) <- getEnv
+  Ctxt{typeEnv = (TypeEnv env), solutions = (TypeEnv sols)} <- get
   newEnv <- replaceUnsolved env
-  setEnv (TypeEnv newEnv)
+  newSols <- replaceUnsolved sols
+  modify $ \ctxt -> ctxt{typeEnv = TypeEnv newEnv, solutions = TypeEnv newSols}
   where
+
     replaceUnsolved [] = error "attempting to articulate nonexistent existential"
     replaceUnsolved (Unsolved evar':parts)
       | evar' == evar = pure $ fmap Unsolved newEvars
@@ -754,5 +752,6 @@ errUnboundVar l x = mkError (printf "Unbound variable '%s'" x) l
 errUnboundFun l f = mkError (printf "Function '%s' is not defined" f) l
 errUnannRecursiveBinder l x = mkError (printf "Recursive function %s must be annotated" (show x)) l
 errSolvingSolvedExistential = error "TODO: solving solved existential"
-errApplyNonFunction _ = error "TODO: applying non-function"
+errApplyNonFunction l typ = mkError (printf "Applying non-function of type %s" (show typ)) l
 errInfiniteTypeConstraint _ _ = error "TODO: infinite type constraint"
+errCheckingError l typ = mkError (printf "Checking expression has type %s failed" (show typ)) l

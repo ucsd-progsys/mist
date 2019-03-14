@@ -13,6 +13,8 @@ import Data.String (fromString)
 import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
 import Data.Maybe (fromMaybe)
+import Data.List (intercalate)
+import Text.Printf
 
 import Language.Mist.Types as M
 import Language.Mist.Checker (primToUnpoly) -- TODO(Matt): move primToUnpoly to a better place
@@ -166,3 +168,13 @@ equalityPrim e typ = do
 -- | Converts a ParsedExpr's predicates from Exprs to Fixpoint Exprs
 parsedExprPredToFixpoint :: ParsedExpr (Expr r a) a -> ParsedExpr HC.Pred a
 parsedExprPredToFixpoint = first $ first (HC.Reft . exprToFixpoint)
+
+
+------------------------------------------------------------------------------
+-- PPrint
+------------------------------------------------------------------------------
+
+instance PPrint (HC.Pred) where
+  pprint (HC.Reft expr) = printf "(%s)" (show expr)
+  pprint (HC.Var kvar args) = printf "%s(%s)" (show kvar) (intercalate "," (fmap show args))
+  pprint (HC.PAnd preds) = intercalate "/\\" (fmap pprint preds)

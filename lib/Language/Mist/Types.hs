@@ -66,7 +66,6 @@ module Language.Mist.Types
 
 import GHC.Exts (IsString(..))
 import Prelude
-import qualified Data.List as L
 import Text.Printf
 import qualified Text.PrettyPrint as PP
 import Language.Mist.UX
@@ -113,9 +112,6 @@ data Expr t a
   | Lam     !(AnnBind t a) !(Expr t a)             a
   | TApp    !(Expr t a)    !Type                   a
   | TAbs    TVar           !(Expr t a)             a
-
-  -- | Tuple   !(Expr a t)    !(Expr a t)             a
-  -- | GetItem !(Expr a t)    !Field                  a
   deriving (Show, Functor, Read, Eq)
 
 -- | The type of Mist type annotations after parsing
@@ -279,15 +275,24 @@ instance PPrint Bool where
 instance PPrint (Bind a) where
   pprint (Bind x _) = x
 
-instance PPrint (AnnBind t a) where
-  pprint (AnnBind x _ _) = x
+instance (PPrint t) => PPrint (AnnBind t a) where
+  pprint (AnnBind x typ _) = printf "(%s : %s)" x (pprint typ)
 
 instance PPrint Field where
   pprint Zero  = "0"
   pprint One   = "1"
 
+instance (PPrint r) => PPrint (ElaboratedType r a) where
+  pprint (Left rtype) = printf ": %s" (pprint rtype)
+  pprint (Right typ) = printf ": %s" (pprint typ)
+
+instance (PPrint r) => PPrint (ParsedType r a) where
+  pprint (ParsedCheck rtype) = printf ": %s" (pprint rtype)
+  pprint (ParsedAssume rtype) = printf "as %s" (pprint rtype)
+  pprint ParsedInfer = ""
+
 -- TODO: better instance
-instance (Show t) => PPrint (Expr t a) where
+instance (PPrint t) => PPrint (Expr t a) where
   pprint (Number n _) = show n
   pprint (Boolean b _) = pprint b
   pprint (Unit _) = "()"
@@ -296,17 +301,14 @@ instance (Show t) => PPrint (Expr t a) where
   pprint (If c t e _) = printf "(if %s then %s else %s)" (pprint c) (pprint t) (pprint e)
   -- pprint e@Let{} = printf "(let %s in %s)" (ppDefs ds) (pprint e')
   --   where (ds, e') = exprDefs e
-  pprint (Let bind e1 e2 _) = printf "(let %s : %s = %s in %s)" (bindId bind) (show $ aBindType bind) (pprint e1) (pprint e2)-- TODO: make better
+  pprint (Let bind e1 e2 _) = printf "(let %s = %s in %s)" (ppDef bind) (pprint e1) (pprint e2)-- TODO: make better
   pprint (App e1 e2 _) = printf "(%s %s)" (pprint e1) (pprint e2)
-  pprint (Lam x e _) = printf "(\\ %s -> %s)" (pprint x) (pprint e)
+  pprint (Lam x e _) = printf "(\\ %s -> %s)" (ppDef x) (pprint e)
   pprint (TApp e t _) = printf "(%s@%s)" (pprint e) (pprint t)
   pprint (TAbs alpha e _) = printf "(/\\%s . %s)" (pprint alpha) (pprint e)
 
-_ppDefs :: [Def t a] -> Text
-_ppDefs = L.intercalate "\n " . fmap ppDef
-
-ppDef :: Def t a -> Text
-ppDef _ = error "TODO"
+ppDef :: (PPrint t) => AnnBind t a -> Text
+ppDef annBind = printf "%s %s" (bindId annBind) (pprint $ aBindType annBind)
 
 _ppSig k b s = printf "%s %s %s\n" (pprint b) k (pprint s)
 _ppEqn b e = printf "%s = \n" (pprint b)
@@ -384,7 +386,10 @@ type ImmExpr r a = Expr (AnfType r a) a
 instance Located a => Located (Expr t a) where
   sourceSpan e = sourceSpan $ extract e
 
-instance (Binder b, Located a) => Located (b a) where
+instance Located a => Located (AnnBind t a) where
+  sourceSpan bind = sourceSpan $ bindLabel bind
+
+instance Located a => Located (Bind a) where
   sourceSpan bind = sourceSpan $ bindLabel bind
 
 --------------------------------------------------------------------------------
@@ -417,7 +422,6 @@ data Type = TVar TVar           -- a
           | TInt                -- Int
           | TBool               -- Bool
           | Type :=> Type       -- t1 => t2
-          -- | TPair Type Type     -- (t0, t1)
           | TCtor Ctor [Type]   -- Ctor [t1,...,tn]
           | TForall TVar Type   -- ∀a.t
           deriving (Eq, Ord, Show, Read)

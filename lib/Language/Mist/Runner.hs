@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE BangPatterns #-}
 
 module Language.Mist.Runner where
 
@@ -16,6 +17,7 @@ import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Types as F
 
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
+import Debug.Trace
 
 type R = HC.Pred
 
@@ -52,5 +54,7 @@ mist expr = do
     [] -> do
       let uniqueExpr = uniquify expr
       let predExpr = parsedExprPredToFixpoint uniqueExpr
-      elaborate predExpr
+      result <- elaborate predExpr
+      !_ <- traceM $ pprint result
+      pure result
     errors -> Left errors

@@ -25,6 +25,8 @@ instance Predicate P where
   strengthen e1 e2 = Prim2 And e1 e2
   buildKvar x params = foldr (\arg kvar -> App kvar (Id arg)) (Id x) params
   varSubst x y e = subst1 @P @P (Id x) y e
+  var x = Id x
+  varNot x = error "TODO"
   prim e@T.Unit{} = equalityPrim e TUnit
   prim e@T.Number{} = equalityPrim e TInt
   prim e@T.Boolean{} = equalityPrim e TBool
