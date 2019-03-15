@@ -2,7 +2,7 @@
 
 module Tests.SimpleTypes
   (
-    T.Prim2 (..)
+    T.Prim (..)
   , T.Id
   , T.Type (..), T.TVar (..), T.Ctor (..)
   , T.RType (..)
@@ -13,7 +13,7 @@ module Tests.SimpleTypes
   , pattern Boolean
   , pattern Unit
   , pattern Id
-  , pattern Prim2
+  , pattern Prim
   , pattern If
   , pattern Let
   , pattern App
@@ -34,7 +34,6 @@ module Tests.SimpleTypes
   , T.AnnBind
   , pattern AnnBind
 
-  , T.Field (..)
   ) where
 
 import qualified Language.Mist.Types as T
@@ -45,11 +44,9 @@ pattern Number i = T.Number i ()
 pattern Boolean b = T.Boolean b ()
 pattern Unit = T.Unit ()
 pattern Id x = T.Id x ()
-pattern Prim2 p e1 e2 = T.Prim2 p e1 e2 ()
+pattern Prim p = T.Prim p ()
 pattern If e1 e2 e3 = T.If e1 e2 e3 ()
 pattern Let b e1 e2 = T.Let b e1 e2 ()
--- pattern Tuple e1 e2 = T.GetItem e1 e2 ()
--- pattern GetItem e1 f = T.GetItem e1 f ()
 pattern App e1 e2 = T.App e1 e2 ()
 pattern Lam b e = T.Lam b e ()
 pattern TApp e t = T.TApp e t ()

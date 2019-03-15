@@ -38,8 +38,7 @@ cgen :: (Predicate r, Show r, Show a) =>
 cgen _ e@Unit{}    = (Head true,) <$> prim e
 cgen _ e@Number{}  = (Head true,) <$> prim e
 cgen _ e@Boolean{} = (Head true,) <$> prim e
-cgen _ e@Prim2{}   = (Head true,) <$> prim e -- TODO: should this be a lookup?
-                                      -- how should prims be handled?
+cgen _ e@Prim{}    = (Head true,) <$> prim e
 cgen env (Id x _)  = (Head true,) <$> single env x
 
 cgen env (If (Id y _) e1 e2 l) = do

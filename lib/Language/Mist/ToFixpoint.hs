@@ -17,7 +17,6 @@ import Data.List (intercalate)
 import Text.Printf
 
 import Language.Mist.Types as M
-import Language.Mist.Checker (primToUnpoly) -- TODO(Matt): move primToUnpoly to a better place
 import qualified Language.Mist.Names as MN
 
 import qualified Language.Fixpoint.Types.Config as C
@@ -29,7 +28,7 @@ import System.Console.CmdArgs.Verbosity
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
-solve constraints = setVerbosity Loud >> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
+solve constraints = {-setVerbosity Loud >>-} S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
   where
     fixpointConstraint = toHornClause constraints
     cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }
@@ -96,14 +95,11 @@ exprToFixpoint (Number n _)       = F.ECon (F.I n)
 exprToFixpoint (Boolean True _)   = F.PTrue
 exprToFixpoint (Boolean False _)  = F.PFalse
 exprToFixpoint (Id x _)           = F.EVar (fromString x)
-exprToFixpoint (Prim2 o e1 e2 _)  =
-  case prim2ToFixpoint o of
-    Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
-    Right bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
+exprToFixpoint (Prim _ _)         = error "primitives should be handled by appToFixpoing"
 exprToFixpoint (If e1 e2 e3 _)    =
   F.EIte (exprToFixpoint e1) (exprToFixpoint e2) (exprToFixpoint e3)
-exprToFixpoint (App f x _)        =
-  F.EApp (exprToFixpoint f) (exprToFixpoint x)
+exprToFixpoint e@App{}            =
+  appToFixpoint e
 exprToFixpoint Let{}              =
   error "lets are currently unsupported inside reifnements"
 exprToFixpoint (Unit _)           = F.EVar (fromString "()")
@@ -121,7 +117,28 @@ exprToFixpoint (Lam _bs _e2 _)      = error "TODO exprToFixpoint"
 exprToFixpoint (TApp _e _typ _)      = error "TODO exprToFixpoint"
 exprToFixpoint (TAbs _tvar _e _)      = error "TODO exprToFixpoint"
 
-prim2ToFixpoint :: Prim2 -> Either F.Brel F.Bop
+    -- case prim2ToFixpoint o of
+    -- Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
+    -- Right bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
+
+appToFixpoint :: M.Expr r a -> F.Expr
+appToFixpoint e =
+  case e of
+    App (App (Prim op _) e1 _) e2 _ ->
+      binopToFixpoint op e1 e2
+    App (App (TApp (Prim op _) _ _) e1 _) e2 _ ->
+      binopToFixpoint op e1 e2
+    App f x _ ->
+      F.EApp (exprToFixpoint f) (exprToFixpoint x)
+    _ -> error "non-application"
+
+  where
+    binopToFixpoint op e1 e2 =
+      case prim2ToFixpoint op of
+        Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
+        Right bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
+
+prim2ToFixpoint :: Prim -> Either F.Brel F.Bop
 prim2ToFixpoint M.Plus  = Right F.Plus
 prim2ToFixpoint M.Minus = Right F.Minus
 prim2ToFixpoint M.Times = Right F.Times
@@ -155,7 +172,7 @@ instance Predicate HC.Pred where
   prim e@Unit{} = equalityPrim e TUnit
   prim e@Number{} = equalityPrim e TInt
   prim e@Boolean{} = equalityPrim e TBool
-  prim e@(Prim2 op _ _ _) = equalityPrim e (primToUnpoly op)
+  prim (Prim op l) = primOp op l
   prim _ = error "prim on non primitive"
 
 equalityPrim :: (MonadFresh m) => Expr r a -> Type -> m (RType HC.Pred a)
@@ -164,6 +181,42 @@ equalityPrim e typ = do
   vv <- refreshId $ "VV" ++ MN.cSEPARATOR
   let reft = HC.Reft $ F.PAtom F.Eq (exprToFixpoint (Id vv l)) (exprToFixpoint e)
   pure $ RBase (M.Bind vv l) typ reft
+
+primOp :: (MonadFresh m) => Prim -> a -> m (RType HC.Pred a)
+primOp op l =
+  case op of
+    Plus -> buildRFun (F.EBin F.Plus) TInt TInt
+    Minus -> buildRFun (F.EBin F.Minus) TInt TInt
+    Times -> buildRFun (F.EBin F.Times) TInt TInt
+    Less -> buildRFun (F.PAtom F.Lt) TInt TBool
+    Greater -> buildRFun (F.PAtom F.Gt) TInt TBool
+    Lte -> buildRFun (F.PAtom F.Le) TInt TBool
+    Equal -> do
+      a <- refreshId $ "A" ++ MN.cSEPARATOR
+      x <- refreshId $ "X" ++ MN.cSEPARATOR
+      y <- refreshId $ "Y" ++ MN.cSEPARATOR
+      v <- refreshId $ "VV" ++ MN.cSEPARATOR
+      v1 <- refreshId $ "VV" ++ MN.cSEPARATOR
+      v2 <- refreshId $ "VV" ++ MN.cSEPARATOR
+      let reft = HC.Reft $ F.PAtom F.Eq (idToFix x) (idToFix y)
+      let returnType = RBase (Bind v l) TBool reft
+      let typ1 = TVar $ TV a
+      pure $ RForall (TV a) (RFun (Bind x l) (trivialBase typ1 v1) (RFun (Bind y l) (trivialBase typ1 v2) returnType))
+    And -> error "TODO"
+
+  where
+    buildRFun oper typ1 typ2 = do
+      x <- refreshId $ "X" ++ MN.cSEPARATOR
+      y <- refreshId $ "Y" ++ MN.cSEPARATOR
+      v <- refreshId $ "VV" ++ MN.cSEPARATOR
+      v1 <- refreshId $ "VV" ++ MN.cSEPARATOR
+      v2 <- refreshId $ "VV" ++ MN.cSEPARATOR
+      let reft = HC.Reft $ F.PAtom F.Eq (idToFix v) (oper (idToFix x) (idToFix y))
+      let returnType = RBase (Bind v l) typ2 reft
+      pure $ RFun (Bind x l) (trivialBase typ1 v1) (RFun (Bind y l) (trivialBase typ1 v2) returnType)
+    idToFix x = exprToFixpoint (Id x l)
+    trivialBase typ x = RBase (Bind x l) typ true
+
 
 -- | Converts a ParsedExpr's predicates from Exprs to Fixpoint Exprs
 parsedExprPredToFixpoint :: ParsedExpr (Expr r a) a -> ParsedExpr HC.Pred a

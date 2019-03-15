@@ -8,37 +8,18 @@ import Test.Tasty.HUnit
 import Tests.Utils
 import Tests.SimpleTypes
 
+import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Horn.Types as HC
+
 import Data.Bifunctor
 
 import Language.Mist.Types (Predicate (..), MonadFresh (..), Constraint (..))
 import qualified Language.Mist.Types as T
 import Language.Mist.CGen
 import Language.Mist.Names
-import Language.Mist.Checker (primToUnpoly)
+import Language.Mist.ToFixpoint
 
-type P = Expr () ()
-
-instance Predicate P where
-  true = Boolean True
-  false = Boolean False
-  varsEqual x y = Prim2 Equal (Id x) (Id y)
-  strengthen e1 e2 = Prim2 And e1 e2
-  buildKvar x params = foldr (\arg kvar -> App kvar (Id arg)) (Id x) params
-  varSubst x y e = subst1 @P @P (Id x) y e
-  var x = Id x
-  varNot x = error "TODO"
-  prim e@T.Unit{} = equalityPrim e TUnit
-  prim e@T.Number{} = equalityPrim e TInt
-  prim e@T.Boolean{} = equalityPrim e TBool
-  prim e@(T.Prim2 op _ _ _) = equalityPrim e (primToUnpoly op)
-  prim _ = error "prim on non primitive"
-
-equalityPrim :: (MonadFresh m) => Expr t a -> Type -> m (RType P a)
-equalityPrim e typ = do
-  let loc = T.extract e
-  vv <- refreshId $ "VV" ++ cSEPARATOR
-  let e' = (second $ const ()) ((first $ const ()) e)
-  pure $ T.RBase (T.Bind vv loc) typ (Prim2 Equal (Id vv) e')
+type P = HC.Pred
 
 cgenTests = testGroup "cgen"
   [

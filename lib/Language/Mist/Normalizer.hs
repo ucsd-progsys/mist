@@ -36,11 +36,11 @@ anf (Let x e b l) = do
   e' <- anf e
   b' <- anf b
   pure $ Let (first Just x) e' b' l
-anf (Prim2 o e1 e2 l) = do
-  (bs, e1') <- imm e1
-  (bs', e2') <- imm e2
-  let bs'' = bs' ++ bs
-  pure $ stitch bs'' (Prim2 o e1' e2' l)
+-- anf (Prim2 o e1 e2 l) = do
+--   (bs, e1') <- imm e1
+--   (bs', e2') <- imm e2
+--   let bs'' = bs' ++ bs
+--   pure $ stitch bs'' (Prim2 o e1' e2' l)
 anf (If c e1 e2 l) = do
   (bs, c') <- imm c
   e1' <- anf e1
@@ -86,12 +86,12 @@ imm e@Unit{} = immExp e
 imm e@Number{} = immExp e
 imm e@Boolean{} = immExp e
 imm (Id x l) = pure ([], Id x l)
-imm (Prim2 o e1 e2 l) = do
-  (bs, v1) <- imm e1
-  (bs', v2) <- imm e2
-  x <- freshBind l
-  let bs'' = (x, (Prim2 o v1 v2 l, l)) : (bs ++ bs')
-  pure (bs'', mkId x l)
+-- imm (Prim2 o e1 e2 l) = do
+--   (bs, v1) <- imm e1
+--   (bs', v2) <- imm e2
+--   x <- freshBind l
+--   let bs'' = (x, (Prim2 o v1 v2 l, l)) : (bs ++ bs')
+--   pure (bs'', mkId x l)
 
 -- imm i (Tuple e1 e2 l)   = (i'', bs', mkId x l)
 --   where

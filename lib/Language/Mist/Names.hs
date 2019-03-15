@@ -12,7 +12,6 @@ module Language.Mist.Names
 
   , cSEPARATOR
 
-
   , varNum
 
   , FreshT
@@ -148,8 +147,7 @@ instance Subable Type t => Subable Type (Expr t a) where
   _subst _su e@Boolean{} = e
   _subst _su e@Unit{} = e
   _subst _su e@Id{} = e
-  _subst su (Prim2 op e1 e2 l)
-    = Prim2 op (_subst su e1) (_subst su e2) l
+  _subst _su e@Prim{} = e
   _subst su (If e e1 e2 l)
     = If (_subst su e) (_subst su e1) (_subst su e2) l
   _subst su (Let bind e1 e2 l)
@@ -182,7 +180,7 @@ instance Subable (Expr t a) (Expr t a) where
   _subst _ e@Boolean{} = e
   _subst _ e@Unit{} = e
   _subst su e@(Id x _) = fromMaybe e $ M.lookup x su
-  _subst su (Prim2 p e1 e2 loc) = Prim2 p (_subst su e1) (_subst su e2) loc
+  _subst _su e@Prim{} = e
   _subst su (If e1 e2 e3 loc) = If (_subst su e1) (_subst su e2) (_subst su e3) loc
   _subst su (Let b e1 e2 loc) = Let b (_subst su' e1) (_subst su' e2) loc
     where
@@ -272,8 +270,7 @@ instance (Uniqable t) => Uniqable (Expr t a) where
   unique e@Number{} = pure e
   unique e@Boolean{} = pure e
   unique e@Unit{} = pure e
-  unique (Prim2 op e1 e2 l) =
-    Prim2 op <$> unique e1 <*> unique e2 <*> pure l
+  unique e@Prim{} = pure e
   unique (If e1 e2 e3 l) =
     If <$> unique e1 <*> unique e2 <*> unique e3 <*> pure l
   unique (App e1 e2 l) =

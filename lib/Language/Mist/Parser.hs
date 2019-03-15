@@ -206,19 +206,26 @@ mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2]))
 
 binops :: (Unannotated a) => [[Operator Parser (Bare a)]]
 binops =
-  [ [ InfixL (symbol "*"  *> pure (op Times))
+  [ [ InfixL (pure op <*> primitive Times "*")
     ]
-  , [ InfixL (symbol "+"  *> pure (op Plus))
-    , InfixL (symbol "-"  *> pure (op Minus))
+  , [ InfixL (pure op <*> primitive Plus "+")
+    , InfixL (pure op <*> primitive Minus "-")
     ]
-  , [ InfixL (symbol "==" *> pure (op Equal))
-    , InfixL (symbol ">"  *> pure (op Greater))
-    , InfixL (symbol "<=" *> pure (op Lte))
-    , InfixL (symbol "<"  *> pure (op Less))
+  , [ InfixL (pure op <*> primitive Equal "==")
+    , InfixL (pure op <*> primitive Greater ">")
+    , InfixL (pure op <*> primitive Lte "<=")
+    , InfixL (pure op <*> primitive Less "<")
     ]
   ]
   where
-    op o e1 e2 = Prim2 o e1 e2 (stretch [e1, e2])
+    op o e1 e2 = App (App o e1 (stretch [e1, o])) e2 (stretch [e1, e2])
+
+primitive :: (Unannotated a) => Prim -> String -> Parser (Bare a)
+primitive prim primSymbol = do
+  p1 <- getPosition
+  symbol primSymbol
+  p2 <- getPosition
+  pure $ Prim prim (SS p1 p2)
 
 idExpr :: (Unannotated a) => Parser (Bare a)
 idExpr = uncurry Id <$> identifier

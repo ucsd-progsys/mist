@@ -31,32 +31,21 @@ module Language.Mist.Types
   , AnfType
   , AnfExpr, AnfAnnBind
   , ImmExpr
-  , isAnf
-
   , Unannotated (..)
 
   , AnnBind (..)
   , aBindType
   , Binder (..)
 
-  , Field (..)
-  , Prim2 (..)
+  , Prim (..)
 
   , extract
   , unTV
 
   , bindsExpr
   , annotateBinding
-  -- * Smart Constructors
-  -- , bindsRType
 
-  -- * Destructors
-  -- , exprDefs
-
-  -- , bkRType
   , eraseRType
-  -- , reftRType
-  -- , typeToCoreRType
 
   , Constraint (..)
   , Predicate (..)
@@ -85,8 +74,7 @@ import Control.Monad.Cont
 -- | `Id` are program variables
 type Id = Text
 
--- | `Prim2` are binary operations
-data Prim2
+data Prim
   = Plus
   | Minus
   | Times
@@ -105,7 +93,7 @@ data Expr t a
   | Boolean !Bool                                  a
   | Unit                                           a
   | Id      !Id                                    a
-  | Prim2   !Prim2         !(Expr t a) !(Expr t a) a
+  | Prim    !Prim                                  a
   | If      !(Expr t a)    !(Expr t a) !(Expr t a) a
   | Let     !(AnnBind t a) !(Expr t a) !(Expr t a) a
   | App     !(Expr t a)    !(Expr t a)             a
@@ -141,16 +129,6 @@ type ElaboratedAnnBind r a = AnnBind (ElaboratedType r a) a
 
 type AnfType t a = Maybe t
 type AnfAnnBind t a = AnnBind (AnfType t a ) a
-
-data Field
-  = Zero
-  | One
-  deriving (Show, Read)
-
-data Prim
-  = Pi0
-  | Pi1
-  deriving (Show, Read)
 
 data Bind a = Bind
   { _bindId :: !Id
@@ -233,7 +211,7 @@ extract :: Expr t a -> a
 extract (Number _ l)    = l
 extract (Boolean _ l)   = l
 extract (Id _ l)        = l
-extract (Prim2 _ _ _ l) = l
+extract (Prim _ l)      = l
 extract (If _ _ _ l)    = l
 extract (Let _ _ _ l)   = l
 extract (App _ _ l)     = l
@@ -257,7 +235,7 @@ data DynError
 --------------------------------------------------------------------------------
 -- | Pretty Printer
 --------------------------------------------------------------------------------
-instance PPrint Prim2 where
+instance PPrint Prim where
   pprint Plus    = "+"
   pprint Minus   = "-"
   pprint Times   = "*"
@@ -278,10 +256,6 @@ instance PPrint (Bind a) where
 instance (PPrint t) => PPrint (AnnBind t a) where
   pprint (AnnBind x typ _) = printf "(%s : %s)" x (pprint typ)
 
-instance PPrint Field where
-  pprint Zero  = "0"
-  pprint One   = "1"
-
 instance (PPrint r) => PPrint (ElaboratedType r a) where
   pprint (Left rtype) = printf ": %s" (pprint rtype)
   pprint (Right typ) = printf ": %s" (pprint typ)
@@ -297,7 +271,7 @@ instance (PPrint t) => PPrint (Expr t a) where
   pprint (Boolean b _) = pprint b
   pprint (Unit _) = "()"
   pprint (Id x _) = x
-  pprint (Prim2 o l r _) = printf "%s %s %s" (pprint l) (pprint o) (pprint r)
+  pprint (Prim o _) = printf "%s" (pprint o)
   pprint (If c t e _) = printf "(if %s then %s else %s)" (pprint c) (pprint t) (pprint e)
   -- pprint e@Let{} = printf "(let %s in %s)" (ppDefs ds) (pprint e')
   --   where (ds, e') = exprDefs e
@@ -331,54 +305,9 @@ instance PPrint e => PPrint (RType e a) where
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
 
---------------------------------------------------------------------------------
--- | `isAnf e` is True if `e` is an A-Normal Form
---------------------------------------------------------------------------------
-{-@ measure isAnf @-}
-isAnf :: Expr t a -> Bool
-isAnf (Unit _)         = True
-isAnf (Number  _ _)    = True
-isAnf (Boolean _ _)    = True
-isAnf (Id      _ _)    = True
-isAnf (Prim2 _ e e' _) = isImm e && isImm e'
-isAnf (If c t e _)     = isImm c && isAnf t && isAnf e
-isAnf (Let _ e e' _)   = isAnf e && isAnf e'
-isAnf (App e e' _)     = isAnf e  && isAnf e'
-isAnf (Lam _ e _)      = isAnf e
-isAnf (TApp e _ _)     = isAnf e
-isAnf (TAbs _ e _)     = isAnf e
-
-{-@ measure isImm @-}
-isImm :: Expr t a -> Bool
-isImm (Number  _ _) = True
-isImm (Boolean _ _) = True
-isImm (Id      _ _) = True
-isImm _             = False
-
-{-@ type AnfExpr a = {v:Expr a| isAnf v} @-}
 type AnfExpr r a = Expr (AnfType r a) a
 
--- TODO: this should become VarExpr
-{-@ type ImmExpr a = {v:Expr a | isImm v} @-}
 type ImmExpr r a = Expr (AnfType r a) a
-
--- {-@ measure isVarAnf @-}
--- isVarAnf :: Expr t a -> Bool
--- isVarAnf (Unit _)         = True
--- isVarAnf (Number  _ _)    = True
--- isVarAnf (Boolean _ _)    = True
--- isVarAnf (Id      _ _)    = True
--- isVarAnf (Prim2 _ e e' _) = isVar e && isVar e'
--- isVarAnf (If c t e _)     = isVar c && isVarAnf t && isVarAnf e
--- isVarAnf (Let _ e e' _)   = isVarAnf e && isVarAnf e'
--- isVarAnf (App e e' _)     = isVarAnf e  && isVar e'
--- isVarAnf (Lam _ e _)      = isVarAnf e
-
--- {-@ measure isVar @-}
--- isVar :: Expr t a -> Bool
--- isVar (Id      _ _) = True
--- isVar _             = False
-
 --------------------------------------------------------------------------------
 -- | The `Parsed` types are for parsed ASTs.
 --------------------------------------------------------------------------------
@@ -544,7 +473,7 @@ instance Bifunctor Expr where
   first _ (Boolean b l) = Boolean b l
   first _ (Unit l) = Unit l
   first _ (Id x l) = Id x l
-  first f (Prim2 op e1 e2 l) = Prim2 op (first f e1) (first f e2) l
+  first _ (Prim op l) = Prim op l
   first f (If e1 e2 e3 l) = If (first f e1) (first f e2) (first f e3) l
   first f (Let bind e1 e2 l) = Let (first f bind) (first f e1) (first f e2) l
   first f (App e1 e2 l) = App (first f e1) (first f e2) l

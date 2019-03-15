@@ -25,8 +25,6 @@ module Language.Mist.Checker
     -- * Error Constructors
   , errUnboundVar
   , errUnboundFun
-
-  , primToUnpoly
   ) where
 
 
@@ -79,8 +77,7 @@ wellFormed = go emptyWEnv
     go _ Unit{}                   = []
     go env (Id x l)               = unboundVarErrors env x (sourceSpan l)
                                     ++ unannotatedRecursiveBinder env x (sourceSpan l)
-    go env (Prim2 _ e1 e2 _)      = go env e1
-                                    ++ go env e2
+    go _ Prim{}                   = []
     go env (If e1 e2 e3 _)        = go env e1
                                     ++ go env e2
                                     ++ go env e3
@@ -298,7 +295,9 @@ _synthesize (Id id tag) = do
   case boundType of
     Just typ -> pure (Id id tag, typ)
     Nothing -> throwError $ [errUnboundVar (sourceSpan tag) id]
-_synthesize (Prim2 op e1 e2 tag) = synthesizePrim2 op e1 e2 tag -- TODO: fix Prim2 to allow type instantiation
+_synthesize (Prim prim tag) = do
+   typ <- primType prim
+   pure (Prim prim tag, typ)
 _synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthesis of branching
   cCondition <- check condition TBool
   alpha <- generateExistential
@@ -353,7 +352,7 @@ _check expr typ = do
     go (Number i tag) TInt = pure $ Number i tag
     go (Boolean b tag) TBool = pure $ Boolean b tag
     go e@Id{} t = checkSub e t
-    go e@Prim2{} t = checkSub e t
+    go e@Prim{} t = checkSub e t
     go (If condition e1 e2 tag) t = do
       cCondition <- check condition TBool
       c1 <- check e1 t
@@ -417,20 +416,6 @@ _synthesizeSpine funType cFun eArg = do
       let newFunType = subst1 (EVar evar) tv t
       synthesizeSpine newFunType (TApp cFun (EVar evar) (extract cFun)) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
-
-synthesizePrim2 :: (Located a, PPrint r) => Prim2 -> ParsedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
-synthesizePrim2 Equal e1 e2 tag = do
-  alpha <- generateExistential
-  extendEnv [Unsolved alpha]
-  c1 <- check e1 (EVar alpha)
-  env <- getEnv
-  c2 <- check e2 (applyEnv env (EVar alpha))
-  pure (Prim2 Equal c1 c2 tag, TBool)
-synthesizePrim2 operator e1 e2 tag = do
-  (typ1 :=> (typ2 :=> typ3)) <- primOpType operator
-  c1 <- check e1 typ1
-  c2 <- check e2 typ2
-  pure (Prim2 operator c1 c2 tag, typ3)
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
 -- When doing a ∀A.B <: C the subtyping check will infer the
@@ -598,24 +583,17 @@ occurrenceCheck alpha typ = do
     then throwError $ [errInfiniteTypeConstraint alpha typ]
     else pure ()
 
-primOpType :: (MonadFresh m) => Prim2 -> m Type
-primOpType Plus    = pure $ TInt :=> (TInt :=> TInt)
-primOpType Minus   = pure $ TInt :=> (TInt :=> TInt)
-primOpType Times   = pure $ TInt :=> (TInt :=> TInt)
-primOpType Less    = pure $ TInt :=> (TInt :=> TBool)
-primOpType Greater = pure $ TInt :=> (TInt :=> TBool)
-primOpType Lte     = pure $ TInt :=> (TInt :=> TBool)
-primOpType Equal   = do
+primType :: (MonadFresh m) => Prim -> m Type
+primType Plus    = pure $ TInt :=> (TInt :=> TInt)
+primType Minus   = pure $ TInt :=> (TInt :=> TInt)
+primType Times   = pure $ TInt :=> (TInt :=> TInt)
+primType Less    = pure $ TInt :=> (TInt :=> TBool)
+primType Greater = pure $ TInt :=> (TInt :=> TBool)
+primType Lte     = pure $ TInt :=> (TInt :=> TBool)
+primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
-primOpType And     = pure $ TBool :=> (TBool :=> TBool)
-
-primToUnpoly c = go $ (runFresh $ primOpType c)
-  where
-    go (TForall _ t) = go t
-    go (_ :=> (_ :=> t)) = t
-    go _ = error "primOpType on a prim which is not a binary function"
-
+primType And     = pure $ TBool :=> (TBool :=> TBool)
 
 checkSub :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
 checkSub e t1 = do
