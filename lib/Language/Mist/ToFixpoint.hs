@@ -27,14 +27,14 @@ import System.Console.CmdArgs.Verbosity
 
 -- | Solves the subtyping constraints we got from CGen.
 
-solve :: M.Constraint HC.Pred -> IO (F.Result Integer)
+solve :: NNF HC.Pred -> IO (F.Result Integer)
 solve constraints = {-setVerbosity Loud >>-} S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
   where
     fixpointConstraint = toHornClause constraints
     cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }
 
 -- TODO: HC.solve requires () but should take any type
-toHornClause :: Constraint HC.Pred -> HC.Cstr ()
+toHornClause :: NNF HC.Pred -> HC.Cstr ()
 toHornClause c = c'
   where c' = toHornClause' c
 
@@ -90,45 +90,33 @@ typeToSort (TForall{}) = error "TODO?"
 --------------------------------------------------------------------
 -- Expressions
 --------------------------------------------------------------------
-exprToFixpoint :: M.Expr r a -> F.Expr
-exprToFixpoint (Number n _)       = F.ECon (F.I n)
-exprToFixpoint (Boolean True _)   = F.PTrue
-exprToFixpoint (Boolean False _)  = F.PFalse
-exprToFixpoint (Id x _)           = F.EVar (fromString x)
-exprToFixpoint (Prim _ _)         = error "primitives should be handled by appToFixpoing"
-exprToFixpoint (If e1 e2 e3 _)    =
+exprToFixpoint :: M.Expr t a -> F.Expr
+exprToFixpoint (AnnNumber n _ _)       = F.ECon (F.I n)
+exprToFixpoint (AnnBoolean True _ _)   = F.PTrue
+exprToFixpoint (AnnBoolean False _ _)  = F.PFalse
+exprToFixpoint (AnnId x _ _)           = idToFix x
+exprToFixpoint (AnnPrim _ _ _)         = error "primitives should be handled by appToFixpoing"
+exprToFixpoint (AnnIf e1 e2 e3 _ _)    =
   F.EIte (exprToFixpoint e1) (exprToFixpoint e2) (exprToFixpoint e3)
-exprToFixpoint e@App{}            =
-  appToFixpoint e
-exprToFixpoint Let{}              =
-  error "lets are currently unsupported inside reifnements"
-exprToFixpoint (Unit _)           = F.EVar (fromString "()")
--- exprToFixpoint (Tuple e1 e2 _)    =
---   F.EApp (F.EApp (F.EVar $ fromString "(,)")
---                  (exprToFixpoint e1))
---        (exprToFixpoint e2)
--- exprToFixpoint (GetItem e Zero _) =
---   F.EApp (F.EVar $ fromString "Pi0") (exprToFixpoint e)
--- exprToFixpoint (GetItem e One _)  =
---   F.EApp (F.EVar $ fromString "Pi1") (exprToFixpoint e)
---   -- To translate Lambdas we need to keep around the sorts of each Expr. We
---   -- can do this in Core, but doing it in Expr seems like it's not work it.
-exprToFixpoint (Lam _bs _e2 _)      = error "TODO exprToFixpoint"
-exprToFixpoint (TApp _e _typ _)      = error "TODO exprToFixpoint"
-exprToFixpoint (TAbs _tvar _e _)      = error "TODO exprToFixpoint"
+exprToFixpoint e@AnnApp{} = appToFixpoint e
+exprToFixpoint AnnLet{} = error "lets are currently unsupported inside refinements"
+exprToFixpoint (AnnUnit _ _)           = F.EVar (fromString "()")
+exprToFixpoint (AnnLam _bs _e2 _ _)      = error "TODO exprToFixpoint"
+exprToFixpoint (AnnTApp _e _typ _ _)      = error "TODO exprToFixpoint"
+exprToFixpoint (AnnTAbs _tvar _e _ _)      = error "TODO exprToFixpoint"
 
     -- case prim2ToFixpoint o of
     -- Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
     -- Right bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
 
-appToFixpoint :: M.Expr r a -> F.Expr
+appToFixpoint :: M.Expr t a -> F.Expr
 appToFixpoint e =
   case e of
-    App (App (Prim op _) e1 _) e2 _ ->
+    AnnApp (AnnApp (AnnPrim op _ _) e1 _ _) e2 _ _ ->
       binopToFixpoint op e1 e2
-    App (App (TApp (Prim op _) _ _) e1 _) e2 _ ->
+    AnnApp (AnnApp (AnnTApp (AnnPrim op _ _) _ _ _) e1 _ _) e2 _ _ ->
       binopToFixpoint op e1 e2
-    App f x _ ->
+    AnnApp f x _ _ ->
       F.EApp (exprToFixpoint f) (exprToFixpoint x)
     _ -> error "non-application"
 
@@ -169,17 +157,17 @@ instance Predicate HC.Pred where
   varSubst x y (HC.PAnd ps) =
     HC.PAnd $ fmap (varSubst x y) ps
 
-  prim e@Unit{} = equalityPrim e TUnit
-  prim e@Number{} = equalityPrim e TInt
-  prim e@Boolean{} = equalityPrim e TBool
-  prim (Prim op l) = primOp op l
+  prim e@AnnUnit{} = equalityPrim e TUnit
+  prim e@AnnNumber{} = equalityPrim e TInt
+  prim e@AnnBoolean{} = equalityPrim e TBool
+  prim (AnnPrim op _ l) = primOp op l
   prim _ = error "prim on non primitive"
 
-equalityPrim :: (MonadFresh m) => Expr r a -> Type -> m (RType HC.Pred a)
+equalityPrim :: (MonadFresh m) => M.Expr t a -> Type -> m (RType HC.Pred a)
 equalityPrim e typ = do
-  let l = extract e
+  let l = extractLoc e
   vv <- refreshId $ "VV" ++ MN.cSEPARATOR
-  let reft = HC.Reft $ F.PAtom F.Eq (exprToFixpoint (Id vv l)) (exprToFixpoint e)
+  let reft = HC.Reft $ F.PAtom F.Eq (idToFix vv) (exprToFixpoint e)
   pure $ RBase (M.Bind vv l) typ reft
 
 primOp :: (MonadFresh m) => Prim -> a -> m (RType HC.Pred a)
@@ -214,13 +202,15 @@ primOp op l =
       let reft = HC.Reft $ F.PAtom F.Eq (idToFix v) (oper (idToFix x) (idToFix y))
       let returnType = RBase (Bind v l) typ2 reft
       pure $ RFun (Bind x l) (trivialBase typ1 v1) (RFun (Bind y l) (trivialBase typ1 v2) returnType)
-    idToFix x = exprToFixpoint (Id x l)
     trivialBase typ x = RBase (Bind x l) typ true
 
 
 -- | Converts a ParsedExpr's predicates from Exprs to Fixpoint Exprs
-parsedExprPredToFixpoint :: ParsedExpr (Expr r a) a -> ParsedExpr HC.Pred a
-parsedExprPredToFixpoint = first $ first (HC.Reft . exprToFixpoint)
+parsedExprPredToFixpoint :: ParsedExpr (Expr t a) a -> ParsedExpr HC.Pred a
+parsedExprPredToFixpoint = first $ fmap (first (HC.Reft . exprToFixpoint))
+
+idToFix :: Id -> F.Expr
+idToFix x = F.EVar (fromString x)
 
 
 ------------------------------------------------------------------------------

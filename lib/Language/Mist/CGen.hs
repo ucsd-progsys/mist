@@ -11,7 +11,7 @@
 
 module Language.Mist.CGen
   ( generateConstraints
-  , Constraint (..)
+  , NNF (..)
   ) where
 
 -- TODO: Do we need to run a Uniqify pass before we run this module?
@@ -30,11 +30,11 @@ type Env r a = [(Id, RType r a)]
 -- | generateConstraints is our main entrypoint to this module
 -------------------------------------------------------------------------------
 generateConstraints :: (Predicate r, Show r, Show a) =>
-                       AnfExpr (ElaboratedType r a) a -> Constraint r
+                       ElaboratedExpr r a -> NNF r
 generateConstraints = fst . runFresh . cgen []
 
 cgen :: (Predicate r, Show r, Show a) =>
-        Env r a -> AnfExpr (ElaboratedType r a) a -> Fresh (Constraint r, RType r a)
+        Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 cgen _ e@Unit{}    = (Head true,) <$> prim e
 cgen _ e@Number{}  = (Head true,) <$> prim e
 cgen _ e@Boolean{} = (Head true,) <$> prim e
@@ -57,26 +57,26 @@ cgen _ (If _ _ _ _) = error "INTERNAL ERROR: if not in ANF"
 -- TODO: recursive let?
 cgen env (Let b e1 e2 _)
   -- Annotated with an RType (Implicit Parameter)
-  | (AnnBind x (Just (Left rt@(RIFun {}))) _) <- b = do
+  | (AnnBind x (Just (ElabRefined rt@(RIFun {}))) _) <- b = do
  let (ns, tx) = splitImplicits rt
  (c1, t1) <- cgen (ns ++ env) e1
  (c2, t2) <- cgen ((x, rt):env) e2
- tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
+ tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x tx (CAnd [c2, t2 <: tHat])
  let c' = foldr (uncurry mkAll) (CAnd [c1, t1 <: tx]) ns
  pure (CAnd [c, c'], tHat)
   -- Annotated with an RType
-  | (AnnBind x (Just (Left tx)) _) <- b = do
+  | (AnnBind x (Just (ElabRefined tx)) _) <- b = do
  (c1, t1) <- cgen env e1
  (c2, t2) <- cgen ((x, tx):env) e2
- tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
+ tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x tx (CAnd [c2, t2 <: tHat])
  pure (CAnd [c1, c, t1 <: tx], tHat)
   -- Unrefined
   | (AnnBind x _ _) <- b = do
  (c1, t1) <- cgen env e1
  (c2, t2) <- cgen ((x, t1):env) e2
- tHat <- fresh (extract e2) (foBinds env) (eraseRType t2)
+ tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x t1 (CAnd [c2, t2 <: tHat])
  pure (CAnd [c1, c], tHat)
 
@@ -91,7 +91,7 @@ cgen env (App e (Id y _) _) =
     ns' <- sequence [ (,rt) <$> refreshId n | (n,rt) <- ns]
     let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns') (fst <$> ns)) rt
     ty <- single env y
-    tHat <- fresh (extract e) (foBinds env) (eraseRType t')
+    tHat <- fresh (extractLoc e) (foBinds env) (eraseRType t')
     let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t'<: tHat]
     pure (CAnd [c, cy], tHat)
   _ -> error "CGen App failed"
@@ -106,11 +106,11 @@ cgen env (App e (Id y _) _) =
 cgen _ (App _ _ _) = error "argument is non-variable"
 
 cgen _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
-cgen env (Lam (AnnBind x (Just (Left tx)) l) e _) = do
+cgen env (Lam (AnnBind x (Just (ElabRefined tx)) l) e _) = do
   (c, t) <- cgen ((x, tx):env) e
   pure (mkAll x tx c, RFun (Bind x l) tx t)
 
-cgen env (Lam (AnnBind x (Just (Right typ)) l) e _) = do
+cgen env (Lam (AnnBind x (Just (ElabUnrefined typ)) l) e _) = do
   tHat <- fresh l (foBinds env) typ
   (c, t) <- cgen ((x, tHat):env) e
   pure (mkAll x tHat c, RFun (Bind x l) tHat t)
@@ -172,7 +172,7 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go _ _ = error $ "CGen subtyping error. Got " ++ show rtype1 ++ " but expected " ++ show rtype2
 
 -- | (x :: t) => c
-mkAll :: (Predicate r) => Id -> RType r a -> Constraint r -> Constraint r
+mkAll :: (Predicate r) => Id -> RType r a -> NNF r -> NNF r
 mkAll x rt c = case flattenRType rt of
                  (RBase (Bind y _) b p) -> All x b (varSubst x y p) c
                  _ -> c
@@ -189,7 +189,7 @@ flattenRType :: (Predicate r) => RType r a -> RType r a
 flattenRType (RRTy b rtype reft) = strengthenRType (flattenRType rtype) b reft
 flattenRType rtype = rtype
 
-strengthenRType :: (Predicate r) => RType r a -> Bind a -> r -> RType r a
+strengthenRType :: (Predicate r) => RType r a -> Bind t a -> r -> RType r a
 strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedReft')
   where
     renamedReft' = varSubst (bindId b) (bindId b') reft'

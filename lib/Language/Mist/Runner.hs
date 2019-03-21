@@ -47,7 +47,7 @@ esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
 esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 
 -----------------------------------------------------------------------------------
-mist :: BareExpr -> Result (ElaboratedExpr R SourceSpan)
+mist :: SSParsedExpr -> Result (ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
 mist expr = do
   case wellFormed expr of

@@ -57,13 +57,13 @@ emptyWEnv = WEnv { binders = []
                  , unannRecursiveBinders = []
                  }
 
-addBinder :: (Binder b) => b a -> WEnv -> WEnv
+addBinder :: Bind t a -> WEnv -> WEnv
 addBinder bind env@(WEnv{binders = binders})
   = env{binders = (bindId bind):binders}
 
-addRecursiveBinder :: ParsedAnnBind r a -> WEnv -> WEnv
+addRecursiveBinder :: ParsedBind r a -> WEnv -> WEnv
 addRecursiveBinder
-  (AnnBind{ _aBindId = x, _aBindType = ParsedInfer })
+  (AnnBind{bindId = x, bindAnn = Just ParsedInfer})
   env@(WEnv{unannRecursiveBinders = unannRecursiveBinders})
   = env{unannRecursiveBinders = x:unannRecursiveBinders}
 addRecursiveBinder _ env = env
@@ -93,7 +93,7 @@ wellFormed = go emptyWEnv
 --------------------------------------------------------------------------------
 -- | Error Checkers: In each case, return an empty list if no errors.
 --------------------------------------------------------------------------------
-duplicateBindErrors :: (Located a) => WEnv -> AnnBind t a -> [UserError]
+duplicateBindErrors :: (Located a) => WEnv -> Bind t a -> [UserError]
 duplicateBindErrors env bind
   = condError ((bindId bind) `elem` (binders env)) (errDupBind bind)
 
@@ -287,18 +287,18 @@ synthesize e = do
 
 -- TODO: add judgments for documentation
 -- | Γ ⊢ e ~> c => A ⊣ Θ
-_synthesize (Number i tag) = pure (Number i tag, TInt)
-_synthesize (Boolean b tag) = pure (Boolean b tag, TBool)
-_synthesize (Unit tag) = pure (Unit tag, TUnit)
-_synthesize (Id id tag) = do
+_synthesize (Number i l) = pure (Number i l, TInt)
+_synthesize (Boolean b l) = pure (Boolean b l, TBool)
+_synthesize (Unit l) = pure (Unit l, TUnit)
+_synthesize (Id id l) = do
   boundType <- getsEnv $ getBoundType id
   case boundType of
-    Just typ -> pure (Id id tag, typ)
-    Nothing -> throwError $ [errUnboundVar (sourceSpan tag) id]
-_synthesize (Prim prim tag) = do
+    Just typ -> pure (Id id l, typ)
+    Nothing -> throwError $ [errUnboundVar (sourceSpan l) id]
+_synthesize (Prim prim l) = do
    typ <- primType prim
-   pure (Prim prim tag, typ)
-_synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthesis of branching
+   pure (Prim prim l, typ)
+_synthesize (If condition e1 e2 l) = do -- TODO: how to properly handle synthesis of branching
   cCondition <- check condition TBool
   alpha <- generateExistential
   extendEnv [Unsolved alpha]
@@ -307,27 +307,27 @@ _synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthe
   let firstBranchType = applyEnv env (EVar alpha)
   c2 <- check e2 firstBranchType
   env' <- getEnv
-  pure (If cCondition c1 c2 tag, applyEnv env' firstBranchType)
-_synthesize (Let binding e1 e2 tag) =
-  typeCheckLet binding e1 e2 tag
+  pure (If cCondition c1 c2 l, applyEnv env' firstBranchType)
+_synthesize (Let binding e1 e2 l) =
+  typeCheckLet binding e1 e2 l
   (\annBind c1 e2 tag -> do
       (c2, inferredType) <- _synthesize e2
-      pure (Let annBind c1 c2 tag, inferredType))
-_synthesize (App e1 e2 tag) = do
+      pure (Let annBind c1 c2 l, inferredType))
+_synthesize (App e1 e2 l) = do
   (c1, funType) <- synthesize e1
   env <- getEnv
-  synthesizeApp (applyEnv env funType) c1 e2 tag
-_synthesize (Lam bind e tag) = do
+  synthesizeApp (applyEnv env funType) c1 e2 l
+_synthesize (Lam bind e l) = do
   alpha <- generateExistential
   beta <- generateExistential
   let newBinding = VarBind (bindId bind) (EVar alpha)
   extendEnv [Unsolved alpha, Unsolved beta, newBinding]
   c <- check e (EVar beta)
   modifyEnv $ dropEnvAfter newBinding -- TODO: do we need to do something with delta' for elaboration?
-  let annBind = bind{ _aBindType = ElabUnrefined (EVar alpha) }
-  pure (Lam annBind c tag, EVar alpha :=> EVar beta)
-_synthesize (TApp _e _typ _tag) = error "TODO"
-_synthesize (TAbs _alpha _e _tag) = error "TODO"
+  let annBind = bind{bindAnn = Just $ ElabUnrefined (EVar alpha)}
+  pure (Lam annBind c l, EVar alpha :=> EVar beta)
+_synthesize (TApp _e _typ _l) = error "TODO"
+_synthesize (TAbs _alpha _e _l) = error "TODO"
 
 -- DEBUGGING
 check :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
@@ -349,38 +349,38 @@ _check expr typ = do
     Nothing -> go expr typ
 
   where
-    go (Number i tag) TInt = pure $ Number i tag
-    go (Boolean b tag) TBool = pure $ Boolean b tag
+    go (Number i l) TInt = pure $ Number i l
+    go (Boolean b l) TBool = pure $ Boolean b l
     go e@Id{} t = checkSub e t
     go e@Prim{} t = checkSub e t
-    go (If condition e1 e2 tag) t = do
+    go (If condition e1 e2 l) t = do
       cCondition <- check condition TBool
       c1 <- check e1 t
       c2 <- check e2 t
-      pure $ If cCondition c1 c2 tag
-    go (Let binding e1 e2 tag) t =
-      typeCheckLet binding e1 e2 tag
-      (\annBind c1 e2 tag -> do
+      pure $ If cCondition c1 c2 l
+    go (Let binding e1 e2 l) t =
+      typeCheckLet binding e1 e2 l
+      (\annBind c1 e2 l -> do
           c2 <- check e2 t
-          pure $ Let annBind c1 c2 tag)
+          pure $ Let annBind c1 c2 l)
     go e@App{} t = checkSub e t
-    go (Lam bind e tag) (t1 :=> t2) = do
+    go (Lam bind e l) (t1 :=> t2) = do
       let newBinding = VarBind (bindId bind) t1
       extendEnv [newBinding]
       c <- check e t2
       modifyEnv $ dropEnvAfter newBinding
-      let annBind = bind{ _aBindType = ElabUnrefined t1 }
-      pure $ Lam annBind c tag
-    go (Unit tag) TUnit = pure $ Unit tag
-    go (TApp _e _typ _tag) _ = error "TODO"
-    go (TAbs _alpha _e _tag) _ = error "TODO"
+      let annBind = bind{bindAnn = Just $ ElabUnrefined t1}
+      pure $ Lam annBind c l
+    go (Unit l) TUnit = pure $ Unit l
+    go (TApp _e _typ _l) _ = error "TODO"
+    go (TAbs _alpha _e _l) _ = error "TODO"
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
 synthesizeApp :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
-synthesizeApp tFun cFun eArg tag = do
+synthesizeApp tFun cFun eArg l = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
   env <- getEnv
-  let cApplication = subst (envToSubst env) $ App cInstantiatedFun cArg tag
+  let cApplication = subst (envToSubst env) $ AnnApp cInstantiatedFun cArg (error "TODO") l
   pure (cApplication, resultType)
 
 -- DEBUGGING
@@ -391,6 +391,7 @@ synthesizeSpine funType cFun eArg = do
   _synthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
+_synthesizeSpine :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 _synthesizeSpine funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
@@ -414,7 +415,7 @@ _synthesizeSpine funType cFun eArg = do
       evar <- generateExistential
       extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      synthesizeSpine newFunType (TApp cFun (EVar evar) (extract cFun)) eArg
+      synthesizeSpine newFunType (AnnTApp cFun (EVar evar) (error "TODO") (extractLoc cFun)) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
@@ -422,7 +423,7 @@ _synthesizeSpine funType cFun eArg = do
 -- polymorphic instantiation for c.
 instSub :: ElaboratedExpr r a -> Type -> Type -> Context (ElaboratedExpr r a)
 instSub c a@(TForall _ _) b =
-  foldr (\typ instantiated -> TApp instantiated typ (extract c))
+  foldr (\typ instantiated -> AnnTApp instantiated typ (error "TODO") (extractLoc c))
         c <$> go a b
 
   where
@@ -603,13 +604,13 @@ checkSub e t1 = do
 
 typeCheckLet ::
   (Located a, PPrint r) =>
-  ParsedAnnBind r a ->
+  ParsedBind r a ->
   ParsedExpr r a ->
   ParsedExpr r a ->
   a ->
-  (ElaboratedAnnBind r a -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context b) ->
+  (ElaboratedBind r a -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context b) ->
   Context b
-typeCheckLet binding@(AnnBind{_aBindType = ParsedInfer}) e1 e2 tag handleBody = do
+typeCheckLet binding@(AnnBind{bindAnn = Just ParsedInfer}) e1 e2 tag handleBody = do
   alpha <- generateExistential
   let evar = EVar alpha
   extendEnv [Scope alpha, Unsolved alpha, VarBind (bindId binding) evar]
@@ -619,26 +620,26 @@ typeCheckLet binding@(AnnBind{_aBindType = ParsedInfer}) e1 e2 tag handleBody = 
   (boundType, c1) <- letGeneralize evar unsubstitutedC1 delta'
   let newBinding = VarBind (bindId binding) boundType
   extendEnv [newBinding]
-  let annBind = binding{ _aBindType = ElabUnrefined boundType }
+  let annBind = binding{bindAnn = Just $ ElabUnrefined boundType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
-typeCheckLet binding@(AnnBind{_aBindType = ParsedCheck rType}) e1 e2 tag handleBody = do
+typeCheckLet binding@(AnnBind{bindAnn = Just (ParsedCheck rType)}) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
   extendEnv [newBinding]
   unabstractedC1 <- check e1 typ
   let c1 = insertTAbs typ unabstractedC1
-  let annBind = binding{ _aBindType = ElabRefined rType }
+  let annBind = binding{bindAnn = Just $ ElabRefined rType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
-typeCheckLet binding@(AnnBind{_aBindType = ParsedAssume rType}) e1 e2 tag handleBody = do
+typeCheckLet binding@(AnnBind{bindAnn = Just (ParsedAssume rType)}) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
   extendEnv [newBinding]
   (c1, _) <- synthesize e1
-  let annBind = binding{ _aBindType = ElabRefined rType }
+  let annBind = binding{bindAnn = Just $ ElabRefined rType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
@@ -713,7 +714,7 @@ freeEVars typ = eVars typ
     eVars (TForall _ t) = eVars t
 
 insertTAbs :: Type -> ElaboratedExpr r a -> ElaboratedExpr r a
-insertTAbs (TForall tvar typ) c = TAbs tvar (insertTAbs typ c) (extract c)
+insertTAbs (TForall tvar typ) c = TAbs tvar (insertTAbs typ c) (extractLoc c)
 insertTAbs _ c = c
 
 --------------------------------------------------------------------------------
