@@ -310,7 +310,7 @@ _synthesize (If condition e1 e2 l) = do -- TODO: how to properly handle synthesi
   pure (If cCondition c1 c2 l, applyEnv env' firstBranchType)
 _synthesize (Let binding e1 e2 l) =
   typeCheckLet binding e1 e2 l
-  (\annBind c1 e2 tag -> do
+  (\annBind c1 e2 l -> do
       (c2, inferredType) <- _synthesize e2
       pure (Let annBind c1 c2 l, inferredType))
 _synthesize (App e1 e2 l) = do
@@ -379,8 +379,7 @@ _check expr typ = do
 synthesizeApp :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
 synthesizeApp tFun cFun eArg l = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
-  env <- getEnv
-  let cApplication = subst (envToSubst env) $ AnnApp cInstantiatedFun cArg (error "TODO") l
+  let cApplication = AnnApp cInstantiatedFun cArg (Just $ ElabUnrefined tFun) l
   pure (cApplication, resultType)
 
 -- DEBUGGING
@@ -415,7 +414,7 @@ _synthesizeSpine funType cFun eArg = do
       evar <- generateExistential
       extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      synthesizeSpine newFunType (AnnTApp cFun (EVar evar) (error "TODO") (extractLoc cFun)) eArg
+      synthesizeSpine newFunType (AnnTApp cFun (EVar evar) (Just $ ElabUnrefined (TForall (TV tv) t)) (extractLoc cFun)) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
@@ -423,7 +422,7 @@ _synthesizeSpine funType cFun eArg = do
 -- polymorphic instantiation for c.
 instSub :: ElaboratedExpr r a -> Type -> Type -> Context (ElaboratedExpr r a)
 instSub c a@(TForall _ _) b =
-  foldr (\typ instantiated -> AnnTApp instantiated typ (error "TODO") (extractLoc c))
+  foldr (\typ instantiated -> AnnTApp instantiated typ (Just $ ElabUnrefined a) (extractLoc c))
         c <$> go a b
 
   where

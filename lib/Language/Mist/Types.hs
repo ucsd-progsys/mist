@@ -114,6 +114,8 @@ data Bind t a = AnnBind
   }
   deriving (Show, Functor, Eq)
 
+{-# COMPLETE Number, Boolean, Unit, Id, Prim, If, Let, Lam, App, TApp, TAbs #-}
+
 pattern Number :: (Default t) => Integer -> a -> Expr t a
 pattern Number n l <- AnnNumber n _ l
   where Number n l = AnnNumber n defaultVal l
@@ -147,6 +149,8 @@ pattern TApp e typ l <- AnnTApp e typ _ l
 pattern TAbs :: (Default t) => TVar -> Expr t a -> a -> Expr t a
 pattern TAbs tvar e l <- AnnTAbs tvar e _ l
   where TAbs tvar e l = AnnTAbs tvar e defaultVal l
+
+{-# COMPLETE Bind #-}
 
 pattern Bind :: (Default t) => Id -> a -> Bind t a
 pattern Bind id tag <- AnnBind id _ tag
