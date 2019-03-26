@@ -8,6 +8,7 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE ConstraintKinds            #-}
 
 --------------------------------------------------------------------------------
 -- | This module contains the code for type check an `Expr`
@@ -25,6 +26,8 @@ module Language.Mist.Checker
     -- * Error Constructors
   , errUnboundVar
   , errUnboundFun
+
+  , annotate
   ) where
 
 
@@ -258,12 +261,14 @@ unsolvedExistentials (TypeEnv env) = [evar | (Unsolved evar) <- env]
 -- Elaboration -----------------------------------------------------------------
 --------------------------------------------------------------------------------
 
+type ElaborateConstraints r a = (Located a, PPrint r)
+
 -- | Elaborates a surface Expr
 -- - adds type annotations
 -- - adds explicit type application
 -- - adds explicit type abstraction
 -- - assumes every name is unique
-elaborate :: (Located a, PPrint r) => ParsedExpr r a -> Result (ElaboratedExpr r a)
+elaborate :: ElaborateConstraints r a => ParsedExpr r a -> Result (ElaboratedExpr r a)
 elaborate e =
   if __debug
   then do
@@ -279,7 +284,7 @@ elaborate e =
 
 
 -- DEBUGGING
-synthesize :: (Located a, PPrint r) => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
+synthesize :: ElaborateConstraints r a => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
 synthesize e = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
@@ -330,7 +335,7 @@ _synthesize (TApp _e _typ _l) = error "TODO"
 _synthesize (TAbs _alpha _e _l) = error "TODO"
 
 -- DEBUGGING
-check :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+check :: ElaborateConstraints r a => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
 check e t = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
@@ -376,21 +381,21 @@ _check expr typ = do
     go (TAbs _alpha _e _l) _ = error "TODO"
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
-synthesizeApp :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
+synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
 synthesizeApp tFun cFun eArg l = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
-  let cApplication = AnnApp cInstantiatedFun cArg (Just $ ElabUnrefined tFun) l
+  let cApplication = App (putAnn (Just $ ElabUnrefined tFun) cInstantiatedFun) cArg l
   pure (cApplication, resultType)
 
 -- DEBUGGING
-synthesizeSpine :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 synthesizeSpine funType cFun eArg = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
   _synthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
-_synthesizeSpine :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+_synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 _synthesizeSpine funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
@@ -410,11 +415,11 @@ _synthesizeSpine funType cFun eArg = do
     go (t1 :=> t2) = do
       cArg <- check eArg t1
       pure (cFun, cArg, t2)
-    go (TForall (TV tv) t) = do
+    go tforall@(TForall (TV tv) t) = do
       evar <- generateExistential
       extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      synthesizeSpine newFunType (AnnTApp cFun (EVar evar) (Just $ ElabUnrefined (TForall (TV tv) t)) (extractLoc cFun)) eArg
+      synthesizeSpine newFunType (TApp (putAnn (Just $ ElabUnrefined tforall) cFun) (EVar evar) (extractLoc cFun)) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
@@ -422,7 +427,7 @@ _synthesizeSpine funType cFun eArg = do
 -- polymorphic instantiation for c.
 instSub :: ElaboratedExpr r a -> Type -> Type -> Context (ElaboratedExpr r a)
 instSub c a@(TForall _ _) b =
-  foldr (\typ instantiated -> AnnTApp instantiated typ (Just $ ElabUnrefined a) (extractLoc c))
+  foldr (\typ instantiated -> TApp (putAnn (Just $ ElabUnrefined a) instantiated) typ (extractLoc c))
         c <$> go a b
 
   where
@@ -595,14 +600,14 @@ primType Equal   = do
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
 primType And     = pure $ TBool :=> (TBool :=> TBool)
 
-checkSub :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+checkSub :: ElaborateConstraints r a => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
 checkSub e t1 = do
   (c, t2) <- synthesize e
   env <- getEnv
   instSub c (applyEnv env t2) (applyEnv env t1)
 
 typeCheckLet ::
-  (Located a, PPrint r) =>
+  ElaborateConstraints r a =>
   ParsedBind r a ->
   ParsedExpr r a ->
   ParsedExpr r a ->
@@ -735,3 +740,42 @@ errSolvingSolvedExistential = error "TODO: solving solved existential"
 errApplyNonFunction l typ = mkError (printf "Applying non-function of type %s" (show typ)) l
 errInfiniteTypeConstraint _ _ = error "TODO: infinite type constraint"
 errCheckingError l typ = mkError (printf "Checking expression has type %s failed" (show typ)) l
+
+--------------------------------------------------------------------------------
+-- | Annotate
+--------------------------------------------------------------------------------
+type AnnotationContext r a = M.Map Id Type
+
+annotate :: ElaborateConstraints r a => ElaboratedExpr r a -> Type -> ElaboratedExpr r a
+annotate e typ = runFresh $ go M.empty e typ
+  where
+    go :: ElaborateConstraints r a => AnnotationContext r a -> ElaboratedExpr r a -> Type -> Fresh (ElaboratedExpr r a)
+    go _ (Number n l) _ = pure $ AnnNumber n (ann TInt) l
+    go _ (Boolean b l) _ = pure $ AnnBoolean b (ann TBool) l
+    go _ (Unit l) _ = pure $ AnnUnit (ann TUnit) l
+    go _ (Prim op l) _ = AnnPrim op <$> fmap ann (primType op) <*> pure l
+    go ctxt (Id x l) _ = pure $ AnnId x (ann (ctxt M.! x)) l
+    go ctxt (If condition e1 e2 l) typ =
+      AnnIf <$> go ctxt condition TBool <*> go ctxt e1 typ <*> go ctxt e2 typ <*> pure (ann typ) <*> pure l
+    go ctxt (Let bind e1 e2 l) typ =
+      let boundType = eraseElaboratedAnn $ bindAnn bind
+          ctxt' = M.insert (bindId bind) boundType ctxt in
+      AnnLet bind <$> go ctxt' e1 boundType <*> go ctxt' e2 typ <*> pure (ann typ) <*> pure l
+    go ctxt (App e1 e2 l) typ =
+      let tFun = eraseElaboratedAnn $ extractAnn e1
+          (t1 :=> _) = tFun in
+      AnnApp <$> go ctxt e1 tFun <*> go ctxt e2 t1 <*> pure (ann typ) <*> pure l
+    go ctxt (Lam bind e l) typ@(t1 :=> t2) =
+      let ctxt' = M.insert (bindId bind) t1 ctxt in
+      AnnLam bind <$> go ctxt' e t2 <*> pure (ann typ) <*> pure l
+    go ctxt (TApp e t l) typ =
+      let tAbs = eraseElaboratedAnn $ extractAnn e in
+      AnnTApp <$> go ctxt e tAbs <*> pure t <*> pure (ann typ) <*> pure l
+    go ctxt (TAbs tvar e l) tAbs@(TForall _ typ) = AnnTAbs tvar <$> go ctxt e typ <*> pure (ann tAbs) <*> pure l
+    go _ expr typ = error $ "incorrectly-typed elaborated expression: " ++ pprint expr ++ " : " ++ pprint typ
+
+    ann typ = Just $ ElabUnrefined typ
+
+    eraseElaboratedAnn (Just (ElabRefined rtype)) = eraseRType rtype
+    eraseElaboratedAnn (Just (ElabUnrefined typ)) = typ
+    eraseElaboratedAnn Nothing = error "impossible: every binding should be annotated"

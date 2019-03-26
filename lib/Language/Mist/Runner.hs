@@ -34,7 +34,7 @@ act _h f = do
   let r = mist e
   case r of
     Right t -> do
-      let c = generateConstraints (anormal t)
+      let c = generateConstraints (anormal (annotate t TUnit))
       solverResult <- print c >> solve c
       print solverResult
       case F.resStatus solverResult of

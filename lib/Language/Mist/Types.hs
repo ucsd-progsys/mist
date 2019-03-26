@@ -46,6 +46,7 @@ module Language.Mist.Types
   , Prim (..)
 
   , extractLoc, extractAnn
+  , putAnn
   , unTV
 
   , eraseRType
@@ -259,6 +260,19 @@ extractAnn (AnnLam _ _ t _)     = t
 extractAnn (AnnUnit t _)        = t
 extractAnn (AnnTApp _ _ t _)    = t
 extractAnn (AnnTAbs _ _ t _)    = t
+
+putAnn :: t -> Expr t a -> Expr t a
+putAnn t (AnnNumber n _ l) = AnnNumber n t l
+putAnn t (AnnBoolean b _ l) = AnnBoolean b t l
+putAnn t (AnnId x _ l) = AnnId x t l
+putAnn t (AnnPrim p _ l) = AnnPrim p t l
+putAnn t (AnnIf e1 e2 e3 _ l) = AnnIf e1 e2 e3 t l
+putAnn t (AnnLet x e1 e2 _ l) = AnnLet x e1 e2 t l
+putAnn t (AnnApp e1 e2 _ l) = AnnApp e1 e2 t l
+putAnn t (AnnLam x e _ l) = AnnLam x e t l
+putAnn t (AnnUnit _ l) = AnnUnit t l
+putAnn t (AnnTApp e typ _ l) = AnnTApp e typ t l
+putAnn t (AnnTAbs tvar e _ l) = AnnTAbs tvar e t l
 
 --------------------------------------------------------------------------------
 -- | Pretty Printer

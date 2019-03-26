@@ -32,6 +32,7 @@ shouldFail result = assertBool (printf "type checked but shouldn't: %s" (show re
 
 checkerTests = testGroup "Language.Mist.Checker"
   [ elaborationTests
+  , annotationTests
   ]
 
 elaborationTests = testGroup "elaborate"
@@ -99,6 +100,49 @@ elaborationTests = testGroup "elaborate"
            assertEqual "a3 == a4" a3 a4
        ]
   ]
+
+pattern A t = Just (ElabUnrefined t)
+
+annotationTests = testGroup "annotation"
+  [
+    testCase "let id : A -> A = λx.x in ()" $ do
+      let (Right elaborated) = elaborate e1
+      let (AnnLet _
+            (AnnTAbs _
+              (AnnLam _
+                (AnnId _ (A (TVar (TV "A"))))
+                (A (TVar (TV "A") :=> TVar (TV "A"))))
+              (A (TForall (TV "A") (TVar (TV "A") :=> TVar (TV "A")))))
+            (AnnUnit (A TUnit))
+            (A TUnit)) = annotate elaborated TUnit
+      pure ()
+
+  , testCase "let id : A -> A = λx.x in id 1" $ do
+      let (Right elaborated) = elaborate e3
+      let (AnnLet _
+            (AnnTAbs _
+              (AnnLam _
+                (AnnId _ (A (TVar (TV "A"))))
+                (A (TVar (TV "A") :=> TVar (TV "A"))))
+              (A (TForall (TV "A") (TVar (TV "A") :=> TVar (TV "A")))))
+            (AnnApp
+             (AnnTApp (AnnId "id" (A (TForall (TV "A") (TVar (TV "A") :=> TVar (TV "A"))))) TInt (A (TInt :=> TInt)))
+             (AnnNumber 1 (A TInt))
+             (A TInt))
+            (A TUnit)) = annotate elaborated TInt
+      pure ()
+
+  , testCase "assume id : A -> A = () in let map : (A -> B) -> A -> B = λf.λx.f x in map id 1" $ do
+      let (Right elaborated) = elaborate e4
+      let _ = annotate elaborated TInt
+      pure ()
+
+  , testCase "assume const : A -> Int = () in let map : (A -> B) -> A -> B = λf.λx.f x in map const ()" $ do
+      let (Right elaborated) = elaborate e5
+      let _ = annotate elaborated TUnit
+      pure ()
+  ]
+
 -- | let id : A -> A = λx.x in ()
 e1 = Let
      (AnnBind "id" (Just $ ParsedCheck (RForall (TV "A") (toRBase $ "A" ==> "A"))))
