@@ -152,7 +152,7 @@ instance Subable Type t => Subable Type (Expr t a) where
   _subst su (AnnLet x e1 e2 tag l) = AnnLet (_subst su x) (_subst su e1) (_subst su e2) (_subst su tag) l
   _subst su (AnnApp e1 e2 tag l) = AnnApp (_subst su e1) (_subst su e2) (_subst su tag) l
   _subst su (AnnLam x e tag l) = AnnLam (_subst su x) (_subst su e) (_subst su tag) l
-  _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) typ (_subst su tag) l
+  _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) (_subst su typ) (_subst su tag) l
   _subst su (AnnTAbs tvar e tag l) = AnnTAbs tvar (_subst su' e) (_subst su tag) l
     where su' = M.delete (unTV tvar) su
 

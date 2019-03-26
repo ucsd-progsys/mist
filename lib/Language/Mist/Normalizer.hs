@@ -9,7 +9,6 @@ module Language.Mist.Normalizer ( anormal ) where
 import Language.Mist.Types
 import Language.Mist.Names
 
-import Data.Bifunctor
 
 type Binds t a = [(Bind t a, (AnfExpr t a, a))] -- TODO: is there a reason for this not to be a triple?
 
@@ -21,17 +20,13 @@ anormal :: Expr t a -> AnfExpr t a
 anormal e = runFresh (anf e)
 
 --------------------------------------------------------------------------------
--- | `anf i e` takes as input a "start" counter `i` and expression `e` and
---   returns an output `(i', e')` where
---   * `i'` is the output counter (i.e. i' - i) anf-variables were generated,
---   * `e'` is equivalent to `e` but is in A-Normal Form.
---------------------------------------------------------------------------------
 anf :: (MonadFresh m) => Expr t a -> m (AnfExpr t a)
 --------------------------------------------------------------------------------
 anf e@AnnUnit{} = pure e
 anf e@AnnNumber{} = pure e
 anf e@AnnBoolean{} = pure e
 anf e@AnnId{} = pure e
+anf e@AnnPrim{} = pure e
 anf (AnnLet x e b tag l) = do
   e' <- anf e
   b' <- anf b
@@ -73,7 +68,7 @@ anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
 --------------------------------------------------------------------------------
 stitch :: Binds t a -> AnfExpr t a -> AnfExpr t a
 --------------------------------------------------------------------------------
-stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (error "TODO") (extractLoc e)
+stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extractAnn e) (extractLoc e)
 
 --------------------------------------------------------------------------------
 -- | `imm i e` takes as input a "start" counter `i` and expression `e` and
@@ -87,6 +82,7 @@ imm :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
 imm e@AnnUnit{} = immExp e
 imm e@AnnNumber{} = immExp e
 imm e@AnnBoolean{} = immExp e
+imm e@AnnPrim{} = immExp e
 imm e@AnnId{} = pure ([], e)
 -- imm (Prim2 o e1 e2 l) = do
 --   (bs, v1) <- imm e1
@@ -110,9 +106,9 @@ imm e@AnnId{} = pure ([], e)
 imm (AnnApp e1 e2 tag l) = do
   (bs, v1) <- imm e1
   (bs', v2) <- imm e2
-  x <- freshBind l
+  x <- freshBind tag l
   let bs'' = (x, (AnnApp v1 v2 tag l, l)) : (bs ++ bs')
-  pure (bs'', mkId x l)
+  pure (bs'', mkId x tag l)
 imm e@AnnIf{} = immExp e
 imm e@AnnLet{} = immExp e
 imm e@AnnLam{} = immExp e
@@ -122,21 +118,25 @@ imm e@AnnTAbs{} = immExp e
 immExp :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
 immExp e = do
   let l = extractLoc e
+  let t = extractAnn e
   e' <- anf e
-  v <- freshBind l
+  v <- freshBind t l
   let bs = [(v, (e', l))]
-  pure (bs, mkId v l)
+  pure (bs, mkId v t l)
 
-freshBind :: (MonadFresh m) => a -> m (Bind t a)
-freshBind l = do
+freshBind :: (MonadFresh m) => t -> a -> m (Bind t a)
+freshBind t l = do
   x <- refreshId $ "anf" ++ cSEPARATOR
   pure AnnBind { bindId = x
-               , bindAnn = error "TODO"
+               , bindAnn = t
                , bindTag = l
                }
 
-mkId :: Bind t a -> a -> Expr t a
-mkId x l = AnnId (bindId x) (error "TODO") l
+mkId :: Bind t a -> t -> a -> Expr t a
+mkId x tag l = AnnId (bindId x) tag l
+
+bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
+bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
 
 
 {-

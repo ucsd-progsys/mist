@@ -13,7 +13,3 @@ testGroupM n xs = testGroup n <$> sequence xs
 x @/=? y = (x /= y) @? msg
   where
     msg = "expected: " ++ show x ++ " /= " ++ show y ++ "\n but: " ++ show x ++ " == " ++ show y
-
-
-instance PPrint () where
-  pprint () = "()"

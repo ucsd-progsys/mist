@@ -47,7 +47,6 @@ module Language.Mist.Types
 
   , extractLoc, extractAnn
   , unTV
-  , bindsExpr
 
   , eraseRType
 
@@ -213,9 +212,6 @@ type ElaboratedBind r a = Bind (Maybe (ElaboratedAnnotation r a)) a
 
 type AnfExpr t a = Expr t a
 type ImmExpr t a = Expr t a
-
-bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
-bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
 
 -- -- | Constructing a function declaration
 -- dec :: Bind a -> Sig -> [Bind a] -> Expr a -> Expr a -> a -> Expr a

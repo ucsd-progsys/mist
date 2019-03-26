@@ -23,7 +23,7 @@ import qualified Language.Fixpoint.Types.Config as C
 import qualified Language.Fixpoint.Types as F
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Horn.Solve as S
-import System.Console.CmdArgs.Verbosity
+-- import System.Console.CmdArgs.Verbosity
 
 -- | Solves the subtyping constraints we got from CGen.
 

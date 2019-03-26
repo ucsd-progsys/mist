@@ -378,3 +378,6 @@ exprAddParsedInfers = goE
     goE (AnnTAbs tvar e _ l) = TAbs tvar (goE e) l
 
     goB (AnnBind x _ l) = AnnBind x (Just ParsedInfer) l
+
+bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
+bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs

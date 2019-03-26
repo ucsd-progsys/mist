@@ -13,7 +13,7 @@ import qualified Language.Fixpoint.Horn.Types as HC
 
 import Data.Bifunctor
 
-import Language.Mist.Types (Predicate (..), MonadFresh (..), Constraint (..))
+import Language.Mist.Types (Predicate (..), MonadFresh (..), NNF (..))
 import qualified Language.Mist.Types as T
 import Language.Mist.CGen
 import Language.Mist.Names

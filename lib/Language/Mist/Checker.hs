@@ -491,7 +491,7 @@ a <<: b = do
     (_, Just evar) -> do
       occurrenceCheck evar a
       instantiateR a evar
-    (_, _) -> error $ "TODO: this is a subtyping error" ++ show a ++ show b
+    (_, _) -> error $ "TODO: this is a subtyping error: " ++ show a ++ " <: " ++ show b
 
 -- DEBUGGING
 instantiateL :: EVar -> Type -> Context ()
@@ -642,6 +642,8 @@ typeCheckLet binding@(AnnBind{bindAnn = Just (ParsedAssume rType)}) e1 e2 tag ha
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
+typeCheckLet AnnBind{bindAnn = Nothing} _ _ _ _ =
+  error "impossible: every binder should be annotated"
 
 -- | Carries out Hindley-Milner style let generalization on the existential variable.
 -- Also substitutes for all existentials that were added as annotations
