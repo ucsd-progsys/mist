@@ -9,9 +9,8 @@ module Language.Mist.Normalizer ( anormal ) where
 import Language.Mist.Types
 import Language.Mist.Names
 
-import Data.Bifunctor
 
-type Binds t a = [(Bind a, (AnfExpr t a, a))] -- TODO: is there a reason for this not to be a triple?
+type Binds t a = [(Bind t a, (AnfExpr t a, a))] -- TODO: is there a reason for this not to be a triple?
 
 --------------------------------------------------------------------------------
 -- | Convert an Expr into A-Normal Form
@@ -21,31 +20,28 @@ anormal :: Expr t a -> AnfExpr t a
 anormal e = runFresh (anf e)
 
 --------------------------------------------------------------------------------
--- | `anf i e` takes as input a "start" counter `i` and expression `e` and
---   returns an output `(i', e')` where
---   * `i'` is the output counter (i.e. i' - i) anf-variables were generated,
---   * `e'` is equivalent to `e` but is in A-Normal Form.
---------------------------------------------------------------------------------
 anf :: (MonadFresh m) => Expr t a -> m (AnfExpr t a)
 --------------------------------------------------------------------------------
-anf (Unit l) = pure $ Unit l
-anf (Number n l) = pure $ Number n l
-anf (Boolean b l) = pure $ Boolean b l
-anf (Id x l) = pure $ Id x l
-anf (Let x e b l) = do
+anf e@AnnUnit{} = pure e
+anf e@AnnNumber{} = pure e
+anf e@AnnBoolean{} = pure e
+anf e@AnnId{} = pure e
+anf e@AnnPrim{} = pure e
+anf (AnnLet x e b tag l) = do
   e' <- anf e
   b' <- anf b
-  pure $ Let (first Just x) e' b' l
-anf (Prim2 o e1 e2 l) = do
-  (bs, e1') <- imm e1
-  (bs', e2') <- imm e2
-  let bs'' = bs' ++ bs
-  pure $ stitch bs'' (Prim2 o e1' e2' l)
-anf (If c e1 e2 l) = do
+  -- pure $ Let (first Just x) e' b' l
+  pure $ AnnLet x e' b' tag l
+-- anf (Prim2 o e1 e2 l) = do
+--   (bs, e1') <- imm e1
+--   (bs', e2') <- imm e2
+--   let bs'' = bs' ++ bs
+--   pure $ stitch bs'' (Prim2 o e1' e2' l)
+anf (AnnIf c e1 e2 tag l) = do
   (bs, c') <- imm c
   e1' <- anf e1
   e2' <- anf e2
-  pure $ stitch bs (If c' e1' e2' l)
+  pure $ stitch bs (AnnIf c' e1' e2' tag l)
 
 -- anf i (Tuple e1 e2 l)   = (i', stitch bs (Tuple e1' e2' l))
 --   where
@@ -55,13 +51,14 @@ anf (If c e1 e2 l) = do
 --   where
 --     (i', bs, e1')       = imm i e1
 
-anf (App e1 e2 l) = do
+anf (AnnApp e1 e2 tag l) = do
   (bs, e1') <- imm e1
   (bs', e2') <- imm e2
-  pure $ stitch (bs ++ bs') (App e1' e2' l)
-anf (Lam x e l) = Lam (first Just x) <$> anf e <*> pure l
-anf (TApp e t l) = TApp <$> anf e <*> pure t <*> pure l
-anf (TAbs alpha e l) = TAbs alpha <$> anf e <*> pure l
+  pure $ stitch (bs ++ bs') (AnnApp e1' e2' tag l)
+-- anf (Lam x e l) = Lam (first Just x) <$> anf e <*> pure l
+anf (AnnLam x e tag l) = AnnLam x <$> anf e <*> pure tag <*> pure l
+anf (AnnTApp e t tag l) = AnnTApp <$> anf e <*> pure t <*> pure tag <*> pure l
+anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
 
 
 --------------------------------------------------------------------------------
@@ -71,7 +68,7 @@ anf (TAbs alpha e l) = TAbs alpha <$> anf e <*> pure l
 --------------------------------------------------------------------------------
 stitch :: Binds t a -> AnfExpr t a -> AnfExpr t a
 --------------------------------------------------------------------------------
-stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extract e)
+stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extractAnn e) (extractLoc e)
 
 --------------------------------------------------------------------------------
 -- | `imm i e` takes as input a "start" counter `i` and expression `e` and
@@ -82,16 +79,17 @@ stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extract e)
 --------------------------------------------------------------------------------
 imm :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
 --------------------------------------------------------------------------------
-imm e@Unit{} = immExp e
-imm e@Number{} = immExp e
-imm e@Boolean{} = immExp e
-imm (Id x l) = pure ([], Id x l)
-imm (Prim2 o e1 e2 l) = do
-  (bs, v1) <- imm e1
-  (bs', v2) <- imm e2
-  x <- freshBind l
-  let bs'' = (x, (Prim2 o v1 v2 l, l)) : (bs ++ bs')
-  pure (bs'', mkId x l)
+imm e@AnnUnit{} = immExp e
+imm e@AnnNumber{} = immExp e
+imm e@AnnBoolean{} = immExp e
+imm e@AnnPrim{} = immExp e
+imm e@AnnId{} = pure ([], e)
+-- imm (Prim2 o e1 e2 l) = do
+--   (bs, v1) <- imm e1
+--   (bs', v2) <- imm e2
+--   x <- freshBind l
+--   let bs'' = (x, (Prim2 o v1 v2 l, l)) : (bs ++ bs')
+--   pure (bs'', mkId x l)
 
 -- imm i (Tuple e1 e2 l)   = (i'', bs', mkId x l)
 --   where
@@ -105,35 +103,40 @@ imm (Prim2 o e1 e2 l) = do
 --     (i'', x)            = fresh l i'
 --     bs'                 = (x, (GetItem v1 f l, l)) : bs
 
-imm (App e1 e2 l) = do
+imm (AnnApp e1 e2 tag l) = do
   (bs, v1) <- imm e1
   (bs', v2) <- imm e2
-  x <- freshBind l
-  let bs'' = (x, (App v1 v2 l, l)) : (bs ++ bs')
-  pure (bs'', mkId x l)
-imm e@If{} = immExp e
-imm e@Let{} = immExp e
-imm e@Lam{} = immExp e
-imm e@TApp{} = immExp e
-imm e@TAbs{} = immExp e
+  x <- freshBind tag l
+  let bs'' = (x, (AnnApp v1 v2 tag l, l)) : (bs ++ bs')
+  pure (bs'', mkId x tag l)
+imm e@AnnIf{} = immExp e
+imm e@AnnLet{} = immExp e
+imm e@AnnLam{} = immExp e
+imm e@AnnTApp{} = immExp e
+imm e@AnnTAbs{} = immExp e
 
 immExp :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
 immExp e = do
-  let l = extract e
+  let l = extractLoc e
+  let t = extractAnn e
   e' <- anf e
-  v <- freshBind l
+  v <- freshBind t l
   let bs = [(v, (e', l))]
-  pure (bs, mkId v l)
+  pure (bs, mkId v t l)
 
-freshBind :: (MonadFresh m) => a -> m (Bind a)
-freshBind l = do
+freshBind :: (MonadFresh m) => t -> a -> m (Bind t a)
+freshBind t l = do
   x <- refreshId $ "anf" ++ cSEPARATOR
-  pure Bind { _bindId = x
-            , _bindLabel = l
-            }
+  pure AnnBind { bindId = x
+               , bindAnn = t
+               , bindTag = l
+               }
 
-mkId :: (Binder b) => b a -> a -> Expr t a
-mkId x l = Id (bindId x) l
+mkId :: Bind t a -> t -> a -> Expr t a
+mkId x tag l = AnnId (bindId x) tag l
+
+bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
+bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
 
 
 {-

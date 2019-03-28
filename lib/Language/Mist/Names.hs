@@ -12,7 +12,6 @@ module Language.Mist.Names
 
   , cSEPARATOR
 
-
   , varNum
 
   , FreshT
@@ -139,29 +138,23 @@ class Subable e a where
 instance Subable Type [Type] where
   _subst su = fmap (_subst su)
 
-instance Subable Type (ElaboratedType r a) where
-  _subst su (Left rType) = Left $ substReftType su rType
-  _subst su (Right typ) = Right $ _subst su typ
+instance Subable Type (ElaboratedAnnotation r a) where
+  _subst su (ElabRefined rType) = ElabRefined $ substReftType su rType
+  _subst su (ElabUnrefined typ) = ElabUnrefined $ _subst su typ
 
 instance Subable Type t => Subable Type (Expr t a) where
-  _subst _su e@Number{} = e
-  _subst _su e@Boolean{} = e
-  _subst _su e@Unit{} = e
-  _subst _su e@Id{} = e
-  _subst su (Prim2 op e1 e2 l)
-    = Prim2 op (_subst su e1) (_subst su e2) l
-  _subst su (If e e1 e2 l)
-    = If (_subst su e) (_subst su e1) (_subst su e2) l
-  _subst su (Let bind e1 e2 l)
-    = Let (_subst su bind) (_subst su e1) (_subst su e2) l
-  _subst su (App e1 e2 l)
-    = App (_subst su e1) (_subst su e2) l
-  _subst su (Lam bind e l)
-    = Lam (_subst su bind) (_subst su e) l
-  _subst su (TApp e typ l)
-    = TApp (_subst su e) (_subst su typ) l
-  _subst su (TAbs tvar e l)
-    = TAbs tvar (_subst (M.delete (unTV tvar) su) e) l
+  _subst su (AnnNumber n tag l) = AnnNumber n (_subst su tag) l
+  _subst su (AnnBoolean b tag l) = AnnBoolean b (_subst su tag) l
+  _subst su (AnnUnit tag l) = AnnUnit (_subst su tag) l
+  _subst su (AnnId var tag l) = AnnId var (_subst su tag) l
+  _subst su (AnnPrim op tag l) = AnnPrim op (_subst su tag) l
+  _subst su (AnnIf e1 e2 e3 tag l) = AnnIf (_subst su e1) (_subst su e2) (_subst su e3) (_subst su tag) l
+  _subst su (AnnLet x e1 e2 tag l) = AnnLet (_subst su x) (_subst su e1) (_subst su e2) (_subst su tag) l
+  _subst su (AnnApp e1 e2 tag l) = AnnApp (_subst su e1) (_subst su e2) (_subst su tag) l
+  _subst su (AnnLam x e tag l) = AnnLam (_subst su x) (_subst su e) (_subst su tag) l
+  _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) (_subst su typ) (_subst su tag) l
+  _subst su (AnnTAbs tvar e tag l) = AnnTAbs tvar (_subst su' e) (_subst su tag) l
+    where su' = M.delete (unTV tvar) su
 
 instance Subable Type Type where
   _subst su t@(TVar (TV a)) = fromMaybe t $ M.lookup a su
@@ -174,26 +167,29 @@ instance Subable Type Type where
   _subst su (TCtor c t2) = TCtor c (_subst su t2)
   _subst su (TForall tvar t) = TForall tvar (_subst (M.delete (unTV tvar) su) t)
 
-instance Subable Type t => Subable Type (AnnBind t a) where
-  _subst su (AnnBind name t l) = AnnBind name (_subst su t) l
+instance Subable Type t => Subable Type (Bind t a) where
+  _subst su (AnnBind name tag l) = AnnBind name (_subst su tag) l
 
 instance Subable (Expr t a) (Expr t a) where
-  _subst _ e@Number{} = e
-  _subst _ e@Boolean{} = e
-  _subst _ e@Unit{} = e
-  _subst su e@(Id x _) = fromMaybe e $ M.lookup x su
-  _subst su (Prim2 p e1 e2 loc) = Prim2 p (_subst su e1) (_subst su e2) loc
-  _subst su (If e1 e2 e3 loc) = If (_subst su e1) (_subst su e2) (_subst su e3) loc
-  _subst su (Let b e1 e2 loc) = Let b (_subst su' e1) (_subst su' e2) loc
-    where
-      su' = M.delete (bindId b) su
-  _subst su (App e1 e2 loc) = App (_subst su e1) (_subst su e2) loc
-  _subst su (Lam b e loc) = Lam b (_subst (M.delete (bindId b) su) e) loc
-  _subst su (TApp e typ loc) = TApp (_subst su e) typ loc
-  _subst su (TAbs alpha e loc) = TAbs alpha (_subst su e) loc
+  _subst _ e@AnnNumber{} = e
+  _subst _ e@AnnBoolean{} = e
+  _subst _ e@AnnUnit{} = e
+  _subst su e@(AnnId x _ _) = fromMaybe e $ M.lookup x su
+  _subst _su e@AnnPrim{} = e
+  _subst su (AnnIf e1 e2 e3 tag l) = AnnIf (_subst su e1) (_subst su e2) (_subst su e3) tag l
+  _subst su (AnnLet b e1 e2 tag l) = AnnLet b (_subst su' e1) (_subst su' e2) tag l
+    where su' = M.delete (bindId b) su
+  _subst su (AnnApp e1 e2 tag l) = AnnApp (_subst su e1) (_subst su e2) tag l
+  _subst su (AnnLam b e tag l) = AnnLam b (_subst su' e) tag l
+    where su' = M.delete (bindId b) su
+  _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) typ tag l
+  _subst su (AnnTAbs alpha e tag l) = AnnTAbs alpha (_subst su e) tag l
+
+instance Subable Type a => Subable Type (Maybe a) where
+  _subst su = fmap (_subst su)
 
 instance Predicate r => Subable Id r where
-  _subst su r = M.foldrWithKey (\x y r' -> varSubst x y r') r su
+  _subst su r = M.foldrWithKey varSubst r su
 
 
 --------------------------------------------------------------------------------
@@ -217,9 +213,9 @@ instance Monad m => MonadFresh (FreshT m) where
         n' = n + 1
     FreshT (put $ FreshState n')
     return name'
-  -- popId = FreshT (modify $ \(FreshState m n g) ->
+  -- popAnnId = FreshT (modify $ \(FreshState m n g) ->
   --   FreshState (M.adjust safeTail (head g) m) n (tail g))
-  -- lookupId name = FreshT (gets $ fmap head . M.lookup name . nameMap)
+  -- lookupAnnId name = FreshT (gets $ fmap head . M.lookup name . nameMap)
 
 emptyFreshState :: FreshState
 emptyFreshState = FreshState { freshInt = 0 }
@@ -256,37 +252,43 @@ class Uniqable a where
   unique :: a -> UniqableContext a
 
 instance (Uniqable t) => Uniqable (Expr t a) where
-  unique (Lam b body l) = do
+  unique (AnnLam b body tag l) = do
+    tag' <- unique tag
     b' <- unique b
     body' <- unique body
     modify $ popNewName (bindId b)
-    pure $ Lam b' body' l
-  unique (Let bind e1 e2 l) = do
+    pure $ AnnLam b' body' tag' l
+  unique (AnnLet bind e1 e2 tag l) = do
+    tag' <- unique tag
     bind' <- unique bind
     e1' <- unique e1
     e2' <- unique e2
     modify $ popNewName (bindId bind)
-    pure $ Let bind' e1' e2' l
-  unique (Id id l) = Id . fromJust <$> gets (lookupNewName id) <*> pure l
+    pure $ AnnLet bind' e1' e2' tag' l
+  unique (AnnId id tag l) = AnnId . fromJust <$> gets (lookupNewName id) <*> unique tag <*> pure l
 
-  unique e@Number{} = pure e
-  unique e@Boolean{} = pure e
-  unique e@Unit{} = pure e
-  unique (Prim2 op e1 e2 l) =
-    Prim2 op <$> unique e1 <*> unique e2 <*> pure l
-  unique (If e1 e2 e3 l) =
-    If <$> unique e1 <*> unique e2 <*> unique e3 <*> pure l
-  unique (App e1 e2 l) =
-    App <$> unique e1 <*> unique e2 <*> pure l
-  unique (TApp e t l) =
-    TApp <$> unique e <*> unique t <*> pure l
-  unique (TAbs tvar e l) = do
+  unique (AnnNumber n tag l) = AnnNumber n <$> unique tag <*> pure l
+  unique (AnnBoolean b tag l) = AnnBoolean b <$> unique tag <*> pure l
+  unique (AnnUnit tag l) = AnnUnit <$> unique tag <*> pure l
+  unique (AnnPrim op tag l) = AnnPrim op <$> unique tag <*> pure l
+  unique (AnnIf e1 e2 e3 tag l) =
+    AnnIf <$> unique e1 <*> unique e2 <*> unique e3 <*> unique tag <*> pure l
+  unique (AnnApp e1 e2 tag l) =
+    AnnApp <$> unique e1 <*> unique e2 <*> unique tag <*> pure l
+  unique (AnnTApp e t tag l) =
+    AnnTApp <$> unique e <*> unique t <*> unique tag <*> pure l
+  unique (AnnTAbs tvar e tag l) = do
+    tag' <- unique tag
     tvar' <- uniquifyBindingTVar tvar
     e' <- unique e
     modify $ popNewName (unTV tvar)
-    pure $ TAbs tvar' e' l
+    pure $ AnnTAbs tvar' e' tag' l
 
-instance Uniqable e => Uniqable (RType e a) where
+instance Uniqable a => Uniqable (Maybe a) where
+  unique (Just a) = Just <$> unique a
+  unique Nothing = pure Nothing
+
+instance (Uniqable r) => Uniqable (RType r a) where
   unique (RBase bind typ expr) = do
     bind' <- unique bind
     typ' <- unique typ
@@ -332,7 +334,7 @@ instance Uniqable Type where
     modify $ popNewName (unTV tvar)
     pure $ TForall tvar' t'
 
-instance Uniqable r => Uniqable (ParsedType r a) where
+instance (Uniqable r) => Uniqable (ParsedAnnotation r a) where
   unique (ParsedCheck rtype) = ParsedCheck <$> unique rtype
   unique (ParsedAssume rtype) = ParsedAssume <$> unique rtype
   unique ParsedInfer = pure ParsedInfer
@@ -340,18 +342,12 @@ instance Uniqable r => Uniqable (ParsedType r a) where
 instance Uniqable () where
   unique _ = pure ()
 
-instance Uniqable (Bind a) where
-  unique (Bind name l) = do
+instance Uniqable t => Uniqable (Bind t a) where
+  unique (AnnBind name tag l) = do
     name' <- refreshId name
+    tag' <- unique tag
     modify $ pushNewName name name'
-    pure $ Bind name' l
-
-instance Uniqable t => Uniqable (AnnBind t a) where
-  unique (AnnBind name t l) = do
-    name' <- refreshId name
-    t' <- unique t
-    modify $ pushNewName name name'
-    pure $ AnnBind name' t' l
+    pure $ AnnBind name' tag' l
 
 uniquifyBindingTVar :: TVar -> UniqableContext TVar
 uniquifyBindingTVar (TV name) = do

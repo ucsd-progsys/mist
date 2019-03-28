@@ -8,6 +8,7 @@
 {-# LANGUAGE LambdaCase                 #-}
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE PatternSynonyms            #-}
+{-# LANGUAGE ConstraintKinds            #-}
 
 --------------------------------------------------------------------------------
 -- | This module contains the code for type check an `Expr`
@@ -26,7 +27,7 @@ module Language.Mist.Checker
   , errUnboundVar
   , errUnboundFun
 
-  , primToUnpoly
+  , annotate
   ) where
 
 
@@ -59,13 +60,13 @@ emptyWEnv = WEnv { binders = []
                  , unannRecursiveBinders = []
                  }
 
-addBinder :: (Binder b) => b a -> WEnv -> WEnv
+addBinder :: Bind t a -> WEnv -> WEnv
 addBinder bind env@(WEnv{binders = binders})
   = env{binders = (bindId bind):binders}
 
-addRecursiveBinder :: ParsedAnnBind r a -> WEnv -> WEnv
+addRecursiveBinder :: ParsedBind r a -> WEnv -> WEnv
 addRecursiveBinder
-  (AnnBind{ _aBindId = x, _aBindType = ParsedInfer })
+  (AnnBind{bindId = x, bindAnn = Just ParsedInfer})
   env@(WEnv{unannRecursiveBinders = unannRecursiveBinders})
   = env{unannRecursiveBinders = x:unannRecursiveBinders}
 addRecursiveBinder _ env = env
@@ -79,8 +80,7 @@ wellFormed = go emptyWEnv
     go _ Unit{}                   = []
     go env (Id x l)               = unboundVarErrors env x (sourceSpan l)
                                     ++ unannotatedRecursiveBinder env x (sourceSpan l)
-    go env (Prim2 _ e1 e2 _)      = go env e1
-                                    ++ go env e2
+    go _ Prim{}                   = []
     go env (If e1 e2 e3 _)        = go env e1
                                     ++ go env e2
                                     ++ go env e3
@@ -96,7 +96,7 @@ wellFormed = go emptyWEnv
 --------------------------------------------------------------------------------
 -- | Error Checkers: In each case, return an empty list if no errors.
 --------------------------------------------------------------------------------
-duplicateBindErrors :: (Located a) => WEnv -> AnnBind t a -> [UserError]
+duplicateBindErrors :: (Located a) => WEnv -> Bind t a -> [UserError]
 duplicateBindErrors env bind
   = condError ((bindId bind) `elem` (binders env)) (errDupBind bind)
 
@@ -261,12 +261,14 @@ unsolvedExistentials (TypeEnv env) = [evar | (Unsolved evar) <- env]
 -- Elaboration -----------------------------------------------------------------
 --------------------------------------------------------------------------------
 
+type ElaborateConstraints r a = (Located a, PPrint r)
+
 -- | Elaborates a surface Expr
 -- - adds type annotations
 -- - adds explicit type application
 -- - adds explicit type abstraction
 -- - assumes every name is unique
-elaborate :: (Located a, PPrint r) => ParsedExpr r a -> Result (ElaboratedExpr r a)
+elaborate :: ElaborateConstraints r a => ParsedExpr r a -> Result (ElaboratedExpr r a)
 elaborate e =
   if __debug
   then do
@@ -282,7 +284,7 @@ elaborate e =
 
 
 -- DEBUGGING
-synthesize :: (Located a, PPrint r) => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
+synthesize :: ElaborateConstraints r a => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
 synthesize e = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
@@ -290,16 +292,18 @@ synthesize e = do
 
 -- TODO: add judgments for documentation
 -- | Γ ⊢ e ~> c => A ⊣ Θ
-_synthesize (Number i tag) = pure (Number i tag, TInt)
-_synthesize (Boolean b tag) = pure (Boolean b tag, TBool)
-_synthesize (Unit tag) = pure (Unit tag, TUnit)
-_synthesize (Id id tag) = do
+_synthesize (Number i l) = pure (Number i l, TInt)
+_synthesize (Boolean b l) = pure (Boolean b l, TBool)
+_synthesize (Unit l) = pure (Unit l, TUnit)
+_synthesize (Id id l) = do
   boundType <- getsEnv $ getBoundType id
   case boundType of
-    Just typ -> pure (Id id tag, typ)
-    Nothing -> throwError $ [errUnboundVar (sourceSpan tag) id]
-_synthesize (Prim2 op e1 e2 tag) = synthesizePrim2 op e1 e2 tag -- TODO: fix Prim2 to allow type instantiation
-_synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthesis of branching
+    Just typ -> pure (Id id l, typ)
+    Nothing -> throwError $ [errUnboundVar (sourceSpan l) id]
+_synthesize (Prim prim l) = do
+   typ <- primType prim
+   pure (Prim prim l, typ)
+_synthesize (If condition e1 e2 l) = do -- TODO: how to properly handle synthesis of branching
   cCondition <- check condition TBool
   alpha <- generateExistential
   extendEnv [Unsolved alpha]
@@ -308,30 +312,30 @@ _synthesize (If condition e1 e2 tag) = do -- TODO: how to properly handle synthe
   let firstBranchType = applyEnv env (EVar alpha)
   c2 <- check e2 firstBranchType
   env' <- getEnv
-  pure (If cCondition c1 c2 tag, applyEnv env' firstBranchType)
-_synthesize (Let binding e1 e2 tag) =
-  typeCheckLet binding e1 e2 tag
-  (\annBind c1 e2 tag -> do
+  pure (If cCondition c1 c2 l, applyEnv env' firstBranchType)
+_synthesize (Let binding e1 e2 l) =
+  typeCheckLet binding e1 e2 l
+  (\annBind c1 e2 l -> do
       (c2, inferredType) <- _synthesize e2
-      pure (Let annBind c1 c2 tag, inferredType))
-_synthesize (App e1 e2 tag) = do
+      pure (Let annBind c1 c2 l, inferredType))
+_synthesize (App e1 e2 l) = do
   (c1, funType) <- synthesize e1
   env <- getEnv
-  synthesizeApp (applyEnv env funType) c1 e2 tag
-_synthesize (Lam bind e tag) = do
+  synthesizeApp (applyEnv env funType) c1 e2 l
+_synthesize (Lam bind e l) = do
   alpha <- generateExistential
   beta <- generateExistential
   let newBinding = VarBind (bindId bind) (EVar alpha)
   extendEnv [Unsolved alpha, Unsolved beta, newBinding]
   c <- check e (EVar beta)
   modifyEnv $ dropEnvAfter newBinding -- TODO: do we need to do something with delta' for elaboration?
-  let annBind = bind{ _aBindType = ElabUnrefined (EVar alpha) }
-  pure (Lam annBind c tag, EVar alpha :=> EVar beta)
-_synthesize (TApp _e _typ _tag) = error "TODO"
-_synthesize (TAbs _alpha _e _tag) = error "TODO"
+  let annBind = bind{bindAnn = Just $ ElabUnrefined (EVar alpha)}
+  pure (Lam annBind c l, EVar alpha :=> EVar beta)
+_synthesize (TApp _e _typ _l) = error "TODO"
+_synthesize (TAbs _alpha _e _l) = error "TODO"
 
 -- DEBUGGING
-check :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+check :: ElaborateConstraints r a => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
 check e t = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
@@ -350,48 +354,48 @@ _check expr typ = do
     Nothing -> go expr typ
 
   where
-    go (Number i tag) TInt = pure $ Number i tag
-    go (Boolean b tag) TBool = pure $ Boolean b tag
+    go (Number i l) TInt = pure $ Number i l
+    go (Boolean b l) TBool = pure $ Boolean b l
     go e@Id{} t = checkSub e t
-    go e@Prim2{} t = checkSub e t
-    go (If condition e1 e2 tag) t = do
+    go e@Prim{} t = checkSub e t
+    go (If condition e1 e2 l) t = do
       cCondition <- check condition TBool
       c1 <- check e1 t
       c2 <- check e2 t
-      pure $ If cCondition c1 c2 tag
-    go (Let binding e1 e2 tag) t =
-      typeCheckLet binding e1 e2 tag
-      (\annBind c1 e2 tag -> do
+      pure $ If cCondition c1 c2 l
+    go (Let binding e1 e2 l) t =
+      typeCheckLet binding e1 e2 l
+      (\annBind c1 e2 l -> do
           c2 <- check e2 t
-          pure $ Let annBind c1 c2 tag)
+          pure $ Let annBind c1 c2 l)
     go e@App{} t = checkSub e t
-    go (Lam bind e tag) (t1 :=> t2) = do
+    go (Lam bind e l) (t1 :=> t2) = do
       let newBinding = VarBind (bindId bind) t1
       extendEnv [newBinding]
       c <- check e t2
       modifyEnv $ dropEnvAfter newBinding
-      let annBind = bind{ _aBindType = ElabUnrefined t1 }
-      pure $ Lam annBind c tag
-    go (Unit tag) TUnit = pure $ Unit tag
-    go (TApp _e _typ _tag) _ = error "TODO"
-    go (TAbs _alpha _e _tag) _ = error "TODO"
+      let annBind = bind{bindAnn = Just $ ElabUnrefined t1}
+      pure $ Lam annBind c l
+    go (Unit l) TUnit = pure $ Unit l
+    go (TApp _e _typ _l) _ = error "TODO"
+    go (TAbs _alpha _e _l) _ = error "TODO"
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
-synthesizeApp :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
-synthesizeApp tFun cFun eArg tag = do
+synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
+synthesizeApp tFun cFun eArg l = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
-  env <- getEnv
-  let cApplication = subst (envToSubst env) $ App cInstantiatedFun cArg tag
+  let cApplication = App (putAnn (Just $ ElabUnrefined tFun) cInstantiatedFun) cArg l
   pure (cApplication, resultType)
 
 -- DEBUGGING
-synthesizeSpine :: (Located a, PPrint r) => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 synthesizeSpine funType cFun eArg = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
   _synthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
+_synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 _synthesizeSpine funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
@@ -411,33 +415,19 @@ _synthesizeSpine funType cFun eArg = do
     go (t1 :=> t2) = do
       cArg <- check eArg t1
       pure (cFun, cArg, t2)
-    go (TForall (TV tv) t) = do
+    go tforall@(TForall (TV tv) t) = do
       evar <- generateExistential
       extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      synthesizeSpine newFunType (TApp cFun (EVar evar) (extract cFun)) eArg
+      synthesizeSpine newFunType (TApp (putAnn (Just $ ElabUnrefined tforall) cFun) (EVar evar) (extractLoc cFun)) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
-
-synthesizePrim2 :: (Located a, PPrint r) => Prim2 -> ParsedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
-synthesizePrim2 Equal e1 e2 tag = do
-  alpha <- generateExistential
-  extendEnv [Unsolved alpha]
-  c1 <- check e1 (EVar alpha)
-  env <- getEnv
-  c2 <- check e2 (applyEnv env (EVar alpha))
-  pure (Prim2 Equal c1 c2 tag, TBool)
-synthesizePrim2 operator e1 e2 tag = do
-  (typ1 :=> (typ2 :=> typ3)) <- primOpType operator
-  c1 <- check e1 typ1
-  c2 <- check e2 typ2
-  pure (Prim2 operator c1 c2 tag, typ3)
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
 -- When doing a ∀A.B <: C the subtyping check will infer the
 -- polymorphic instantiation for c.
 instSub :: ElaboratedExpr r a -> Type -> Type -> Context (ElaboratedExpr r a)
 instSub c a@(TForall _ _) b =
-  foldr (\typ instantiated -> TApp instantiated typ (extract c))
+  foldr (\typ instantiated -> TApp (putAnn (Just $ ElabUnrefined a) instantiated) typ (extractLoc c))
         c <$> go a b
 
   where
@@ -506,7 +496,7 @@ a <<: b = do
     (_, Just evar) -> do
       occurrenceCheck evar a
       instantiateR a evar
-    (_, _) -> error $ "TODO: this is a subtyping error" ++ show a ++ show b
+    (_, _) -> error $ "TODO: this is a subtyping error: " ++ show a ++ " <: " ++ show b
 
 -- DEBUGGING
 instantiateL :: EVar -> Type -> Context ()
@@ -598,40 +588,33 @@ occurrenceCheck alpha typ = do
     then throwError $ [errInfiniteTypeConstraint alpha typ]
     else pure ()
 
-primOpType :: (MonadFresh m) => Prim2 -> m Type
-primOpType Plus    = pure $ TInt :=> (TInt :=> TInt)
-primOpType Minus   = pure $ TInt :=> (TInt :=> TInt)
-primOpType Times   = pure $ TInt :=> (TInt :=> TInt)
-primOpType Less    = pure $ TInt :=> (TInt :=> TBool)
-primOpType Greater = pure $ TInt :=> (TInt :=> TBool)
-primOpType Lte     = pure $ TInt :=> (TInt :=> TBool)
-primOpType Equal   = do
+primType :: (MonadFresh m) => Prim -> m Type
+primType Plus    = pure $ TInt :=> (TInt :=> TInt)
+primType Minus   = pure $ TInt :=> (TInt :=> TInt)
+primType Times   = pure $ TInt :=> (TInt :=> TInt)
+primType Less    = pure $ TInt :=> (TInt :=> TBool)
+primType Greater = pure $ TInt :=> (TInt :=> TBool)
+primType Lte     = pure $ TInt :=> (TInt :=> TBool)
+primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
-primOpType And     = pure $ TBool :=> (TBool :=> TBool)
+primType And     = pure $ TBool :=> (TBool :=> TBool)
 
-primToUnpoly c = go $ (runFresh $ primOpType c)
-  where
-    go (TForall _ t) = go t
-    go (_ :=> (_ :=> t)) = t
-    go _ = error "primOpType on a prim which is not a binary function"
-
-
-checkSub :: (Located a, PPrint r) => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+checkSub :: ElaborateConstraints r a => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
 checkSub e t1 = do
   (c, t2) <- synthesize e
   env <- getEnv
   instSub c (applyEnv env t2) (applyEnv env t1)
 
 typeCheckLet ::
-  (Located a, PPrint r) =>
-  ParsedAnnBind r a ->
+  ElaborateConstraints r a =>
+  ParsedBind r a ->
   ParsedExpr r a ->
   ParsedExpr r a ->
   a ->
-  (ElaboratedAnnBind r a -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context b) ->
+  (ElaboratedBind r a -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context b) ->
   Context b
-typeCheckLet binding@(AnnBind{_aBindType = ParsedInfer}) e1 e2 tag handleBody = do
+typeCheckLet binding@(AnnBind{bindAnn = Just ParsedInfer}) e1 e2 tag handleBody = do
   alpha <- generateExistential
   let evar = EVar alpha
   extendEnv [Scope alpha, Unsolved alpha, VarBind (bindId binding) evar]
@@ -641,29 +624,31 @@ typeCheckLet binding@(AnnBind{_aBindType = ParsedInfer}) e1 e2 tag handleBody = 
   (boundType, c1) <- letGeneralize evar unsubstitutedC1 delta'
   let newBinding = VarBind (bindId binding) boundType
   extendEnv [newBinding]
-  let annBind = binding{ _aBindType = ElabUnrefined boundType }
+  let annBind = binding{bindAnn = Just $ ElabUnrefined boundType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
-typeCheckLet binding@(AnnBind{_aBindType = ParsedCheck rType}) e1 e2 tag handleBody = do
+typeCheckLet binding@(AnnBind{bindAnn = Just (ParsedCheck rType)}) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
   extendEnv [newBinding]
   unabstractedC1 <- check e1 typ
   let c1 = insertTAbs typ unabstractedC1
-  let annBind = binding{ _aBindType = ElabRefined rType }
+  let annBind = binding{bindAnn = Just $ ElabRefined rType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
-typeCheckLet binding@(AnnBind{_aBindType = ParsedAssume rType}) e1 e2 tag handleBody = do
+typeCheckLet binding@(AnnBind{bindAnn = Just (ParsedAssume rType)}) e1 e2 tag handleBody = do
   let typ = eraseRType rType
   let newBinding = VarBind (bindId binding) typ
   extendEnv [newBinding]
   (c1, _) <- synthesize e1
-  let annBind = binding{ _aBindType = ElabRefined rType }
+  let annBind = binding{bindAnn = Just $ ElabRefined rType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
+typeCheckLet AnnBind{bindAnn = Nothing} _ _ _ _ =
+  error "impossible: every binder should be annotated"
 
 -- | Carries out Hindley-Milner style let generalization on the existential variable.
 -- Also substitutes for all existentials that were added as annotations
@@ -735,7 +720,7 @@ freeEVars typ = eVars typ
     eVars (TForall _ t) = eVars t
 
 insertTAbs :: Type -> ElaboratedExpr r a -> ElaboratedExpr r a
-insertTAbs (TForall tvar typ) c = TAbs tvar (insertTAbs typ c) (extract c)
+insertTAbs (TForall tvar typ) c = TAbs tvar (insertTAbs typ c) (extractLoc c)
 insertTAbs _ c = c
 
 --------------------------------------------------------------------------------
@@ -755,3 +740,42 @@ errSolvingSolvedExistential = error "TODO: solving solved existential"
 errApplyNonFunction l typ = mkError (printf "Applying non-function of type %s" (show typ)) l
 errInfiniteTypeConstraint _ _ = error "TODO: infinite type constraint"
 errCheckingError l typ = mkError (printf "Checking expression has type %s failed" (show typ)) l
+
+--------------------------------------------------------------------------------
+-- | Annotate
+--------------------------------------------------------------------------------
+type AnnotationContext r a = M.Map Id Type
+
+annotate :: ElaborateConstraints r a => ElaboratedExpr r a -> Type -> ElaboratedExpr r a
+annotate e typ = runFresh $ go M.empty e typ
+  where
+    go :: ElaborateConstraints r a => AnnotationContext r a -> ElaboratedExpr r a -> Type -> Fresh (ElaboratedExpr r a)
+    go _ (Number n l) _ = pure $ AnnNumber n (ann TInt) l
+    go _ (Boolean b l) _ = pure $ AnnBoolean b (ann TBool) l
+    go _ (Unit l) _ = pure $ AnnUnit (ann TUnit) l
+    go _ (Prim op l) _ = AnnPrim op <$> fmap ann (primType op) <*> pure l
+    go ctxt (Id x l) _ = pure $ AnnId x (ann (ctxt M.! x)) l
+    go ctxt (If condition e1 e2 l) typ =
+      AnnIf <$> go ctxt condition TBool <*> go ctxt e1 typ <*> go ctxt e2 typ <*> pure (ann typ) <*> pure l
+    go ctxt (Let bind e1 e2 l) typ =
+      let boundType = eraseElaboratedAnn $ bindAnn bind
+          ctxt' = M.insert (bindId bind) boundType ctxt in
+      AnnLet bind <$> go ctxt' e1 boundType <*> go ctxt' e2 typ <*> pure (ann typ) <*> pure l
+    go ctxt (App e1 e2 l) typ =
+      let tFun = eraseElaboratedAnn $ extractAnn e1
+          (t1 :=> _) = tFun in
+      AnnApp <$> go ctxt e1 tFun <*> go ctxt e2 t1 <*> pure (ann typ) <*> pure l
+    go ctxt (Lam bind e l) typ@(t1 :=> t2) =
+      let ctxt' = M.insert (bindId bind) t1 ctxt in
+      AnnLam bind <$> go ctxt' e t2 <*> pure (ann typ) <*> pure l
+    go ctxt (TApp e t l) typ =
+      let tAbs = eraseElaboratedAnn $ extractAnn e in
+      AnnTApp <$> go ctxt e tAbs <*> pure t <*> pure (ann typ) <*> pure l
+    go ctxt (TAbs tvar e l) tAbs@(TForall _ typ) = AnnTAbs tvar <$> go ctxt e typ <*> pure (ann tAbs) <*> pure l
+    go _ expr typ = error $ "incorrectly-typed elaborated expression: " ++ pprint expr ++ " : " ++ pprint typ
+
+    ann typ = Just $ ElabUnrefined typ
+
+    eraseElaboratedAnn (Just (ElabRefined rtype)) = eraseRType rtype
+    eraseElaboratedAnn (Just (ElabUnrefined typ)) = typ
+    eraseElaboratedAnn Nothing = error "impossible: every binding should be annotated"

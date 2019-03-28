@@ -17,7 +17,6 @@ import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Types as F
 
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
-import Debug.Trace
 
 type R = HC.Pred
 
@@ -35,7 +34,7 @@ act _h f = do
   let r = mist e
   case r of
     Right t -> do
-      let c = generateConstraints (anormal t)
+      let c = generateConstraints (anormal (annotate t TUnit))
       solverResult <- print c >> solve c
       print solverResult
       case F.resStatus solverResult of
@@ -47,7 +46,7 @@ esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
 esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 
 -----------------------------------------------------------------------------------
-mist :: BareExpr -> Result (ElaboratedExpr R SourceSpan)
+mist :: SSParsedExpr -> Result (ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
 mist expr = do
   case wellFormed expr of
@@ -55,6 +54,6 @@ mist expr = do
       let uniqueExpr = uniquify expr
       let predExpr = parsedExprPredToFixpoint uniqueExpr
       result <- elaborate predExpr
-      !_ <- traceM $ pprint result
+      -- !_ <- traceM $ pprint result
       pure result
     errors -> Left errors
