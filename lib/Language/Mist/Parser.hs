@@ -302,7 +302,19 @@ either a parser-assigned one or given explicitly. e.g.
 -}
 
 typeRType :: Parser SSParsedRType
-typeRType = try rfun <|> try rifun <|> unrefined <|> rbase
+typeRType = try rapp <|> try rfun <|> try rifun <|> unrefined <|> rbase
+
+rapp :: Parser SSParsedRType
+rapp = do
+  c <- ctor
+  ts <- many ((,) <$> variance <*> typeRType)
+  pure $ RApp c ts
+
+variance :: Parser Variance
+variance =  char '>' *> pure Covariant
+        <|> char '<' *> pure Contravariant
+        <|> char '^' *> pure Invariant
+        <|> char 'v' *> pure Bivariant
 
 rifun :: Parser SSParsedRType
 rifun = do id <- (binder <* colon) <|> freshBinder

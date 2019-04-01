@@ -16,6 +16,7 @@ module Language.Mist.Types
   -- * Types and Types
   , Type (..), TVar (..), Ctor (..)
   , RType (..)
+  , Variance (..)
 
   -- * Abstract syntax of Mist
   , Expr (..)
