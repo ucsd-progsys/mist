@@ -171,6 +171,7 @@ pattern Bind id tag <- AnnBind id _ tag
 
 data RType r a
   = RBase !(Bind () a) Type !r
+  | RApp !Ctor ![(Variance, RType r a)]
   | RFun !(Bind () a) !(RType r a) !(RType r a)
   | RIFun !(Bind () a) !(RType r a) !(RType r a)
   | RRTy !(Bind () a) !(RType r a) r
@@ -189,6 +190,9 @@ data Type = TVar TVar           -- a
 newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
+
+data Variance = Invariant | Bivariant | Contravariant | Covariant
+              deriving (Show, Eq)
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
@@ -344,6 +348,8 @@ nest n = unlines . map pad . lines
 instance (PPrint r) => PPrint (RType r a) where
   pprint (RBase b t e) =
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
+  pprint (RApp c ts) =
+    printf "%s %s" (show c) (show $ void $ ts)
   pprint (RFun b t1 t2) =
     printf "%s:%s -> %s" (pprint b) (pprint t1) (pprint t2)
   pprint (RIFun b t1 t2) =
@@ -372,6 +378,7 @@ unTV (TV t) = t
 -- | Returns the base type for an RType
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
+eraseRType (RApp c ts) = TCtor c $ eraseRType . snd <$> ts
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RIFun _ _t1 t2) = eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
@@ -506,6 +513,7 @@ instance Bifunctor ElaboratedAnnotation where
 instance Bifunctor RType where
   second = fmap
   first f (RBase b t r) = RBase b t (f r)
+  first f (RApp c ts) = RApp c $ (\(a, b) -> (a, first f b)) <$> ts
   first f (RFun b rt1 rt2) = RFun b (first f rt1) (first f rt2)
   first f (RIFun b rt1 rt2) = RIFun b (first f rt1) (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)

@@ -195,6 +195,7 @@ strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedRe
     renamedReft' = varSubst (bindId b) (bindId b') reft'
 strengthenRType (RFun _ _ _) _ _ = error "TODO"
 strengthenRType (RIFun _ _ _) _ _ = error "TODO"
+strengthenRType (RApp _ _) _ _ = error "TODO"
 strengthenRType (RRTy b rtype reft) b' reft' = RRTy b rtype (strengthen reft renamedReft')
   where
     renamedReft' = varSubst (bindId b) (bindId b') reft'
