@@ -210,6 +210,7 @@ type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
 -- r is the type of refinements
 data ElaboratedAnnotation r a
   = ElabRefined !(RType r a)
+  | ElabAssume !(RType r a)
   | ElabUnrefined !Type
   deriving (Functor, Show)
 
@@ -310,7 +311,8 @@ instance (PPrint t) => PPrint (Bind t a) where
 
 instance (PPrint r) => PPrint (ElaboratedAnnotation r a) where
   pprint (ElabRefined rtype) = printf ": %s" (pprint rtype)
-  pprint (ElabUnrefined typ) = printf ": %s" (pprint typ)
+  pprint (ElabAssume rtype) = printf "as %s" (pprint rtype)
+  pprint (ElabUnrefined typ) = printf ":: %s" (pprint typ)
 
 instance (PPrint r) => PPrint (ParsedAnnotation r a) where
   pprint (ParsedCheck rtype) = printf ": %s" (pprint rtype)
@@ -509,6 +511,7 @@ instance Bifunctor ParsedAnnotation where
 instance Bifunctor ElaboratedAnnotation where
   second = fmap
   first f (ElabRefined r) = ElabRefined $ first f r
+  first f (ElabAssume r) = ElabAssume $ first f r
   first _ (ElabUnrefined typ) = ElabUnrefined typ
 
 instance Bifunctor RType where

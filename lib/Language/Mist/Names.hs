@@ -148,6 +148,7 @@ instance Subable Type [Type] where
 
 instance Subable Type (ElaboratedAnnotation r a) where
   _subst su (ElabRefined rType) = ElabRefined $ substReftType su rType
+  _subst su (ElabAssume rType) = ElabAssume $ substReftType su rType
   _subst su (ElabUnrefined typ) = ElabUnrefined $ _subst su typ
 
 instance Subable Type t => Subable Type (Expr t a) where

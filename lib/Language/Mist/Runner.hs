@@ -20,6 +20,16 @@ import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
 type R = HC.Pred
 
+{-
+ 0) parse
+ 1) unique
+ 2) convert refinements from mist `Expr`s to fixpoint `Expr`s
+ 3) elaborate
+ 4) annotate each node with its type
+ 5) anf
+ 6) constraint generation
+-}
+
 ---------------------------------------------------------------------------
 runMist :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
 ---------------------------------------------------------------------------
@@ -35,7 +45,7 @@ act _h f = do
   case r of
     Right t -> do
       let c = generateConstraints (anormal (annotate t TUnit))
-      solverResult <- print c >> solve c
+      solverResult <- solve c
       print solverResult
       case F.resStatus solverResult of
         F.Safe -> return r

@@ -56,6 +56,8 @@ cgen _ (If _ _ _ _) = error "INTERNAL ERROR: if not in ANF"
 
 -- TODO: recursive let?
 cgen env (Let b e1 e2 _)
+  -- Annotated with an assume
+  | (AnnBind x (Just (ElabAssume tx)) _) <- b = cgen ((x, tx):env) e2
   -- Annotated with an RType (Implicit Parameter)
   | (AnnBind x (Just (ElabRefined rt@(RIFun {}))) _) <- b = do
  let (ns, tx) = splitImplicits rt
@@ -106,6 +108,7 @@ cgen env (App e (Id y _) _) =
 cgen _ (App _ _ _) = error "argument is non-variable"
 
 cgen _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
+cgen _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _) = pure (CAnd [], tx)
 cgen env (Lam (AnnBind x (Just (ElabRefined tx)) l) e _) = do
   (c, t) <- cgen ((x, tx):env) e
   pure (mkAll x tx c, RFun (Bind x l) tx t)

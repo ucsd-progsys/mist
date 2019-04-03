@@ -643,7 +643,7 @@ typeCheckLet binding@(AnnBind{bindAnn = Just (ParsedAssume rType)}) e1 e2 tag ha
   let newBinding = VarBind (bindId binding) typ
   extendEnv [newBinding]
   (c1, _) <- synthesize e1
-  let annBind = binding{bindAnn = Just $ ElabRefined rType}
+  let annBind = binding{bindAnn = Just $ ElabAssume rType}
   result <- handleBody annBind c1 e2 tag
   modifyEnv $ dropEnvAfter newBinding
   pure result
@@ -757,6 +757,10 @@ annotate e typ = runFresh $ go M.empty e typ
     go ctxt (Id x l) _ = pure $ AnnId x (ann (ctxt M.! x)) l
     go ctxt (If condition e1 e2 l) typ =
       AnnIf <$> go ctxt condition TBool <*> go ctxt e1 typ <*> go ctxt e2 typ <*> pure (ann typ) <*> pure l
+    go ctxt (Let bind@(AnnBind _ (Just ElabAssume{}) _) e1 e2 l) typ =
+      let boundType = eraseElaboratedAnn $ bindAnn bind
+          ctxt' = M.insert (bindId bind) boundType ctxt in
+      AnnLet bind e1 <$> go ctxt' e2 typ <*> pure (ann typ) <*> pure l
     go ctxt (Let bind e1 e2 l) typ =
       let boundType = eraseElaboratedAnn $ bindAnn bind
           ctxt' = M.insert (bindId bind) boundType ctxt in
@@ -777,5 +781,6 @@ annotate e typ = runFresh $ go M.empty e typ
     ann typ = Just $ ElabUnrefined typ
 
     eraseElaboratedAnn (Just (ElabRefined rtype)) = eraseRType rtype
+    eraseElaboratedAnn (Just (ElabAssume rtype)) = eraseRType rtype
     eraseElaboratedAnn (Just (ElabUnrefined typ)) = typ
     eraseElaboratedAnn Nothing = error "impossible: every binding should be annotated"
