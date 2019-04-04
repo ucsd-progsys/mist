@@ -50,12 +50,6 @@ parseUserError err = mkError msg sp
 instance ShowErrorComponent SourcePos where
   showErrorComponent = sourcePosPretty
 
--- instance Located ParseError where
---  sourceSpan = posSpan . errorPos
-
--- instance PPrint ParseError where
---   pprint = show
-
 --------------------------------------------------------------------------------
 parseFile :: FilePath -> IO SSParsedExpr
 --------------------------------------------------------------------------------
@@ -64,6 +58,9 @@ parseFile f = parse f =<< readFile f
 type Parser = ParsecT SourcePos Text (State Integer)
 
 -- https://mrkkrp.github.io/megaparsec/tutorials/parsing-simple-imperative-language.html
+--------------------------------------------------------------------------------
+-- | "Lexing"
+--------------------------------------------------------------------------------
 
 -- | Top-level parsers (should consume all input)
 whole :: Parser a -> Parser a
@@ -117,11 +114,9 @@ lexeme p = L.lexeme sc (withSpan p)
 integer :: Parser (Integer, SourceSpan)
 integer = lexeme L.decimal
 
-
--- | `rWord`
+-- | `rWord` parses reserved words
 rWord   :: String -> Parser SourceSpan
 rWord w = snd <$> (withSpan (string w) <* notFollowedBy alphaNumChar <* sc)
-
 
 -- | list of reserved words
 keywords :: [Text]
@@ -129,8 +124,6 @@ keywords =
   [ "if"      , "else"
   , "true"    , "false"
   , "let"     , "in"
-  -- , "add1"    , "sub1"  , "isNum"   , "isBool",   "print"
-  -- , "def"     , "lambda"
   , "Int"     , "Bool"  , "forall"  , "as"
   ]
 
@@ -153,6 +146,10 @@ binder = uncurry Bind <$> identifier
 freshBinder :: Parser BareBind
 freshBinder = uncurry Bind <$> (lexeme $ ("fresh" ++) . show <$> lift get)
 
+--------------------------------------------------------------------------------
+-- | Locations
+--------------------------------------------------------------------------------
+
 stretch :: (Monoid a) => [Expr t a] -> a
 stretch = mconcat . fmap extractLoc
 
@@ -170,6 +167,26 @@ withSpan p = do
   p2 <- getPosition
   return (x, SS p1 p2)
 
+exprAddParsedInfers :: Expr t a -> ParsedExpr r a
+exprAddParsedInfers = goE
+  where
+    goE (AnnNumber n _ l) = Number n l
+    goE (AnnBoolean b _ l) = Boolean b l
+    goE (AnnUnit _ l) = Unit l
+    goE (AnnId var _ l) = Id var l
+    goE (AnnPrim op _ l) = Prim op l
+    goE (AnnIf e1 e2 e3 _ l) = If (goE e1) (goE e2) (goE e3) l
+    goE (AnnLet x e1 e2 _ l) = Let (goB x) (goE e1) (goE e2) l
+    goE (AnnApp e1 e2 _ l) = App (goE e1) (goE e2) l
+    goE (AnnLam x e _ l) = Lam (goB x) (goE e) l
+    goE (AnnTApp e typ _ l) = TApp (goE e) typ l
+    goE (AnnTAbs tvar e _ l) = TAbs tvar (goE e) l
+
+    goB (AnnBind x _ l) = AnnBind x (Just ParsedInfer) l
+
+--------------------------------------------------------------------------------
+-- | Parsing Definitions
+--------------------------------------------------------------------------------
 topExprs :: Parser SSParsedExpr
 topExprs = defsExpr <$> topDefs
 
@@ -178,23 +195,38 @@ topDefs = many topDef
 
 topDef :: Parser SSParsedDef
 topDef = do
-  f <- binder
+  Bind id tag <- binder
   ann <- typeSig
-  _f' <- binder <* symbol "="
+  _ <- lexeme (string id) <* symbol "="
   e <- expr
-  let annBind = AnnBind{bindId = bindId f, bindAnn = Just ann, bindTag = bindTag f}
+  let annBind = AnnBind id (Just ann) tag
   return (annBind, exprAddParsedInfers e)
+
+defsExpr :: [SSParsedDef] -> SSParsedExpr
+defsExpr [] = error "list of defintions is empty"
+defsExpr bs@((b,_):_)   = go (bindTag b) bs
+  where
+    go l [] = Unit l
+    go _ ((b, e) : ds) = Let b e (go l ds) l
+      where l = bindTag b
+
+--------------------------------------------------------------------------------
+-- | Expressions
+--------------------------------------------------------------------------------
+
+-- NOTE: all applications require parentheses, except for operators.
 
 expr :: Parser BareExpr
 expr = makeExprParser expr0 binops
 
 expr0 :: Parser BareExpr
-expr0 =  try letExpr
-     <|> try ifExpr
-     <|> try lamExpr
+expr0 =  letExpr  -- starts with let
+     <|> ifExpr   -- starts with if
+     <|> lamExpr  -- starts with \\
+     <|> (mkApps <$> parens (sepBy1 expr sc))
+                  -- starts with (
      <|> try constExpr
-     <|> try idExpr
-     <|> try (mkApps <$> parens (sepBy1 expr sc))
+     <|> idExpr
 
 mkApps :: [BareExpr] -> BareExpr
 mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2]))
@@ -239,6 +271,9 @@ letExpr = withSpan' $ do
   e  <- expr
   return (bindsExpr bs e ())
 
+bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
+bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
+
 bind :: Parser (BareBind, BareExpr)
 bind = (,) <$> binder <* symbol "=" <*> expr
 
@@ -252,12 +287,14 @@ ifExpr = withSpan' $ do
 
 lamExpr :: Parser BareExpr
 lamExpr = withSpan' $ do
-  -- rWord "lambda"
   char '\\' <* sc
-  -- xs    <- parens (sepBy binder comma) <* symbol "->"
   xs    <- sepBy binder sc <* symbol "->"
   e     <- expr
   return (\span -> (foldr (\x e -> Lam x e span) e xs))
+
+--------------------------------------------------------------------------------
+-- | Types
+--------------------------------------------------------------------------------
 
 typeSig :: Parser SSParsedAnnotation
 typeSig
@@ -340,7 +377,6 @@ baseType
   =  try (rWord "Int"   *> pure TInt)
  <|> try (rWord "Bool"  *> pure TBool)
  <|> try (TVar <$> tvar)
- -- <|> try (withSpan' (mkPairType <$> types))
  <|> ctorType
 
 mkArrow :: [Type] -> Type
@@ -352,44 +388,8 @@ mkArrow _  = error "impossible: mkArrow"
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier
 
-_types :: Parser [Type]
-_types = parens (sepBy1 typeType comma)
-
 ctorType :: Parser Type
 ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
 
 ctor :: Parser Ctor
 ctor = CT . fst <$> identStart upperChar
-
--- mkPairType :: [Type] -> SourceSpan -> Type
--- mkPairType [t]      _ = t
--- mkPairType [t1, t2] _ = TPair t1 t2
--- mkPairType _        l = panic "Mist only supports pairs types" l
-
-defsExpr :: [SSParsedDef] -> SSParsedExpr
-defsExpr [] = error "list of defintions is empty"
-defsExpr bs@((b,_):_)   = go (bindTag b) bs
-  where
-    go l [] = Unit l
-    go _ ((b, e) : ds) = Let b e (go l ds) l
-      where l = bindTag b
-
-exprAddParsedInfers :: Expr t a -> ParsedExpr r a
-exprAddParsedInfers = goE
-  where
-    goE (AnnNumber n _ l) = Number n l
-    goE (AnnBoolean b _ l) = Boolean b l
-    goE (AnnUnit _ l) = Unit l
-    goE (AnnId var _ l) = Id var l
-    goE (AnnPrim op _ l) = Prim op l
-    goE (AnnIf e1 e2 e3 _ l) = If (goE e1) (goE e2) (goE e3) l
-    goE (AnnLet x e1 e2 _ l) = Let (goB x) (goE e1) (goE e2) l
-    goE (AnnApp e1 e2 _ l) = App (goE e1) (goE e2) l
-    goE (AnnLam x e _ l) = Lam (goB x) (goE e) l
-    goE (AnnTApp e typ _ l) = TApp (goE e) typ l
-    goE (AnnTAbs tvar e _ l) = TAbs tvar (goE e) l
-
-    goB (AnnBind x _ l) = AnnBind x (Just ParsedInfer) l
-
-bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
-bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
