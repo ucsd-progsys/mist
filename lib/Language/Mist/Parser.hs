@@ -130,6 +130,7 @@ keywords =
 -- | `identifier` parses identifiers: lower-case alphabets followed by alphas or digits
 identifier :: Parser (String, SourceSpan)
 identifier = identStart lowerChar
+          <?> "Identifier"
 
 identStart:: Parser Char -> Parser (String, SourceSpan)
 identStart start = lexeme (p >>= check)
@@ -209,7 +210,6 @@ defsExpr bs@((b,_):_)   = go (bindTag b) bs
     go l [] = Unit l
     go _ ((b, e) : ds) = Let b e (go l ds) l
       where l = bindTag b
-
 --------------------------------------------------------------------------------
 -- | Expressions
 --------------------------------------------------------------------------------
@@ -298,14 +298,15 @@ lamExpr = withSpan' $ do
 
 typeSig :: Parser SSParsedAnnotation
 typeSig
-  =   try (ParsedAssume <$> (rWord "as" *> scheme))
-  <|> try (ParsedCheck <$> (dcolon *> scheme))
+  =   (ParsedAssume <$> (rWord "as" *> scheme))
+  <|> (ParsedCheck <$> (dcolon *> scheme))
   <|> pure ParsedInfer
+  <?> "Type Signature"
 
 scheme :: Parser SSParsedRType
 scheme
-  =  try schemeForall
- <|>     typeRType
+  =  schemeForall
+ <|> typeRType
 
 schemeForall :: Parser SSParsedRType
 schemeForall = do
@@ -315,6 +316,7 @@ schemeForall = do
 
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
+        <?> "Unrefined Type"
 
 {- | [NOTE:RTYPE-PARSE] Fundamentally, a type is of the form
 
@@ -324,6 +326,7 @@ So
 
   rt = comp
      | comp '->' rt
+     | comp '~>' rt
 
   comp = circle
        | '(' rt ')'
@@ -340,6 +343,7 @@ either a parser-assigned one or given explicitly. e.g.
 
 typeRType :: Parser SSParsedRType
 typeRType = try rapp <|> try rfun <|> try rifun <|> unrefined <|> rbase
+         <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
 rapp = do
@@ -374,10 +378,11 @@ rbase = braces $ RBase
 
 baseType :: Parser Type
 baseType
-  =  try (rWord "Int"   *> pure TInt)
- <|> try (rWord "Bool"  *> pure TBool)
- <|> try (TVar <$> tvar)
+  =  (rWord "Int"   *> pure TInt)
+ <|> (rWord "Bool"  *> pure TBool)
  <|> ctorType
+ <|> (TVar <$> tvar)
+ <?> "Base Type"
 
 mkArrow :: [Type] -> Type
 mkArrow [t] = t
@@ -387,9 +392,11 @@ mkArrow _  = error "impossible: mkArrow"
 
 tvar :: Parser TVar
 tvar = TV . fst <$> identifier
+    <?> "Type Variable"
 
 ctorType :: Parser Type
 ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
+        <?> "Type Constructor"
 
 ctor :: Parser Ctor
 ctor = CT . fst <$> identStart upperChar
