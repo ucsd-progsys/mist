@@ -239,6 +239,7 @@ binops =
     , InfixL (pure op <*> primitive Minus "-")
     ]
   , [ InfixL (pure op <*> primitive Equal "==")
+    , InfixL (pure op <*> primitive Equal "=")
     , InfixL (pure op <*> primitive Greater ">")
     , InfixL (pure op <*> primitive Lte "<=")
     , InfixL (pure op <*> primitive Less "<")
