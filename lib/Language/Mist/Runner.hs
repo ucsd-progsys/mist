@@ -1,10 +1,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE BangPatterns #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Mist.Runner where
 
-import qualified Control.Exception as Ex
 import System.IO
 import Language.Mist.Types
 import Language.Mist.Parser
@@ -33,9 +33,9 @@ type R = HC.Pred
 ---------------------------------------------------------------------------
 runMist :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
 ---------------------------------------------------------------------------
-runMist h f = act h f
-                `Ex.catch`
-                   esHandle h (return . Left)
+runMist h f = act h f >>= \case
+  r@Right{} -> putStrLn "SAFE" >> return r
+  Left es -> esHandle h (return . Left) es
 
 act :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
 act _h f = do
