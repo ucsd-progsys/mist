@@ -343,7 +343,7 @@ either a parser-assigned one or given explicitly. e.g.
 -}
 
 typeRType :: Parser SSParsedRType
-typeRType = try rapp <|> try rfun <|> try rifun <|> unrefined <|> rbase
+typeRType = try rfun <|> try rifun <|> try rapp <|> unrefined <|> rbase
          <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
