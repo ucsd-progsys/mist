@@ -343,7 +343,7 @@ either a parser-assigned one or given explicitly. e.g.
 -}
 
 typeRType :: Parser SSParsedRType
-typeRType = try rfun <|> try rifun <|> try rapp <|> unrefined <|> rbase
+typeRType = try rfun <|> try rapp <|> unrefined <|> rbase
          <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
@@ -358,15 +358,14 @@ variance =  char '>' *> pure Covariant
         <|> char '^' *> pure Invariant
         <|> char 'v' *> pure Bivariant
 
-rifun :: Parser SSParsedRType
-rifun = do id <- (binder <* colon) <|> freshBinder
-           tin <- (unrefined <|> rbase <|> parens typeRType) <* (symbol "~>")
-           RIFun id tin <$> typeRType
+
+arrow :: Parser (BareBind -> SSParsedRType -> SSParsedRType -> SSParsedRType)
+arrow = symbol "~>" *> pure RIFun <|> symbol "->" *> pure RFun
 
 rfun :: Parser SSParsedRType
 rfun = do id <- (binder <* colon) <|> freshBinder
-          tin <- (unrefined <|> rbase <|> parens typeRType) <* (symbol "->")
-          RFun id tin <$> typeRType
+          tin <- (unrefined <|> rbase <|> parens typeRType)
+          arrow <*> pure id <*> pure tin <*> typeRType
 
 unrefined :: Parser SSParsedRType
 unrefined = RBase <$> freshBinder <*> baseType <*> pure (Boolean True mempty)
