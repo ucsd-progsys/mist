@@ -1,5 +1,5 @@
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE FlexibleContexts      #-}
+{-# LANGUAGE TupleSections         #-}
 
 module Language.Mist.Parser
   (
@@ -395,7 +395,7 @@ tvar = TV . fst <$> identifier
     <?> "Type Variable"
 
 ctorType :: Parser Type
-ctorType = TCtor <$> ctor <*> brackets (sepBy typeType comma)
+ctorType = TCtor <$> ctor <*> brackets (sepBy ((,) <$> variance <*> typeType) comma)
         <?> "Type Constructor"
 
 ctor :: Parser Ctor

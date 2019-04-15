@@ -184,7 +184,7 @@ data Type = TVar TVar           -- a
           | TInt                -- Int
           | TBool               -- Bool
           | Type :=> Type       -- t1 => t2
-          | TCtor Ctor [Type]   -- Ctor [t1,...,tn]
+          | TCtor Ctor [(Variance, Type)]   -- Ctor [t1,...,tn]
           | TForall TVar Type   -- ∀a.t
           deriving (Eq, Ord, Show, Read)
 
@@ -193,7 +193,7 @@ newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 
 data Variance = Invariant | Bivariant | Contravariant | Covariant
-              deriving (Show, Eq)
+              deriving (Show, Eq, Ord, Read)
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
@@ -381,7 +381,7 @@ unTV (TV t) = t
 -- | Returns the base type for an RType
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
-eraseRType (RApp c ts) = TCtor c $ eraseRType . snd <$> ts
+eraseRType (RApp c ts) = TCtor c $ second eraseRType <$> ts
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RIFun _ _t1 t2) = eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
@@ -414,8 +414,8 @@ prType (TForall a t)  = PP.text "Forall" PP.<+>
                           prTVar a
                           PP.<> PP.text "." PP.<+> prType t
 
-prTypes           :: [Type] -> PP.Doc
-prTypes ts         = PP.hsep $ PP.punctuate PP.comma (prType <$> ts)
+prTypes           :: [(Variance,Type)] -> PP.Doc
+prTypes ts         = PP.hsep $ PP.punctuate PP.comma (prType . snd <$> ts)
 
 
 prCtor :: Ctor -> PP.Doc

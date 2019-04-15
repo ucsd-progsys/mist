@@ -83,7 +83,7 @@ typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
 -- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
 -- with FTyCon right now.
 -- typeToSort (TPair t1 t2) = F.FApp (F.FApp (F.FTC F.mapFTyCon) (typeToSort t1)) (typeToSort t2)
-typeToSort (TCtor _ t2) = foldr F.FApp (F.FTC F.mapFTyCon) (typeToSort <$> t2)
+typeToSort (TCtor _ t2) = foldr F.FApp (F.FTC F.mapFTyCon) (typeToSort . snd <$> t2)
 typeToSort (TForall{}) = error "TODO?"
 
 

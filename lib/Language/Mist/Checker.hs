@@ -471,7 +471,7 @@ a@(TVar _) <<: b@(TVar _) | a == b = pure ()
       else mapM_ (\(a, b) -> do
                     env <- getEnv
                     (applyEnv env a) <: (applyEnv env b))
-                  (zip as bs)
+                  (zip (snd <$> as) (snd <$> bs))
 (TForall alpha a) <<: b = do
   evar <- generateExistential
   extendEnv [Scope evar, Unsolved evar]
@@ -523,9 +523,10 @@ _instantiateL alpha typ = do
       instantiateR a alpha1
       env <- getEnv
       instantiateL alpha2 (applyEnv env b)
-    go (TCtor ctor as) = do
+    go (TCtor ctor vts) = do
+      let (vs, as) = unzip vts
       betas <- mapM (const generateExistential) as
-      solveExistential alpha (TCtor ctor (fmap EVar betas)) (reverse betas)
+      solveExistential alpha (TCtor ctor (zip vs $ fmap EVar betas)) (reverse betas)
       mapM_ (\(beta, a) -> do
                 env <- getEnv
                 instantiateL beta (applyEnv env a))
@@ -560,9 +561,10 @@ _instantiateR typ alpha = do
       instantiateL alpha1 a
       env <- getEnv
       instantiateR (applyEnv env b) alpha2
-    go (TCtor ctor as) = do
+    go (TCtor ctor vts) = do
+      let (vs, as) = unzip vts
       betas <- mapM (const generateExistential) as
-      solveExistential alpha (TCtor ctor (fmap EVar betas)) (reverse betas)
+      solveExistential alpha (TCtor ctor (zip vs $ fmap EVar betas)) (reverse betas)
       mapM_ (\(a, beta) -> do
                 env <- getEnv
                 instantiateR (applyEnv env a) beta)
@@ -716,7 +718,7 @@ freeEVars typ = eVars typ
     eVars TBool = pure S.empty
     eVars (t1 :=> t2) = S.union <$> eVars t1 <*> eVars t2
     -- eVars (TPair t1 t2) = S.union <$> eVars t1 <*> eVars t2
-    eVars (TCtor _ ts) = fold <$> mapM eVars ts
+    eVars (TCtor _ ts) = fold <$> mapM eVars (snd <$> ts)
     eVars (TForall _ t) = eVars t
 
 insertTAbs :: Type -> ElaboratedExpr r a -> ElaboratedExpr r a

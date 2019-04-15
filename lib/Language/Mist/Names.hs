@@ -173,7 +173,7 @@ instance Subable Type Type where
   _subst _ TBool = TBool
 
   _subst su (t1 :=> t2) = _subst su t1 :=> _subst su t2
-  _subst su (TCtor c t2) = TCtor c (_subst su t2)
+  _subst su (TCtor c t2) = TCtor c (second (_subst su) <$> t2)
   _subst su (TForall tvar t) = TForall tvar (_subst (M.delete (unTV tvar) su) t)
 
 instance Subable Type t => Subable Type (Bind t a) where
@@ -337,7 +337,7 @@ instance Uniqable Type where
   unique (domain :=> codomain) =
     (:=>) <$> unique domain <*> unique codomain
   unique (TCtor c ts) =
-    TCtor c <$> mapM unique ts
+    TCtor c <$> mapM (sequence . second unique) ts
   unique (TForall tvar t) = do
     tvar' <- uniquifyBindingTVar tvar
     t' <- unique t
