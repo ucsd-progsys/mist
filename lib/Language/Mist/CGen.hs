@@ -19,6 +19,7 @@ module Language.Mist.CGen
 
 import Language.Mist.Types
 import Language.Mist.Names
+import Data.Bifunctor (second)
 import qualified Data.Map.Strict as M
 
 -------------------------------------------------------------------------------
@@ -147,7 +148,7 @@ fresh l env (typ1 :=> typ2) = do
   x <- refreshId $ "karg" ++ cSEPARATOR
   rtype2 <- (fresh l) ((x,typ1):env) typ2
   pure $ RFun (Bind x l) rtype1 rtype2
-fresh _l _env (TCtor _ctor _types) = error "TODO: fresh at constructor type. Same as base type?"
+fresh l env (TCtor ctor types) = RApp ctor <$> mapM (sequence . second (fresh l env)) types
 fresh l env (TForall tvar typ) = RForall tvar <$> (fresh l) env typ
 
 
