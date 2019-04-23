@@ -328,7 +328,7 @@ _synthesize (Lam bind e l) = do
   let newBinding = VarBind (bindId bind) (EVar alpha)
   extendEnv [Unsolved alpha, Unsolved beta, newBinding]
   c <- check e (EVar beta)
-  modifyEnv $ dropEnvAfter newBinding -- TODO: do we need to do something with delta' for elaboration?
+  modifyEnv $ dropEnvAfter newBinding
   let annBind = bind{bindAnn = Just $ ElabUnrefined (EVar alpha)}
   pure (Lam annBind c l, EVar alpha :=> EVar beta)
 _synthesize (TApp _e _typ _l) = error "TODO"
@@ -384,8 +384,7 @@ _check expr typ = do
 synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
 synthesizeApp tFun cFun eArg l = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
-  let cApplication = App (putAnn (Just $ ElabUnrefined tFun) cInstantiatedFun) cArg l
-  pure (cApplication, resultType)
+  pure (App cInstantiatedFun cArg l, resultType)
 
 -- DEBUGGING
 synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
@@ -410,16 +409,18 @@ _synthesizeSpine funType cFun eArg = do
                             (EVar alpha1 :=> EVar alpha2)
                             [alpha2, alpha1]
       cArg <- check eArg (EVar alpha1)
-      pure (cFun, cArg, EVar alpha2)
+      let annotatedFun = putAnn (Just $ ElabUnrefined (EVar alpha1 :=> EVar alpha2)) cFun
+      pure (annotatedFun, cArg, EVar alpha2)
 
     go (t1 :=> t2) = do
       cArg <- check eArg t1
-      pure (cFun, cArg, t2)
+      pure (putAnn (Just $ ElabUnrefined (t1 :=> t2)) cFun, cArg, t2)
     go tforall@(TForall (TV tv) t) = do
       evar <- generateExistential
       extendEnv [Unsolved evar]
       let newFunType = subst1 (EVar evar) tv t
-      synthesizeSpine newFunType (TApp (putAnn (Just $ ElabUnrefined tforall) cFun) (EVar evar) (extractLoc cFun)) eArg
+      let annotatedFun = (putAnn (Just $ ElabUnrefined tforall) cFun)
+      synthesizeSpine newFunType (putAnn (Just $ ElabUnrefined newFunType) (TApp annotatedFun (EVar evar) (extractLoc cFun))) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
 
 -- | Γ ⊢ A_c <: B ~> c ⊣ Θ
@@ -785,4 +786,4 @@ annotate e typ = runFresh $ go M.empty e typ
     eraseElaboratedAnn (Just (ElabRefined rtype)) = eraseRType rtype
     eraseElaboratedAnn (Just (ElabAssume rtype)) = eraseRType rtype
     eraseElaboratedAnn (Just (ElabUnrefined typ)) = typ
-    eraseElaboratedAnn Nothing = error "impossible: every binding should be annotated"
+    eraseElaboratedAnn Nothing = error "impossible: should be annotated"
