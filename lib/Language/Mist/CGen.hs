@@ -151,12 +151,16 @@ fresh l env (typ1 :=> typ2) = do
 fresh l env (TCtor ctor types) = RApp ctor <$> mapM (sequence . second (fresh l env)) types
 fresh l env (TForall tvar typ) = RForall tvar <$> (fresh l) env typ
 
+foTypes :: [(Id, Type)] -> [(Id, Type)]
+foTypes ((_,_ :=> _):xs) = foTypes xs
+foTypes ((x,t):xs) = (x,t):foTypes xs
+foTypes [] = []
 
 freshBaseType :: (Predicate r) => [(Id, Type)] -> Type -> a -> Fresh (RType r a)
 freshBaseType env baseType l = do
   kappa <- refreshId $ "kvar" ++ cSEPARATOR
   v <- refreshId $ "VV" ++ cSEPARATOR
-  let k = buildKvar kappa $ v : map fst env
+  let k = buildKvar kappa $ v : map fst (foTypes env)
   pure $ RBase (Bind v l) baseType k
 
 rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
