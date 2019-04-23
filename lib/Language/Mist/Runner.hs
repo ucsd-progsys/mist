@@ -49,7 +49,7 @@ act _h f = do
       print solverResult
       case F.resStatus solverResult of
         F.Safe -> return r
-        _ -> return $ Left [mkError ("solver failed: " ++ show solverResult) (SS {ssBegin = initialPos "file", ssEnd = initialPos "file"})] -- TODO: proper error
+        _ -> return $ Left [mkError ("solver failed: " ++ show solverResult) (SS {ssBegin = initialPos f, ssEnd = initialPos f})] -- TODO: proper error
     Left _ -> return r
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
