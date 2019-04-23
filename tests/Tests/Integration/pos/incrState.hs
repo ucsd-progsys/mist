@@ -12,4 +12,4 @@ put  = (0)
 
 -- incr
 incr :: ST <Int >Int >Unit
-incr = (bind (get 0) (\n -> (put n+1)))
+incr = (bind (get 0) (\n -> (put (n+1))))
