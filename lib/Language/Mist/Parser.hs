@@ -121,7 +121,7 @@ rWord w = snd <$> (withSpan (string w) <* notFollowedBy alphaNumChar <* sc)
 -- | list of reserved words
 keywords :: [Text]
 keywords =
-  [ "if"      , "else"
+  [ "if"      , "else"  , "then"
   , "true"    , "false"
   , "let"     , "in"
   , "Int"     , "Bool"  , "forall"  , "as"
@@ -130,7 +130,7 @@ keywords =
 -- | `identifier` parses identifiers: lower-case alphabets followed by alphas or digits
 identifier :: Parser (String, SourceSpan)
 identifier = identStart lowerChar
-          <?> "Identifier"
+          <?> "identifier"
 
 identStart:: Parser Char -> Parser (String, SourceSpan)
 identStart start = lexeme (p >>= check)
@@ -199,7 +199,7 @@ topDef = do
   Bind id tag <- binder
   ann <- typeSig
   _ <- lexeme (string id) <* symbol "="
-  e <- expr
+  e <- simpleExpr
   let annBind = AnnBind id (Just ann) tag
   return (annBind, exprAddParsedInfers e)
 
@@ -220,16 +220,21 @@ expr :: Parser BareExpr
 expr = makeExprParser expr0 binops
 
 expr0 :: Parser BareExpr
-expr0 =  letExpr  -- starts with let
-     <|> ifExpr   -- starts with if
-     <|> lamExpr  -- starts with \\
-     <|> (mkApps <$> parens (sepBy1 expr sc))
-                  -- starts with (
-     <|> try constExpr
-     <|> idExpr
+expr0 = mkApps <$> sepBy1 simpleExpr sc
+            <|> lamExpr  -- starts with \\
+
+-- A simpleExpr is one that has an end deliminator
+simpleExpr :: Parser BareExpr
+simpleExpr  = try constExpr
+            <|> try idExpr
+            <|> parens expr
+            <|> letExpr  -- starts with let
+            <|> ifExpr   -- starts with if
 
 mkApps :: [BareExpr] -> BareExpr
-mkApps = L.foldl1' (\e1 e2 -> App e1 e2 (stretch [e1, e2]))
+mkApps = L.foldl1' mkApp
+mkApp :: BareExpr -> BareExpr -> BareExpr
+mkApp e1 e2 = App e1 e2 (stretch [e1, e2])
 
 binops :: [[Operator Parser BareExpr]]
 binops =
@@ -269,7 +274,7 @@ letExpr = withSpan' $ do
   rWord "let"
   bs <- sepBy1 bind comma
   rWord "in"
-  e  <- expr
+  e  <- simpleExpr
   return (bindsExpr bs e ())
 
 bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
@@ -283,7 +288,7 @@ ifExpr = withSpan' $ do
   rWord "if"
   b  <- expr
   e1 <- between (rWord "then") (rWord "else") expr
-  e2 <- expr
+  e2 <- simpleExpr
   return (If b e1 e2)
 
 lamExpr :: Parser BareExpr
@@ -318,29 +323,6 @@ schemeForall = do
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
         <?> "Unrefined Type"
-
-{- | [NOTE:RTYPE-PARSE] Fundamentally, a type is of the form
-
-      comp -> comp -> ... -> comp
-
-So
-
-  rt = comp
-     | comp '->' rt
-     | comp '~>' rt
-
-  comp = circle
-       | '(' rt ')'
-
-  circle = { v : t | r }
-         | t
-
-Each 'comp' should have a variable to refer to it,
-either a parser-assigned one or given explicitly. e.g.
-
-  xs : [Int]
-
--}
 
 typeRType :: Parser SSParsedRType
 typeRType = try rfun <|> try rapp <|> unrefined <|> rbase
