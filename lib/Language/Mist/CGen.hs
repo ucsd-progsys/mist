@@ -177,6 +177,9 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go (RForall alpha t1) (RForall beta t2)
       | alpha == beta = t1 <: t2
       | otherwise = error "Constraint generation subtyping error"
+    go (RApp c1 vts1) (RApp c2 vts2)
+      | c1 == c2  = CAnd $ zipWith (<:) (snd <$> vts1) (snd <$> vts2)
+      | otherwise = error "CGen: constructors don't match"
     go _ _ = error $ "CGen subtyping error. Got " ++ show rtype1 ++ " but expected " ++ show rtype2
 
 -- | (x :: t) => c
