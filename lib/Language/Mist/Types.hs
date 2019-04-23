@@ -332,7 +332,7 @@ instance (PPrint t) => PPrint (Expr t a) where
   pprint (AnnLet bind e1 e2 _ _) = printf "(let %s = %s in %s)" (ppDef bind) (pprint e1) (pprint e2)-- TODO: make better
   pprint (AnnApp e1 e2 _ _) = printf "(%s %s)" (pprint e1) (pprint e2)
   pprint (AnnLam x e _ _) = printf "(\\ %s -> %s)" (ppDef x) (pprint e)
-  pprint (AnnTApp e t _ _) = printf "(%s@%s)" (pprint e) (pprint t)
+  pprint (AnnTApp e t _ _) = printf "(%s @ %s)" (pprint e) (pprint t)
   pprint (AnnTAbs alpha e _ _) = printf "(/\\%s . %s)" (pprint alpha) (pprint e)
 
 ppDef :: (PPrint t) => Bind t a -> Text
