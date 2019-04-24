@@ -178,12 +178,20 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
       | alpha == beta = t1 <: t2
       | otherwise = error "Constraint generation subtyping error"
     go (RApp c1 vts1) (RApp c2 vts2)
-      | c1 == c2  = CAnd $ zipWith (<:) (snd <$> vts1) (snd <$> vts2)
+      | c1 == c2  = CAnd $ concat $ zipWith (<<:) vts1 vts2
       | otherwise = error "CGen: constructors don't match"
     go _ _ = error $ "CGen subtyping error. Got " ++ show rtype1 ++ " but expected " ++ show rtype2
 
+(v, rt1) <<: (_,rt2) = case v of
+                         -- AT: did I flip these twp ? I always fucking flip them...
+                         -- TODO: write tests that over these two cases...
+                         Invariant -> []
+                         Bivariant -> [rt1 <: rt2, rt2 <: rt1]
+                         Covariant -> [rt1 <: rt2]
+                         Contravariant -> [rt2 <: rt1]
+
+
 -- | (x :: t) => c
-mkAll :: (Predicate r) => Id -> RType r a -> NNF r -> NNF r
 mkAll x rt c = case flattenRType rt of
                  (RBase (Bind y _) b p) -> All x b (varSubst x y p) c
                  _ -> c
