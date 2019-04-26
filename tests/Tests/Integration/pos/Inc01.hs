@@ -1,5 +1,5 @@
 incr :: Int -> Int 
-incr = ( \x -> x + 1 ) 
+incr = \x -> x + 1 
 
 moo :: Int 
-moo =  ( incr 7 )
+moo = incr 7

@@ -7,6 +7,7 @@ flags: {}
 
 extra-deps:
 - tasty-rerun-1.1.12
+#- './liquid-fixpoint/'
 # liquid-fixpoint and deps
 - github: ucsd-progsys/liquid-fixpoint
   commit: abb35956cde1ab7c194b9b63e0d6ec977fbab754

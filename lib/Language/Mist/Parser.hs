@@ -196,10 +196,10 @@ topDefs = many topDef
 
 topDef :: Parser SSParsedDef
 topDef = do
-  Bind id tag <- binder
+  Bind id tag <- L.nonIndented sc binder
   ann <- typeSig
-  _ <- lexeme (string id) <* symbol "="
-  e <- simpleExpr
+  _ <- L.nonIndented sc $ lexeme (string id) <* symbol "="
+  e <- expr
   let annBind = AnnBind id (Just ann) tag
   return (annBind, exprAddParsedInfers e)
 
@@ -222,14 +222,14 @@ expr = makeExprParser expr0 binops
 expr0 :: Parser BareExpr
 expr0 = mkApps <$> sepBy1 simpleExpr sc
             <|> lamExpr  -- starts with \\
+            <|> letExpr  -- starts with let
+            <|> ifExpr   -- starts with if
 
 -- A simpleExpr is one that has an end deliminator
 simpleExpr :: Parser BareExpr
 simpleExpr  = try constExpr
             <|> try idExpr
             <|> parens expr
-            <|> letExpr  -- starts with let
-            <|> ifExpr   -- starts with if
 
 mkApps :: [BareExpr] -> BareExpr
 mkApps = L.foldl1' mkApp
@@ -261,7 +261,7 @@ primitive prim primSymbol = do
   pure $ Prim prim (SS p1 p2)
 
 idExpr :: Parser BareExpr
-idExpr = uncurry Id <$> identifier
+idExpr = L.indentGuard sc GT pos1 *> (uncurry Id <$> identifier)
 
 constExpr :: Parser BareExpr
 constExpr
@@ -274,7 +274,7 @@ letExpr = withSpan' $ do
   rWord "let"
   bs <- sepBy1 bind comma
   rWord "in"
-  e  <- simpleExpr
+  e  <- expr
   return (bindsExpr bs e ())
 
 bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
@@ -288,7 +288,7 @@ ifExpr = withSpan' $ do
   rWord "if"
   b  <- expr
   e1 <- between (rWord "then") (rWord "else") expr
-  e2 <- simpleExpr
+  e2 <- expr
   return (If b e1 e2)
 
 lamExpr :: Parser BareExpr
