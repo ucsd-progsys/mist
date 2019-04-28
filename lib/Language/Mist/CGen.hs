@@ -152,6 +152,7 @@ fresh l env (TCtor ctor types) = RApp ctor <$> mapM (sequence . second (fresh l 
 fresh l env (TForall tvar typ) = RForall tvar <$> (fresh l) env typ
 
 foTypes :: [(Id, Type)] -> [(Id, Type)]
+foTypes ((_,TCtor{}):xs) = foTypes xs
 foTypes ((_,_ :=> _):xs) = foTypes xs
 foTypes ((x,t):xs) = (x,t):foTypes xs
 foTypes [] = []
