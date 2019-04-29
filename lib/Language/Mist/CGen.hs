@@ -205,17 +205,18 @@ foBinds [] = []
 foBinds ((x, (RBase (Bind _ _) t _)):ts) = (x,t) : foBinds ts
 foBinds (_:ts) = foBinds ts
 
-flattenRType :: (Predicate r) => RType r a -> RType r a
+flattenRType :: (Show r, Predicate r) => RType r a -> RType r a
 flattenRType (RRTy b rtype reft) = strengthenRType (flattenRType rtype) b reft
 flattenRType rtype = rtype
 
-strengthenRType :: (Predicate r) => RType r a -> Bind t a -> r -> RType r a
+strengthenRType :: (Show r, Predicate r) => RType r a -> Bind t a -> r -> RType r a
 strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedReft')
   where
     renamedReft' = varSubst (bindId b) (bindId b') reft'
 strengthenRType (RFun _ _ _) _ _ = error "TODO"
 strengthenRType (RIFun _ _ _) _ _ = error "TODO"
-strengthenRType (RApp _ _) _ _ = error "TODO"
+-- TODO
+strengthenRType rt@RApp{} _b _r = rt
 strengthenRType (RRTy b rtype reft) b' reft' = RRTy b rtype (strengthen reft renamedReft')
   where
     renamedReft' = varSubst (bindId b) (bindId b') reft'
