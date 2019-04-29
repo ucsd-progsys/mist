@@ -32,59 +32,59 @@ type Env r a = [(Id, RType r a)]
 -------------------------------------------------------------------------------
 generateConstraints :: (Predicate r, Show r, Show a) =>
                        ElaboratedExpr r a -> NNF r
-generateConstraints = fst . runFresh . cgen []
+generateConstraints = fst . runFresh . synth []
 
-cgen :: (Predicate r, Show r, Show a) =>
+synth :: (Predicate r, Show r, Show a) =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-cgen _ e@Unit{}    = (Head true,) <$> prim e
-cgen _ e@Number{}  = (Head true,) <$> prim e
-cgen _ e@Boolean{} = (Head true,) <$> prim e
-cgen _ e@Prim{}    = (Head true,) <$> prim e
-cgen env (Id x _)  = (Head true,) <$> single env x
+synth _ e@Unit{}    = (Head true,) <$> prim e
+synth _ e@Number{}  = (Head true,) <$> prim e
+synth _ e@Boolean{} = (Head true,) <$> prim e
+synth _ e@Prim{}    = (Head true,) <$> prim e
+synth env (Id x _)  = (Head true,) <$> single env x
 
-cgen env (If (Id y _) e1 e2 l) = do
-    rtT <- pure $ RBase (Bind idT l) TBool $ var y
-    rtF <- pure $ RBase (Bind idF l) TBool $ varNot y
-    (c1, t1) <- cgen ((idT,rtT):env) e1
-    (c2, t2) <- cgen ((idF,rtF):env) e2
+synth env (If (Id y _) e1 e2 l) = do
+    let rtT = RBase (Bind idT l) TBool $ var y
+    let rtF = RBase (Bind idF l) TBool $ varNot y
+    (c1, t1) <- synth ((idT,rtT):env) e1
+    (c2, t2) <- synth ((idF,rtF):env) e2
     tHat <- fresh l (foBinds env) (eraseRType t1) -- could just as well be t2
     let c = CAnd [mkAll idT rtT (CAnd [c1, t1 <: tHat]),
                   mkAll idF rtF (CAnd [c2, t2 <: tHat])]
     pure (c, tHat)
   where idT = y<>"then"
         idF = y<>"else"
-cgen _ (If _ _ _ _) = error "INTERNAL ERROR: if not in ANF"
+synth _ (If _ _ _ _) = error "INTERNAL ERROR: if not in ANF"
 
 -- TODO: recursive let?
-cgen env (Let b e1 e2 _)
+synth env (Let b e1 e2 _)
   -- Annotated with an assume
-  | (AnnBind x (Just (ElabAssume tx)) _) <- b = cgen ((x, tx):env) e2
+  | (AnnBind x (Just (ElabAssume tx)) _) <- b = synth ((x, tx):env) e2
   -- Annotated with an RType (Implicit Parameter)
   | (AnnBind x (Just (ElabRefined rt@(RIFun {}))) _) <- b = do
  let (ns, tx) = splitImplicits rt
- (c1, t1) <- cgen (ns ++ env) e1
- (c2, t2) <- cgen ((x, rt):env) e2
+ (c1, t1) <- synth (ns ++ env) e1
+ (c2, t2) <- synth ((x, rt):env) e2
  tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x tx (CAnd [c2, t2 <: tHat])
  let c' = foldr (uncurry mkAll) (CAnd [c1, t1 <: tx]) ns
  pure (CAnd [c, c'], tHat)
   -- Annotated with an RType
   | (AnnBind x (Just (ElabRefined tx)) _) <- b = do
- (c1, t1) <- cgen env e1
- (c2, t2) <- cgen ((x, tx):env) e2
+ (c1, t1) <- synth env e1
+ (c2, t2) <- synth ((x, tx):env) e2
  tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x tx (CAnd [c2, t2 <: tHat])
  pure (CAnd [c1, c, t1 <: tx], tHat)
   -- Unrefined
   | (AnnBind x _ _) <- b = do
- (c1, t1) <- cgen env e1
- (c2, t2) <- cgen ((x, t1):env) e2
+ (c1, t1) <- synth env e1
+ (c2, t2) <- synth ((x, t1):env) e2
  tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x t1 (CAnd [c2, t2 <: tHat])
  pure (CAnd [c1, c], tHat)
 
-cgen env (App e (Id y _) _) =
-  cgen env e >>= \case
+synth env (App e (Id y _) _) =
+  synth env e >>= \case
   (c, RFun x t t') -> do
     ty <- single env y
     let cy = ty <: t
@@ -98,33 +98,26 @@ cgen env (App e (Id y _) _) =
     let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t'<: tHat]
     pure (CAnd [c, cy], tHat)
   _ -> error "CGen App failed"
--- there's a \forall fresh0##5 . true => c that's not being eliminated. We
--- could drop useless binds like this, but I want to see where it's being
--- generated here in the first place.
---
--- Seems it's the name given to the unused binder for Int -> ...
 
+synth _ (App _ _ _) = error "argument is non-variable"
 
-
-cgen _ (App _ _ _) = error "argument is non-variable"
-
-cgen _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
-cgen _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _) = pure (CAnd [], tx)
-cgen env (Lam (AnnBind x (Just (ElabRefined tx)) l) e _) = do
-  (c, t) <- cgen ((x, tx):env) e
+synth _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
+synth _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _) = pure (CAnd [], tx)
+synth env (Lam (AnnBind x (Just (ElabRefined tx)) l) e _) = do
+  (c, t) <- synth ((x, tx):env) e
   pure (mkAll x tx c, RFun (Bind x l) tx t)
 
-cgen env (Lam (AnnBind x (Just (ElabUnrefined typ)) l) e _) = do
+synth env (Lam (AnnBind x (Just (ElabUnrefined typ)) l) e _) = do
   tHat <- fresh l (foBinds env) typ
-  (c, t) <- cgen ((x, tHat):env) e
+  (c, t) <- synth ((x, tHat):env) e
   pure (mkAll x tHat c, RFun (Bind x l) tHat t)
 
-cgen env (TApp e typ l) = do
-  (c, RForall (TV alpha) t) <- cgen env e
+synth env (TApp e typ l) = do
+  (c, RForall (TV alpha) t) <- synth env e
   tHat <- fresh l (foBinds env) typ
   pure (c, substReftReft1 tHat alpha t)
-cgen env (TAbs tvar e _) = do
-  (c, t) <- cgen env e
+synth env (TAbs tvar e _) = do
+  (c, t) <- synth env e
   pure (c, RForall tvar t)
 
 single :: (Predicate r, Show a, Show r) => Env r a -> Id -> Fresh (RType r a)
@@ -144,18 +137,23 @@ fresh l env TUnit = freshBaseType env TUnit l
 fresh l env TInt = freshBaseType env TInt l
 fresh l env TBool = freshBaseType env TBool l
 fresh l env (typ1 :=> typ2) = do
-  rtype1 <- (fresh l) env typ1
+  rtype1 <- fresh l env typ1
   x <- refreshId $ "karg" ++ cSEPARATOR
-  rtype2 <- (fresh l) ((x,typ1):env) typ2
+  rtype2 <- fresh l ((x,typ1):env) typ2
   pure $ RFun (Bind x l) rtype1 rtype2
 fresh l env (TCtor ctor types) = RApp ctor <$> mapM (sequence . second (fresh l env)) types
-fresh l env (TForall tvar typ) = RForall tvar <$> (fresh l) env typ
+fresh l env (TForall tvar typ) = RForall tvar <$> fresh l env typ
 
+-- filters out higher-order type binders in the environment
 foTypes :: [(Id, Type)] -> [(Id, Type)]
 foTypes ((_,TCtor{}):xs) = foTypes xs
 foTypes ((_,_ :=> _):xs) = foTypes xs
 foTypes ((x,t):xs) = (x,t):foTypes xs
 foTypes [] = []
+
+foBinds [] = []
+foBinds ((x, RBase (Bind _ _) t _):ts) = (x,t) : foBinds ts
+foBinds (_:ts) = foBinds ts
 
 freshBaseType :: (Predicate r) => [(Id, Type)] -> Type -> a -> Fresh (RType r a)
 freshBaseType env baseType l = do
@@ -200,10 +198,6 @@ mkExists xts c = foldr mkExi c xts
   where mkExi (x,rt) c = case flattenRType rt of
                              (RBase (Bind y _) b p) -> Any x b (varSubst x y p) c
                              _ -> c
-
-foBinds [] = []
-foBinds ((x, (RBase (Bind _ _) t _)):ts) = (x,t) : foBinds ts
-foBinds (_:ts) = foBinds ts
 
 flattenRType :: (Show r, Predicate r) => RType r a -> RType r a
 flattenRType (RRTy b rtype reft) = strengthenRType (flattenRType rtype) b reft
