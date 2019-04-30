@@ -30,11 +30,11 @@ type Env r a = [(Id, RType r a)]
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
 -------------------------------------------------------------------------------
-generateConstraints :: (Predicate r, Show r, Show a) =>
+generateConstraints :: (Predicate r, Show r, Show a, PPrint r) =>
                        ElaboratedExpr r a -> NNF r
 generateConstraints = fst . runFresh . synth []
 
-synth :: (Predicate r, Show r, Show a) =>
+synth :: (Predicate r, Show r, Show a, PPrint r) =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 synth _ e@Unit{}    = (Head true,) <$> prim e
 synth _ e@Number{}  = (Head true,) <$> prim e
@@ -45,6 +45,7 @@ synth env (Id x _)  = (Head true,) <$> single env x
 synth env (If (Id y _) e1 e2 l) = do
     let rtT = RBase (Bind idT l) TBool $ var y
     let rtF = RBase (Bind idF l) TBool $ varNot y
+    -- TODO make these check, after pulling the right thing out of l
     (c1, t1) <- synth ((idT,rtT):env) e1
     (c2, t2) <- synth ((idF,rtF):env) e2
     tHat <- fresh l (foBinds env) (eraseRType t1) -- could just as well be t2
@@ -70,14 +71,17 @@ synth env (Let b e1 e2 _)
  pure (CAnd [c, c'], tHat)
   -- Annotated with an RType
   | (AnnBind x (Just (ElabRefined tx)) _) <- b = do
- (c1, t1) <- synth env e1
+ c1 <- check env e1 tx
+ -- (c1, t1) <- synth env e1
  (c2, t2) <- synth ((x, tx):env) e2
  tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x tx (CAnd [c2, t2 <: tHat])
- pure (CAnd [c1, c, t1 <: tx], tHat)
+ pure (CAnd [c1, c{-, t1 <: tx-}], tHat)
   -- Unrefined
-  | (AnnBind x _ _) <- b = do
- (c1, t1) <- synth env e1
+  | (AnnBind x (Just (ElabUnrefined taux)) l) <- b = do
+ t1 <- fresh l (foBinds env) taux
+ c1 <- check env e1 t1
+ -- (c1, t1) <- synth env e1
  (c2, t2) <- synth ((x, t1):env) e2
  tHat <- fresh (extractLoc e2) (foBinds env) (eraseRType t2)
  let c = mkAll x t1 (CAnd [c2, t2 <: tHat])
@@ -95,7 +99,7 @@ synth env (App e (Id y _) _) =
     let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns') (fst <$> ns)) rt
     ty <- single env y
     tHat <- fresh (extractLoc e) (foBinds env) (eraseRType t')
-    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t'<: tHat]
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t' <: tHat]
     pure (CAnd [c, cy], tHat)
   _ -> error "CGen App failed"
 
@@ -103,9 +107,10 @@ synth _ (App _ _ _) = error "argument is non-variable"
 
 synth _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
 synth _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _) = pure (CAnd [], tx)
-synth env (Lam (AnnBind x (Just (ElabRefined tx)) l) e _) = do
-  (c, t) <- synth ((x, tx):env) e
-  pure (mkAll x tx c, RFun (Bind x l) tx t)
+synth _env (Lam (AnnBind _x (Just (ElabRefined _tx)) _l) _e _) = do
+  error "Internal error, how did we half-annotate a lam with a refinement?"
+  -- (c, t) <- synth ((x, tx):env) e
+  -- pure (mkAll x tx c, RFun (Bind x l) tx t)
 
 synth env (Lam (AnnBind x (Just (ElabUnrefined typ)) l) e _) = do
   tHat <- fresh l (foBinds env) typ
@@ -179,7 +184,7 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go (RApp c1 vts1) (RApp c2 vts2)
       | c1 == c2  = CAnd $ concat $ zipWith (<<:) vts1 vts2
       | otherwise = error "CGen: constructors don't match"
-    go _ _ = error $ "CGen subtyping error. Got " ++ show rtype1 ++ " but expected " ++ show rtype2
+    go _ _ = error $ "CGen subtyping error. Got " ++ pprint rtype1 ++ " but expected " ++ pprint rtype2
 
 (v, rt1) <<: (_,rt2) = case v of
                          -- AT: did I flip these twp ? I always fucking flip them...
@@ -220,3 +225,56 @@ strengthenRType (RForall _ _) _ _ = error "TODO"
 splitImplicits (RIFun b t t') = ((bindId b,t):bs, t'')
     where (bs,t'') = splitImplicits t'
 splitImplicits rt = ([],rt)
+
+check :: (Show r, Predicate r, Show a, PPrint r) => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
+check env (Let b e1 e2 _) t2
+  -- Annotated with an assume
+  | (AnnBind x (Just (ElabAssume tx)) _) <- b = check ((x, tx):env) e2 t2
+  -- Annotated with an RType (Implicit Parameter)
+  | (AnnBind x (Just (ElabRefined rt@(RIFun {}))) _) <- b = do
+ let (ns, tx) = splitImplicits rt
+ c1 <- check (ns ++ env) e1 tx
+ c2 <- check ((x, rt):env) e2 t2
+ let c = mkAll x tx c2
+ let c' = foldr (uncurry mkAll) c1 ns
+ pure $ CAnd [c, c']
+  -- Annotated with an RType
+  | (AnnBind x (Just (ElabRefined tx)) _) <- b = do
+ c1 <- check env e1 tx
+ c2 <- check ((x, tx):env) e2 t2
+ let c = mkAll x tx c2
+ pure (CAnd [c1, c])
+  -- Unrefined
+  | (AnnBind x (Just (ElabUnrefined taux)) l) <- b = do
+ t1 <- fresh l (foBinds env) taux
+ c1 <- check env e1 t1
+ c2 <- check ((x, t1):env) e2 t2
+ let c = mkAll x t1 c2
+ pure (CAnd [c1, c])
+
+check env (App e (Id y _) _) tapp =
+  synth env e >>= \case
+  (c, RFun x t t') -> do
+    ty <- single env y
+    let cy = ty <: t
+    pure (CAnd [c, cy, substReftPred1 (bindId x) y t' <: tapp])
+  (c, rit@RIFun{}) -> do
+    let (ns, rt) = splitImplicits rit
+    ns' <- sequence [ (,rt) <$> refreshId n | (n,rt) <- ns]
+    let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns') (fst <$> ns)) rt
+    ty <- single env y
+    let (_ns'', tapp') = splitImplicits tapp
+--     traceM $ show ns''
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t' <: tapp']
+    pure (CAnd [c, cy])
+  _ -> error "CGen App failed"
+
+check _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) _ = pure (CAnd [])
+check env (Lam (AnnBind x _ _) e _) (RFun y ty t) =
+  mkAll x ty <$> check ((x, ty):env) e (substReftPred1 (bindId y) x t)
+
+-- this is INCORRECT for implicits
+check env e t = do
+  (c, t') <- synth env e
+  -- traceM ("portal: " ++ pprint t' ++ " <: " ++ pprint t)
+  pure $ CAnd [c, t' <: t]
