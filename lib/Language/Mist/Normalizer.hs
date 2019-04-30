@@ -30,13 +30,7 @@ anf e@AnnPrim{} = pure e
 anf (AnnLet x e b tag l) = do
   e' <- anf e
   b' <- anf b
-  -- pure $ Let (first Just x) e' b' l
   pure $ AnnLet x e' b' tag l
--- anf (Prim2 o e1 e2 l) = do
---   (bs, e1') <- imm e1
---   (bs', e2') <- imm e2
---   let bs'' = bs' ++ bs
---   pure $ stitch bs'' (Prim2 o e1' e2' l)
 anf (AnnIf c e1 e2 tag l) = do
   (bs, c') <- imm c
   e1' <- anf e1

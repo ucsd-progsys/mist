@@ -16,6 +16,7 @@ module Language.Mist.Types
   -- * Types and Types
   , Type (..), TVar (..), Ctor (..)
   , RType (..)
+  , Variance (..)
 
   -- * Abstract syntax of Mist
   , Expr (..)
@@ -171,6 +172,7 @@ pattern Bind id tag <- AnnBind id _ tag
 
 data RType r a
   = RBase !(Bind () a) Type !r
+  | RApp !Ctor ![(Variance, RType r a)]
   | RFun !(Bind () a) !(RType r a) !(RType r a)
   | RIFun !(Bind () a) !(RType r a) !(RType r a)
   | RRTy !(Bind () a) !(RType r a) r
@@ -182,13 +184,16 @@ data Type = TVar TVar           -- a
           | TInt                -- Int
           | TBool               -- Bool
           | Type :=> Type       -- t1 => t2
-          | TCtor Ctor [Type]   -- Ctor [t1,...,tn]
+          | TCtor Ctor [(Variance, Type)]   -- Ctor [t1,...,tn]
           | TForall TVar Type   -- ∀a.t
           deriving (Eq, Ord, Show, Read)
 
 newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
 
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
+
+data Variance = Invariant | Bivariant | Contravariant | Covariant
+              deriving (Show, Eq, Ord, Read)
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
@@ -205,6 +210,7 @@ type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
 -- r is the type of refinements
 data ElaboratedAnnotation r a
   = ElabRefined !(RType r a)
+  | ElabAssume !(RType r a)
   | ElabUnrefined !Type
   deriving (Functor, Show)
 
@@ -305,7 +311,8 @@ instance (PPrint t) => PPrint (Bind t a) where
 
 instance (PPrint r) => PPrint (ElaboratedAnnotation r a) where
   pprint (ElabRefined rtype) = printf ": %s" (pprint rtype)
-  pprint (ElabUnrefined typ) = printf ": %s" (pprint typ)
+  pprint (ElabAssume rtype) = printf "as %s" (pprint rtype)
+  pprint (ElabUnrefined typ) = printf ":: %s" (pprint typ)
 
 instance (PPrint r) => PPrint (ParsedAnnotation r a) where
   pprint (ParsedCheck rtype) = printf ": %s" (pprint rtype)
@@ -325,7 +332,7 @@ instance (PPrint t) => PPrint (Expr t a) where
   pprint (AnnLet bind e1 e2 _ _) = printf "(let %s = %s in %s)" (ppDef bind) (pprint e1) (pprint e2)-- TODO: make better
   pprint (AnnApp e1 e2 _ _) = printf "(%s %s)" (pprint e1) (pprint e2)
   pprint (AnnLam x e _ _) = printf "(\\ %s -> %s)" (ppDef x) (pprint e)
-  pprint (AnnTApp e t _ _) = printf "(%s@%s)" (pprint e) (pprint t)
+  pprint (AnnTApp e t _ _) = printf "(%s @ %s)" (pprint e) (pprint t)
   pprint (AnnTAbs alpha e _ _) = printf "(/\\%s . %s)" (pprint alpha) (pprint e)
 
 ppDef :: (PPrint t) => Bind t a -> Text
@@ -344,6 +351,8 @@ nest n = unlines . map pad . lines
 instance (PPrint r) => PPrint (RType r a) where
   pprint (RBase b t e) =
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
+  pprint (RApp c ts) =
+    printf "%s %s" (show c) (show $ void $ ts)
   pprint (RFun b t1 t2) =
     printf "%s:%s -> %s" (pprint b) (pprint t1) (pprint t2)
   pprint (RIFun b t1 t2) =
@@ -372,6 +381,7 @@ unTV (TV t) = t
 -- | Returns the base type for an RType
 eraseRType :: RType e a -> Type
 eraseRType (RBase _ t _) = t
+eraseRType (RApp c ts) = TCtor c $ second eraseRType <$> ts
 eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RIFun _ _t1 t2) = eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
@@ -404,8 +414,8 @@ prType (TForall a t)  = PP.text "Forall" PP.<+>
                           prTVar a
                           PP.<> PP.text "." PP.<+> prType t
 
-prTypes           :: [Type] -> PP.Doc
-prTypes ts         = PP.hsep $ PP.punctuate PP.comma (prType <$> ts)
+prTypes           :: [(Variance,Type)] -> PP.Doc
+prTypes ts         = PP.hsep $ PP.punctuate PP.comma (prType . snd <$> ts)
 
 
 prCtor :: Ctor -> PP.Doc
@@ -501,11 +511,13 @@ instance Bifunctor ParsedAnnotation where
 instance Bifunctor ElaboratedAnnotation where
   second = fmap
   first f (ElabRefined r) = ElabRefined $ first f r
+  first f (ElabAssume r) = ElabAssume $ first f r
   first _ (ElabUnrefined typ) = ElabUnrefined typ
 
 instance Bifunctor RType where
   second = fmap
   first f (RBase b t r) = RBase b t (f r)
+  first f (RApp c ts) = RApp c $ (\(a, b) -> (a, first f b)) <$> ts
   first f (RFun b rt1 rt2) = RFun b (first f rt1) (first f rt2)
   first f (RIFun b rt1 rt2) = RIFun b (first f rt1) (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)
