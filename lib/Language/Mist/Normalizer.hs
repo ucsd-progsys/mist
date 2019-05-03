@@ -36,14 +36,16 @@ anf (AnnIf c e1 e2 tag l) = do
   e1' <- anf e1
   e2' <- anf e2
   pure $ stitch bs (AnnIf c' e1' e2' tag l)
-anf (AnnApp e1 e2 tag l) = do
-  (bs, e1') <- imm e1
-  (bs', e2') <- imm e2
-  pure $ stitch (bs ++ bs') (AnnApp e1' e2' tag l)
+anf e@AnnApp{} = uncurry stitch <$> anfApp e
 anf (AnnLam x e tag l) = AnnLam x <$> anf e <*> pure tag <*> pure l
 anf (AnnTApp e t tag l) = AnnTApp <$> anf e <*> pure t <*> pure tag <*> pure l
 anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
 
+anfApp (AnnApp e1 e2 tag l) = do
+  (bs, e1') <- anfApp e1
+  (bs', e2') <- imm e2
+  pure (bs ++ bs', AnnApp e1' e2' tag l)
+anfApp e = imm e
 
 --------------------------------------------------------------------------------
 -- | `stitch bs e` takes a "context" `bs` which is a list of temp-vars and their

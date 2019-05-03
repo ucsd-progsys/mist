@@ -14,9 +14,6 @@ module Language.Mist.CGen
   , NNF (..)
   ) where
 
--- TODO: Do we need to run a Uniqify pass before we run this module?
--- Matt: We should uniquify at the beginning and then maintain the unique names property
-
 import Language.Mist.Types
 import Language.Mist.Names
 import Data.Bifunctor (second)
@@ -245,9 +242,8 @@ check env (Let b e1 e2 _) t2
  let c = mkAll x tx c2
  pure (CAnd [c1, c])
   -- Unrefined
-  | (AnnBind x (Just (ElabUnrefined taux)) l) <- b = do
- t1 <- fresh l (foBinds env) taux
- c1 <- check env e1 t1
+  | (AnnBind x _ _) <- b = do
+ (c1, t1) <- synth env e1
  c2 <- check ((x, t1):env) e2 t2
  let c = mkAll x t1 c2
  pure (CAnd [c1, c])
