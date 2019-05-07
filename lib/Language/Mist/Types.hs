@@ -65,6 +65,7 @@ import Text.Printf
 import qualified Text.PrettyPrint as PP
 import Language.Mist.UX
 import Data.Bifunctor
+import Data.List (intercalate)
 
 import Control.Monad.State
 import Control.Monad.Writer
@@ -310,13 +311,13 @@ instance (PPrint t) => PPrint (Bind t a) where
   pprint (AnnBind x tag _) = printf "%s %s" x (pprint tag)
 
 instance (PPrint r) => PPrint (ElaboratedAnnotation r a) where
-  pprint (ElabRefined rtype) = printf ": %s" (pprint rtype)
-  pprint (ElabAssume rtype) = printf "as %s" (pprint rtype)
-  pprint (ElabUnrefined typ) = printf ":: %s" (pprint typ)
+  pprint (ElabRefined rtype) = printf " : %s" (pprint rtype)
+  pprint (ElabAssume rtype) = printf " as %s" (pprint rtype)
+  pprint (ElabUnrefined typ) = printf " : %s" (pprint typ)
 
 instance (PPrint r) => PPrint (ParsedAnnotation r a) where
-  pprint (ParsedCheck rtype) = printf ": %s" (pprint rtype)
-  pprint (ParsedAssume rtype) = printf "as %s" (pprint rtype)
+  pprint (ParsedCheck rtype) = printf " : %s" (pprint rtype)
+  pprint (ParsedAssume rtype) = printf " as %s" (pprint rtype)
   pprint ParsedInfer = ""
 
 -- TODO: better instance
@@ -352,7 +353,7 @@ instance (PPrint r) => PPrint (RType r a) where
   pprint (RBase b t e) =
     printf "{%s:%s | %s}" (pprint b) (pprint t) (pprint e)
   pprint (RApp c ts) =
-    printf "%s %s" (show c) (show $ void $ ts)
+    printf "%s [%s]" (pprint c) (intercalate "," $ pprint <$> (snd <$> ts))
   pprint (RFun b t1 t2) =
     printf "%s:%s -> %s" (pprint b) (pprint t1) (pprint t2)
   pprint (RIFun b t1 t2) =
@@ -409,13 +410,13 @@ prType TInt         = PP.text "Int"
 prType TBool        = PP.text "Bool"
 prType (t1 :=> t2)   = PP.parens (prType t1) PP.<+> PP.text "=>" PP.<+> prType t2
 -- prType (TPair t s)  = PP.parens $ prType t PP.<> PP.text "," PP.<+> prType s
-prType (TCtor c ts) = prCtor c PP.<> PP.brackets (prTypes ts)
+prType (TCtor c ts) = prCtor c PP.<> PP.brackets (prTypeArgs ts)
 prType (TForall a t)  = PP.text "Forall" PP.<+>
                           prTVar a
                           PP.<> PP.text "." PP.<+> prType t
 
-prTypes           :: [(Variance,Type)] -> PP.Doc
-prTypes ts         = PP.hsep $ PP.punctuate PP.comma (prType . snd <$> ts)
+prTypeArgs           :: [(Variance,Type)] -> PP.Doc
+prTypeArgs ts         = PP.hsep $ PP.punctuate PP.comma (prType . snd <$> ts)
 
 
 prCtor :: Ctor -> PP.Doc
