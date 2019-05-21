@@ -57,9 +57,8 @@ stitch :: Binds t a -> AnfExpr t a -> AnfExpr t a
 stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extractAnn e) (extractLoc e)
 
 --------------------------------------------------------------------------------
--- | `imm i e` takes as input a "start" counter `i` and expression `e` and
---   returns an output `(i', bs, e')` where
---   * `i'` is the output counter (i.e. i' - i) anf-variables were generated,
+-- | `imm e` takes as input an expression `e` and
+--   returns an output `(bs, e')` where
 --   * `bs` are the temporary binders needed to render `e` in ANF, and
 --   * `e'` is an `imm` value Id equivalent to `e`.
 --------------------------------------------------------------------------------
