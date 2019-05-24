@@ -25,7 +25,7 @@ import qualified Data.Map.Strict as M
 -------------------------------------------------------------------------------
 type Env r a = [(Id, RType r a)]
 
-type CGenConstraints r a = (Predicate r, Show r, Show a, PPrint r)
+type CGenConstraints r a = (Predicate r, Show r, Show a, PPrint r, Eq r)
 
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
@@ -91,14 +91,14 @@ synth env (App e (Id y _) _) =
   (c, RFun x t t') -> do
     ty <- single env y
     let cy = ty <: t
-    pure (CAnd [c, cy], substReftPred1 (bindId x) y t')
+    pure (CAnd [c, cy], substReftPred (bindId x |-> y) t')
   (c, rit@RIFun{}) -> do
     let (ns, rt) = splitImplicits rit
     ns' <- sequence [ (,rt) <$> refreshId n | (n,rt) <- ns]
-    let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns') (fst <$> ns)) rt
+    let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns) (fst <$> ns')) rt
     ty <- single env y
     tHat <- fresh (extractLoc e) (foBinds env) (eraseRType t')
-    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t' <: tHat]
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (y |-> (bindId x)) t' <: tHat]
     pure (CAnd [c, cy], tHat)
   _ -> error "CGen App failed"
 
@@ -119,7 +119,7 @@ synth env (Lam (AnnBind x (Just (ElabUnrefined typ)) l) e _) = do
 synth env (TApp e typ l) = do
   (c, RForall (TV alpha) t) <- synth env e
   tHat <- fresh l (foBinds env) typ
-  pure (c, substReftReft1 tHat alpha t)
+  pure (c, substReftReft (alpha |-> tHat) t)
 synth env (TAbs tvar e _) = do
   (c, t) <- synth env e
   pure (c, RForall tvar t)
@@ -170,13 +170,12 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
   where
     go (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
       -- TODO: check whether the guard is correct/needed
-      | b1 == b2 = All x1 b1 p1 (Head $ varSubst x1 x2 p2)
+      | b1 == b2 = All x1 b1 p1 (Head $ varSubst (x2 |-> x1) p2)
       | otherwise = error $ "error?" ++ show b1 ++ show b2
-    go (RFun (Bind x _) s s') (RFun (Bind y _) t t') = CAnd [c, mkAll y t c']
+    go (RFun (Bind x1 _) t1 t1') (RFun (Bind x2 _) t2 t2') = CAnd [c, mkAll x2 t2 c']
       where
-        c = t <: s
-        -- ordering
-        c' = substReftPred1 x y s' <: t'
+        c = t2 <: t1
+        c' = substReftPred (x1 |-> x2) t1' <: t2'
     go (RForall alpha t1) (RForall beta t2)
       | alpha == beta = t1 <: t2
       | otherwise = error "Constraint generation subtyping error"
@@ -196,28 +195,28 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
 
 -- | (x :: t) => c
 mkAll x rt c = case flattenRType rt of
-                 (RBase (Bind y _) b p) -> All x b (varSubst x y p) c
+                 (RBase (Bind y _) b p) -> All x b (varSubst (y |-> x) p) c
                  _ -> c
 mkExists xts c = foldr mkExi c xts
   where mkExi (x,rt) c = case flattenRType rt of
-                             (RBase (Bind y _) b p) -> Any x b (varSubst x y p) c
+                             (RBase (Bind y _) b p) -> Any x b (varSubst (y |-> x) p) c
                              _ -> c
 
-flattenRType :: (Show r, Predicate r) => RType r a -> RType r a
+flattenRType :: CGenConstraints r a => RType r a -> RType r a
 flattenRType (RRTy b rtype reft) = strengthenRType (flattenRType rtype) b reft
 flattenRType rtype = rtype
 
-strengthenRType :: (Show r, Predicate r) => RType r a -> Bind t a -> r -> RType r a
+strengthenRType :: CGenConstraints r a => RType r a -> Bind t a -> r -> RType r a
 strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedReft')
   where
-    renamedReft' = varSubst (bindId b) (bindId b') reft'
+    renamedReft' = varSubst ((bindId b') |-> (bindId b)) reft'
 strengthenRType (RFun _ _ _) _ _ = error "TODO"
 strengthenRType (RIFun _ _ _) _ _ = error "TODO"
 -- TODO
 strengthenRType rt@RApp{} _b _r = rt
 strengthenRType (RRTy b rtype reft) b' reft' = RRTy b rtype (strengthen reft renamedReft')
   where
-    renamedReft' = varSubst (bindId b) (bindId b') reft'
+    renamedReft' = varSubst ((bindId b') |-> (bindId b)) reft'
 strengthenRType (RForall _ _) _ _ = error "TODO"
 
 
@@ -255,21 +254,21 @@ check env (App e (Id y _) _) tapp =
   (c, RFun x t t') -> do
     ty <- single env y
     let cy = ty <: t
-    pure (CAnd [c, cy, substReftPred1 (bindId x) y t' <: tapp])
+    pure (CAnd [c, cy, substReftPred (bindId x |-> y) t' <: tapp])
   (c, rit@RIFun{}) -> do
     let (ns, rt) = splitImplicits rit
     ns' <- sequence [ (,rt) <$> refreshId n | (n,rt) <- ns]
-    let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns') (fst <$> ns)) rt
+    let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns) (fst <$> ns')) rt
     ty <- single env y
     let (_ns'', tapp') = splitImplicits tapp
 --     traceM $ show ns''
-    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred1 (bindId x) y t' <: tapp']
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (y |-> (bindId x)) t' <: tapp']
     pure (CAnd [c, cy])
   _ -> error "CGen App failed"
 
 check _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) _ = pure (CAnd [])
 check env (Lam (AnnBind x _ _) e _) (RFun y ty t) =
-  mkAll x ty <$> check ((x, ty):env) e (substReftPred1 (bindId y) x t)
+  mkAll x ty <$> check ((x, ty):env) e (substReftPred (bindId y |-> x) t)
 
 -- this is INCORRECT for implicits
 check env e t = do

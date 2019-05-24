@@ -52,6 +52,8 @@ module Language.Mist.Types
 
   , eraseRType
 
+  , Subst
+
   , NNF (..)
   , Predicate (..)
 
@@ -66,6 +68,7 @@ import qualified Text.PrettyPrint as PP
 import Language.Mist.UX
 import Data.Bifunctor
 import Data.List (intercalate)
+import qualified Data.Map as M
 
 import Control.Monad.State
 import Control.Monad.Writer
@@ -425,6 +428,12 @@ prCtor (CT c) = PP.text c
 prTVar :: TVar -> PP.Doc
 prTVar (TV a) = PP.text a
 
+--------------------------------------------------------------------------------
+-- | Substitution Data Structure -----------------------------------------------
+--------------------------------------------------------------------------------
+
+type Subst e = M.Map Id e
+
 
 --------------------------------------------------------------------------------
 -- | Horn Clause Structures ----------------------------------------------------
@@ -448,7 +457,7 @@ class Predicate r where
   prim :: (MonadFresh m) => Expr t a -> m (RType r a) -- ^ Gives a specification to primitives
                                                       -- TODO: this is a partial function
   strengthen :: r -> r -> r
-  varSubst :: Id -> Id -> r -> r -- ^ [x/y]r
+  varSubst :: Subst Id -> r -> r -- ^ [x/y]r
   buildKvar :: Id -> [Id] -> r -- ^ k(x1, ..., xn)
 
 --------------------------------------------------------------------------------
