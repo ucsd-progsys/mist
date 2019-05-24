@@ -3,6 +3,7 @@
 {-# LANGUAGE TupleSections #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternGuards #-}
+{-# LANGUAGE ConstraintKinds #-}
 
 --------------------------------------------------------------------------------
 -- | This module generates refinement type constraints
@@ -24,14 +25,15 @@ import qualified Data.Map.Strict as M
 -------------------------------------------------------------------------------
 type Env r a = [(Id, RType r a)]
 
+type CGenConstraints r a = (Predicate r, Show r, Show a, PPrint r)
+
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
 -------------------------------------------------------------------------------
-generateConstraints :: (Predicate r, Show r, Show a, PPrint r) =>
-                       ElaboratedExpr r a -> NNF r
+generateConstraints :: CGenConstraints r a => ElaboratedExpr r a -> NNF r
 generateConstraints = fst . runFresh . synth []
 
-synth :: (Predicate r, Show r, Show a, PPrint r) =>
+synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 synth _ e@Unit{}    = (Head true,) <$> prim e
 synth _ e@Number{}  = (Head true,) <$> prim e
@@ -223,7 +225,7 @@ splitImplicits (RIFun b t t') = ((bindId b,t):bs, t'')
     where (bs,t'') = splitImplicits t'
 splitImplicits rt = ([],rt)
 
-check :: (Show r, Predicate r, Show a, PPrint r) => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
+check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 check env (Let b e1 e2 _) t2
   -- Annotated with an assume
   | (AnnBind x (Just (ElabAssume tx)) _) <- b = check ((x, tx):env) e2 t2
