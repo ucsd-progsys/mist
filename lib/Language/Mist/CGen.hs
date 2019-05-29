@@ -98,7 +98,8 @@ synth env (App e (Id y _) _) =
     let RFun x t t' = substReftPred (M.fromList $ zip (fst <$> ns) (fst <$> ns')) rt
     ty <- single env y
     tHat <- fresh (extractLoc e) (foBinds env) (eraseRType t')
-    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (y |-> (bindId x)) t' <: tHat]
+    -- let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (y |-> bindId x) t' <: tHat]
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (bindId x |-> y) t' <: tHat]
     pure (CAnd [c, cy], tHat)
   _ -> error "CGen App failed"
 
@@ -262,7 +263,7 @@ check env (App e (Id y _) _) tapp =
     ty <- single env y
     let (_ns'', tapp') = splitImplicits tapp
 --     traceM $ show ns''
-    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (y |-> (bindId x)) t' <: tapp']
+    let cy = mkExists ns' $ CAnd [ty <: t, substReftPred (bindId x |-> y) t' <: tapp']
     pure (CAnd [c, cy])
   _ -> error "CGen App failed"
 
