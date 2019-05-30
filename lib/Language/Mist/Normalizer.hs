@@ -36,24 +36,19 @@ anf (AnnIf c e1 e2 tag l) = do
   e1' <- anf e1
   e2' <- anf e2
   pure $ stitch bs (AnnIf c' e1' e2' tag l)
-
--- anf i (Tuple e1 e2 l)   = (i', stitch bs (Tuple e1' e2' l))
---   where
---     (i', bs, [e1',e2']) = imms i [e1, e2]
-
--- anf i (GetItem e1 f l)  = (i', stitch bs (GetItem e1' f l))
---   where
---     (i', bs, e1')       = imm i e1
-
-anf (AnnApp e1 e2 tag l) = do
-  (bs, e1') <- imm e1
-  (bs', e2') <- imm e2
-  pure $ stitch (bs ++ bs') (AnnApp e1' e2' tag l)
--- anf (Lam x e l) = Lam (first Just x) <$> anf e <*> pure l
+anf e@AnnApp{} = uncurry stitch <$> anfApp e
 anf (AnnLam x e tag l) = AnnLam x <$> anf e <*> pure tag <*> pure l
-anf (AnnTApp e t tag l) = AnnTApp <$> anf e <*> pure t <*> pure tag <*> pure l
+anf e@AnnTApp{}  = uncurry stitch <$> anfApp e
 anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
 
+anfApp (AnnApp e1 e2 tag l) = do
+  (bs, e1') <- anfApp e1
+  (bs', e2') <- imm e2
+  pure (bs ++ bs', AnnApp e1' e2' tag l)
+anfApp (AnnTApp e1 t tag l) = do
+  (bs, e1') <- anfApp e1
+  pure (bs, AnnTApp e1' t tag l)
+anfApp e = imm e
 
 --------------------------------------------------------------------------------
 -- | `stitch bs e` takes a "context" `bs` which is a list of temp-vars and their
@@ -65,9 +60,8 @@ stitch :: Binds t a -> AnfExpr t a -> AnfExpr t a
 stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extractAnn e) (extractLoc e)
 
 --------------------------------------------------------------------------------
--- | `imm i e` takes as input a "start" counter `i` and expression `e` and
---   returns an output `(i', bs, e')` where
---   * `i'` is the output counter (i.e. i' - i) anf-variables were generated,
+-- | `imm e` takes as input an expression `e` and
+--   returns an output `(bs, e')` where
 --   * `bs` are the temporary binders needed to render `e` in ANF, and
 --   * `e'` is an `imm` value Id equivalent to `e`.
 --------------------------------------------------------------------------------
@@ -78,25 +72,6 @@ imm e@AnnNumber{} = immExp e
 imm e@AnnBoolean{} = immExp e
 imm e@AnnPrim{} = immExp e
 imm e@AnnId{} = pure ([], e)
--- imm (Prim2 o e1 e2 l) = do
---   (bs, v1) <- imm e1
---   (bs', v2) <- imm e2
---   x <- freshBind l
---   let bs'' = (x, (Prim2 o v1 v2 l, l)) : (bs ++ bs')
---   pure (bs'', mkId x l)
-
--- imm i (Tuple e1 e2 l)   = (i'', bs', mkId x l)
---   where
---     (i', bs, [v1, v2])  = imms  i [e1, e2]
---     (i'', x)            = fresh l i'
---     bs'                 = (x, (Tuple v1 v2 l, l)) : bs
-
--- imm i (GetItem e1 f l)  = (i'', bs', mkId x l)
---   where
---     (i', bs, v1)        = imm i e1
---     (i'', x)            = fresh l i'
---     bs'                 = (x, (GetItem v1 f l, l)) : bs
-
 imm (AnnApp e1 e2 tag l) = do
   (bs, v1) <- imm e1
   (bs', v2) <- imm e2
@@ -131,38 +106,3 @@ mkId x tag l = AnnId (bindId x) tag l
 
 bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
 bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
-
-
-{-
-anf1 := "add1(add1(add1(add1(x))))"
-
-let t1 = add1(x)
-  , t2 = add1(t1)
-  , t3 = add1(t2)
-  , t4 = add1(t3)
-in
-    t4
-
-anf2 := ((2 + 3) * (12 - 4)) * (7 + 8)
-
- let t1 = 2  + 3
-   , t2 = 12 - 4
-   , t3 = t1 * t2
-   , t4 = 7 + 8
- in
-     t3 * t4
-
-anf3 := (let x = 10 in x + 5) + (let y = 20 in y - 5)
-
-let  t1 = let x = 10 in
-           x + 5
-   , t2 = let y = 20 in
-           y - 5
-in
-   t1 + t2
-
-anf4 := (if x: y + 1 else: z + 1) + 12
-let t = (if ...)
-in t + 12
-
--}

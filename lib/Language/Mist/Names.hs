@@ -21,17 +21,13 @@ module Language.Mist.Names
   , evalFreshT
   , runFresh
 
+  , (|->)
   , Subable
-  , Subst
   , subst
-  , subst1
 
   , substReftPred
-  , substReftPred1
   , substReftType
-  , substReftType1
   , substReftReft
-  , substReftReft1
 
   , emptyFreshState
 
@@ -62,15 +58,12 @@ varNum = read . last . splitOn cSEPARATOR
 -- change this if it's too slow
 createInternalName name number = head (splitOn cSEPARATOR name) ++ cSEPARATOR ++ show number
 
+(|->) :: Id -> e -> Subst e
+x |-> e = M.singleton x e
+
 --------------------------------------------------------------------------------
 -- | Substitutions
 --------------------------------------------------------------------------------
-type Subst e = M.Map Id e
-
--- | e[ex/x]
-subst1 :: Subable e a => e -> Id -> a -> a
-subst1 ex x e = subst (M.singleton x ex) e
-
 -- | Substitutes in the predicates of an RType
 substReftPred :: (Subable e r) => Subst e -> RType r a -> RType r a
 substReftPred su (RApp c ts) =
@@ -86,9 +79,6 @@ substReftPred su (RRTy bind rtype expr) =
 substReftPred su (RForall tvars r) =
   RForall tvars (substReftPred su r)
 
-substReftPred1 :: (Subable e r) => e -> Id -> RType r a -> RType r a
-substReftPred1 e x rtype = substReftPred (M.singleton x e) rtype
-
 -- | Substitutes in the Types of an RType
 substReftType :: (Subable t Type) => Subst t -> RType r a -> RType r a
 substReftType su (RBase bind typ p) =
@@ -103,9 +93,6 @@ substReftType su (RRTy bind rtype expr) =
   RRTy bind (substReftType su rtype) expr
 substReftType su (RForall tvar r) =
   RForall tvar (substReftType (M.delete (unTV tvar) su) r)
-
-substReftType1 :: (Subable t Type) => t -> Id -> RType r a -> RType r a
-substReftType1 t x rtype = substReftType (M.singleton x t) rtype
 
 -- | Substitutes an RType for an RType
 substReftReft :: Subst (RType r a) -> RType r a -> RType r a
@@ -123,9 +110,6 @@ substReftReft su (RRTy bind rtype expr) =
   RRTy bind (substReftReft su rtype) expr
 substReftReft su (RForall tvar r) =
   RForall tvar (substReftReft (M.delete (unTV tvar) su) r)
-
-substReftReft1 :: RType r a -> Id -> RType r a -> RType r a
-substReftReft1 rtype1 x rtype2 = substReftReft (M.singleton x rtype1) rtype2
 
 toTVar :: Type -> Maybe Id
 toTVar (TVar (TV t)) = Just t
@@ -197,9 +181,8 @@ instance Subable (Expr t a) (Expr t a) where
 instance Subable Type a => Subable Type (Maybe a) where
   _subst su = fmap (_subst su)
 
-instance Predicate r => Subable Id r where
-  _subst su r = M.foldrWithKey varSubst r su
-
+instance (Eq r, Show r, Predicate r) => Subable Id r where
+  _subst su r = varSubst su r
 
 --------------------------------------------------------------------------------
 data FreshState = FreshState { freshInt :: Integer }

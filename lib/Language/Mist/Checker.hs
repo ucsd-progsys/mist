@@ -418,7 +418,7 @@ _synthesizeSpine funType cFun eArg = do
     go tforall@(TForall (TV tv) t) = do
       evar <- generateExistential
       extendEnv [Unsolved evar]
-      let newFunType = subst1 (EVar evar) tv t
+      let newFunType = subst (tv |-> (EVar evar)) t
       let annotatedFun = (putAnn (Just $ ElabUnrefined tforall) cFun)
       synthesizeSpine newFunType (putAnn (Just $ ElabUnrefined newFunType) (TApp annotatedFun (EVar evar) (extractLoc cFun))) eArg
     go t = throwError $ [errApplyNonFunction (sourceSpan cFun) t]
@@ -435,7 +435,7 @@ instSub c a@(TForall _ _) b =
     go (TForall alpha a) b = do
       evar <- generateExistential
       extendEnv [Scope evar, Unsolved evar]
-      instantiations <- go (subst1 (EVar evar) (unTV alpha) a) b
+      instantiations <- go (subst ((unTV alpha) |-> (EVar evar)) a) b
       (delta, delta') <- getsEnv $ splitEnvAt (Scope evar)
       setEnv delta
       pure (applyEnv delta' (EVar evar):instantiations)
@@ -476,7 +476,7 @@ a@(TVar _) <<: b@(TVar _) | a == b = pure ()
 (TForall alpha a) <<: b = do
   evar <- generateExistential
   extendEnv [Scope evar, Unsolved evar]
-  (subst1 (EVar evar) (unTV alpha) a) <: b
+  (subst ((unTV alpha) |-> (EVar evar)) a) <: b
   modifyEnv $ dropEnvAfter (Scope evar)
 a <<: (TForall alpha b) = do
   extendEnv [BoundTVar alpha]
@@ -573,7 +573,7 @@ _instantiateR typ alpha = do
     go (TForall tvar a) = do
       beta <- generateExistential
       extendEnv [Scope beta, Unsolved beta]
-      instantiateR (subst1 (EVar beta) (unTV tvar) a) alpha
+      instantiateR (subst ((unTV tvar) |-> (EVar beta)) a) alpha
       modifyEnv $ dropEnvAfter (Scope beta)
     go typ = solveExistential alpha typ []
 

@@ -28,7 +28,7 @@ import qualified Language.Fixpoint.Horn.Solve as S
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: NNF HC.Pred -> IO (F.Result Integer)
-solve constraints = {-setVerbosity Loud >>-} S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
+solve constraints = {-setVerbosity Loud >>-} fmap (fmap fst) $ S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
   where
     fixpointConstraint = toHornClause constraints
     cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }
@@ -62,9 +62,9 @@ collectKVars cstr = go MAP.empty cstr
         bindKVars = goPred env' (HC.bPred bind)
         constraintKVars = go env' constraint
 
-    goPred env (HC.Var k args) = [HC.HVar k argSorts ()]
+    goPred env var@(HC.Var k args) = [HC.HVar k argSorts ()]
       where
-        argSorts = map (\arg -> fromMaybe (error (show arg)) $ MAP.lookup arg env) args
+        argSorts = map (\arg -> fromMaybe (error (show (arg, var))) $ MAP.lookup arg env) args
     goPred env (HC.PAnd preds) = concatMap (goPred env) preds
     goPred _ (HC.Reft _) = []
 
@@ -150,12 +150,15 @@ instance Predicate HC.Pred where
 
   buildKvar x params = HC.Var (fromString x) (fmap fromString params)
 
-  varSubst x y (HC.Reft fexpr) =
-    HC.Reft $ F.subst1 fexpr (fromString y, F.EVar $ fromString x)
-  varSubst x y (HC.Var k params) =
-    HC.Var k $ fmap (\param -> if param == fromString y then fromString x else param) params
-  varSubst x y (HC.PAnd ps) =
-    HC.PAnd $ fmap (varSubst x y) ps
+  varSubst su (HC.Reft fexpr) = HC.Reft $ MAP.foldrWithKey substNameInFexpr fexpr su
+    where
+      substNameInFexpr oldName newName fexpr = F.subst1 fexpr (fromString oldName, F.EVar $ fromString newName)
+  varSubst su (HC.Var k params) =
+    let su' = MAP.map fromString $ MAP.mapKeys fromString su in
+    HC.Var k $ fmap (\param -> MAP.findWithDefault param param su') params
+  varSubst su (HC.PAnd ps) =
+    HC.PAnd $ fmap (varSubst su) ps
+
 
   prim e@AnnUnit{} = equalityPrim e TUnit
   prim e@AnnNumber{} = equalityPrim e TInt
