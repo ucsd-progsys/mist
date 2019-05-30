@@ -38,13 +38,16 @@ anf (AnnIf c e1 e2 tag l) = do
   pure $ stitch bs (AnnIf c' e1' e2' tag l)
 anf e@AnnApp{} = uncurry stitch <$> anfApp e
 anf (AnnLam x e tag l) = AnnLam x <$> anf e <*> pure tag <*> pure l
-anf (AnnTApp e t tag l) = AnnTApp <$> anf e <*> pure t <*> pure tag <*> pure l
+anf e@AnnTApp{}  = uncurry stitch <$> anfApp e
 anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
 
 anfApp (AnnApp e1 e2 tag l) = do
   (bs, e1') <- anfApp e1
   (bs', e2') <- imm e2
   pure (bs ++ bs', AnnApp e1' e2' tag l)
+anfApp (AnnTApp e1 t tag l) = do
+  (bs, e1') <- anfApp e1
+  pure (bs, AnnTApp e1' t tag l)
 anfApp e = imm e
 
 --------------------------------------------------------------------------------

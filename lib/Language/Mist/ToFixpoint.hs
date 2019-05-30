@@ -28,7 +28,7 @@ import qualified Language.Fixpoint.Horn.Solve as S
 -- | Solves the subtyping constraints we got from CGen.
 
 solve :: NNF HC.Pred -> IO (F.Result Integer)
-solve constraints = {-setVerbosity Loud >>-} S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
+solve constraints = {-setVerbosity Loud >>-} fmap (fmap fst) $ S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
   where
     fixpointConstraint = toHornClause constraints
     cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }

@@ -19,8 +19,8 @@ put as forall s. w:s -> ST <s >{v:s|v==w} >Unit
 put = (0)
 
 -- incr
-incr :: ST <Int >Int >Unit
-incr = (bind (get True) (\n -> (put (n+1))))
+-- incr :: ST <Int >Int >Unit
+-- incr = (bind (get True) (\n -> (put (n+1))))
 
 incr2 :: ST <{i:Int|i==2} >{w:Int|w==2} >Int
 incr2 = thenn (get True) (get True)
