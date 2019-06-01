@@ -16,7 +16,10 @@ import           System.IO
 import           System.Process
 import           System.Timeout
 import           System.Console.CmdArgs.Verbosity (whenLoud)
-import           Debug.Trace (trace)
+import qualified Debug.Trace as DT
+
+_DBG :: Bool -- To Debug or not to Debug?
+_DBG = False
 
 --------------------------------------------------------------------------------
 (>->) :: (a -> Either e b) -> (b -> c) -> a -> Either e c
@@ -66,9 +69,14 @@ safeReadFile f = (Right <$> readFile f) `catch` handleIO f
 handleIO :: FilePath -> IOException -> IO (Either String a)
 handleIO f e = return . Left $ "Warning: Couldn't open " <> f <> ": " <> show e
 
-traceShow :: (Show a) => Bool -> String -> a -> a
-traceShow False _   x = x 
-traceShow True  msg x = trace (printf "TRACE: %s = %s" msg (show x)) x
+traceShow :: (Show a) => String -> a -> a
+traceShow msg x = if _DBG then DT.trace (printf "TRACE: %s = %s" msg (show x)) x else x
+
+trace :: String -> a -> a
+trace = if _DBG then DT.trace else const id
+
+traceShowId :: Show a => a -> a
+traceShowId = if _DBG then DT.traceShowId else id
 
 safeHead :: a -> [a] -> a
 safeHead def []    = def

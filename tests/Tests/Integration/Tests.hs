@@ -1,6 +1,7 @@
 module Tests.Integration.Tests (integrationTests) where
 
-import Control.Monad (liftM3)
+import Control.Exception
+import Control.Monad
 import Data.Bool (bool)
 
 import System.Directory
@@ -20,23 +21,24 @@ import Language.Mist.Runner
 import Language.Mist.UX (Result, SourceSpan)
 
 integrationTests = testGroupM "Integration"
-  [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" mistSuccess
-  , testGroup "neg" <$> dirTests "tests/Tests/Integration/neg" mistFailure
+  [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" (mkTest mistSuccess)
+  , testGroup "neg" <$> dirTests "tests/Tests/Integration/neg" (mkTest mistFailure)
+  , testGroup "todo" <$> dirTests "tests/Tests/Integration/todo" crashTest
   ]
 
 ---------------------------------------------------------------------------
--- dirTests :: FilePath -> (Result (Core SourceSpan) -> Assertion) -> IO [TestTree]
+dirTests :: FilePath -> (FilePath -> TestName -> TestTree) -> IO [TestTree]
 ---------------------------------------------------------------------------
 dirTests root testPred = do
   files    <- walkDirectory root
   let tests = [ rel | f <- files, isTest f, let rel = makeRelative root f ]
-  return    $ mkTest testPred root <$> tests
+  return    $ testPred root <$> tests
 
 isTest   :: FilePath -> Bool
 isTest f = takeExtension f `elem` [".hs"]
 
 ---------------------------------------------------------------------------
--- mkTest :: (Result (Core SourceSpan) -> Assertion) -> FilePath -> FilePath -> TestTree
+mkTest :: (Result () -> IO ()) -> FilePath -> TestName -> TestTree
 ---------------------------------------------------------------------------
 mkTest testPred dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
@@ -47,6 +49,17 @@ mkTest testPred dir file = testCase file $ do
     test = dir </> file
     log  = let (d, f) = splitFileName file in dir </> d </> ".liquid" </> f <.> "log"
 
+-- TODO abstract logging machinery, make tests fail when they don't crash
+crashTest :: FilePath -> TestName -> TestTree
+crashTest dir file = testCase file $ do
+  createDirectoryIfMissing True $ takeDirectory log
+  withFile log WriteMode $ \h -> void (runMist h test)
+        `catch` (\(SomeException _) -> pure ())
+  where
+    test = dir </> file
+    log  = let (d, f) = splitFileName file in dir </> d </> ".liquid" </> f <.> "log"
+
+
 mistSuccess :: Result a -> Assertion
 mistSuccess (Right _) = pure ()
 mistSuccess (Left errors) = assertFailure (printf "expected success but got errors: %s" (show errors))
@@ -55,9 +68,9 @@ mistFailure :: Result a -> Assertion
 mistFailure (Right _) = assertFailure "expected failure but Mist succeeded"
 mistFailure (Left _) = pure ()
 
-----------------------------------------------------------------------------------------
+---------------------------------------------------------------------------
 walkDirectory :: FilePath -> IO [FilePath]
-----------------------------------------------------------------------------------------
+---------------------------------------------------------------------------
 walkDirectory root =
   fmap concat . traverse collect . candidates
     =<< (getDirectoryContents root `catchIOError` const (return []))

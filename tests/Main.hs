@@ -20,7 +20,7 @@ main :: IO ()
 main = runTests
 
 runTests :: IO ()
-runTests = run =<< testGroupM "Tests" [integrationTests, pure unitTests]
+runTests = run =<< testGroupM "Tests" [pure unitTests, integrationTests]
   where
     run = defaultMainWithIngredients [
                 testRunner

@@ -42,9 +42,6 @@ import           Language.Mist.Types
 import           Language.Mist.Utils
 import           Language.Mist.Names
 
-import Debug.Trace
-
-
 --------------------------------------------------------------------------------
 -- | Well-formedness errors
 --------------------------------------------------------------------------------

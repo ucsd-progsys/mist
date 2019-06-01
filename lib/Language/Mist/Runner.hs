@@ -31,14 +31,14 @@ type R = HC.Pred
 -}
 
 ---------------------------------------------------------------------------
-runMist :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
+runMist :: Handle -> FilePath -> IO (Result ())
 ---------------------------------------------------------------------------
 runMist h f = act h f >>= \case
-  r@Right{} -> putStrLn "SAFE" >> return r
+  r@Right{} -> hPutStrLn h "SAFE" >> return r
   Left es -> esHandle h (return . Left) es
 
-act :: Handle -> FilePath -> IO (Result (ElaboratedExpr R SourceSpan))
-act _h f = do
+act :: Handle -> FilePath -> IO (Result ())
+act h f = do
   s    <- readFile f
   e    <- parse f s
   let r = mist e
@@ -46,11 +46,11 @@ act _h f = do
     Right t -> do
       let c = generateConstraints (anormal (annotate t TUnit))
       solverResult <- solve c
-      print solverResult
+      hPrint h solverResult
       case F.resStatus solverResult of
-        F.Safe -> return r
+        F.Safe -> return (Right ())
         _ -> return $ Left [mkError ("solver failed: " ++ show solverResult) (SS {ssBegin = initialPos f, ssEnd = initialPos f})] -- TODO: proper error
-    Left _ -> return r
+    Left l -> return (Left l)
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
 esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
