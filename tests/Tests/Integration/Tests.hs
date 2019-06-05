@@ -18,7 +18,7 @@ import Test.Tasty.HUnit
 import Tests.Utils
 
 import Language.Mist.Runner
-import Language.Mist.UX (Result, SourceSpan)
+import Language.Mist.UX (Result, SourceSpan, UserError)
 
 integrationTests = testGroupM "Integration"
   [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" (mkTest mistSuccess)
@@ -49,16 +49,26 @@ mkTest testPred dir file = testCase file $ do
     test = dir </> file
     log  = let (d, f) = splitFileName file in dir </> d </> ".liquid" </> f <.> "log"
 
+data MistException = Success | Failure [UserError]
+  deriving Show
+
+instance Exception MistException
+
 -- TODO abstract logging machinery, make tests fail when they don't crash
 crashTest :: FilePath -> TestName -> TestTree
 crashTest dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
-  withFile log WriteMode $ \h -> void (runMist h test)
-        `catch` (\(SomeException _) -> pure ())
+  withFile log WriteMode $ \h -> (do
+    ec <- (runMist h test) `catch` (\(SomeException _) -> pure $ Left [])
+    case ec of
+      Right _ -> throw Success
+      Left errors -> throw $ Failure errors) `catch` handler
   where
     test = dir </> file
     log  = let (d, f) = splitFileName file in dir </> d </> ".liquid" </> f <.> "log"
 
+    handler Success = assertFailure "expected failure but Mist succeeded"
+    handler (Failure _) = pure ()
 
 mistSuccess :: Result a -> Assertion
 mistSuccess (Right _) = pure ()
