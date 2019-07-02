@@ -174,6 +174,7 @@ pattern Bind id tag <- AnnBind id _ tag
 -- | This allows us to bind functions as in LH `--higherorder`
 -- |   {f : { v:_ | v < 0 } -> { v:_ | v > 0} | f 0 = 0}
 
+-- TODO: add type variables
 data RType r a
   = RBase !(Bind () a) Type !r
   | RApp !Ctor ![(Variance, RType r a)]

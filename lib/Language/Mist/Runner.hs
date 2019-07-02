@@ -1,5 +1,4 @@
 {-# LANGUAGE ScopedTypeVariables #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE BangPatterns #-}
 {-# LANGUAGE LambdaCase #-}
 
@@ -21,13 +20,13 @@ import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 type R = HC.Pred
 
 {-
- 0) parse
- 1) unique
- 2) convert refinements from mist `Expr`s to fixpoint `Expr`s
- 3) elaborate
- 4) annotate each node with its type
- 5) anf
- 6) constraint generation
+  0) parse
+  1) unique
+  2) convert refinements from mist `Expr`s to fixpoint `Expr`s
+  3) elaborate
+  4) annotate each node with its type
+  5) anf
+  6) constraint generation
 -}
 
 ---------------------------------------------------------------------------
@@ -58,12 +57,11 @@ esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 -----------------------------------------------------------------------------------
 mist :: SSParsedExpr -> Result (ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
-mist expr = do
+mist expr =
   case wellFormed expr of
     [] -> do
       let uniqueExpr = uniquify expr
       let predExpr = parsedExprPredToFixpoint uniqueExpr
       result <- elaborate predExpr
-      -- !_ <- traceM $ pprint result
       pure result
     errors -> Left errors

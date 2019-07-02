@@ -96,7 +96,7 @@ substReftType su (RForall tvar r) =
 
 -- | Substitutes an RType for an RType
 substReftReft :: Subst (RType r a) -> RType r a -> RType r a
-substReftReft su (RBase bind typ expr) =
+substReftReft su (RBase bind typ expr) = -- TODO: handle polymorphism more appropriately
   case flip M.lookup su =<< toTVar typ of
       Nothing -> RBase bind typ expr
       Just rt -> RRTy bind rt expr
