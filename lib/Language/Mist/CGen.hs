@@ -273,10 +273,9 @@ eraseRTypes :: Env r a -> [(Id, Type)]
 eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 
 (<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
-rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
+rtype1 <: rtype2 = go rtype1 rtype2
   where
     go (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
-      -- TODO: check whether the guard is correct/needed
       | b1 == b2 = pure $ All x1 b1 p1 (Head $ varSubst (x2 |-> x1) p2)
       | otherwise = error $ "error?" ++ show b1 ++ show b2
     go (RFun (Bind x1 _) t1 t1') (RFun (Bind x2 _) t2 t2') = do
@@ -293,6 +292,11 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
       z <- refreshId x
       cSub <- substReftPred (x |-> z) t1' <: t2
       pure $ mkExists z t1 cSub
+    go (RRTy (Bind x _) rt1 reft) rt2 = All x (eraseRType rt1) reft <$> (rt1 <: rt2)
+    go rt1 (RRTy x rt2 reft) = do
+      subrt <- rt1 <: rt2
+      subreft <- rt1 <: RBase x (eraseRType rt2) reft
+      pure $ CAnd [subrt, subreft]
     go _ _ = error $ "CGen subtyping error. Got " ++ pprint rtype1 ++ " but expected " ++ pprint rtype2
 
 (v, rt1) <<: (_,rt2) = case v of
@@ -304,33 +308,17 @@ rtype1 <: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
 
 
 -- | (x :: t) => c
-mkAll x rt c =
-  case flattenRType rt of
-    (RBase (Bind y _) b p) -> All x b (varSubst (y |-> x) p) c
-    _ -> c
+mkAll :: CGenConstraints r a => Id -> RType r a -> NNF r -> NNF r
+mkAll x rt c = case rt of
+   RBase (Bind y _) b p -> All x b (varSubst (y |-> x) p) c
+   RRTy (Bind y _) rt reft -> All x (eraseRType rt) (varSubst (y |-> x) reft) (mkAll y rt c)
+   _ -> c
 
 -- | ∃ x :: t. c
-mkExists x rt c =
-  case flattenRType rt of
-    (RBase (Bind y _) b p) -> Any x b (varSubst (y |-> x) p) c
-    _ -> c -- TODO: is this safe?
-
-flattenRType :: CGenConstraints r a => RType r a -> RType r a
-flattenRType (RRTy b rtype reft) = strengthenRType (flattenRType rtype) b reft
-flattenRType rtype = rtype
-
-strengthenRType :: CGenConstraints r a => RType r a -> Bind t a -> r -> RType r a
-strengthenRType (RBase b t reft) b' reft' = RBase b t (strengthen reft renamedReft')
-  where
-    renamedReft' = varSubst ((bindId b') |-> (bindId b)) reft'
-strengthenRType (RFun _ _ _) _ _ = error "TODO"
-strengthenRType (RIFun _ _ _) _ _ = error "TODO"
--- TODO
-strengthenRType rt@RApp{} _b _r = rt
-strengthenRType (RRTy b rtype reft) b' reft' = RRTy b rtype (strengthen reft renamedReft')
-  where
-    renamedReft' = varSubst ((bindId b') |-> (bindId b)) reft'
-strengthenRType (RForall _ _) _ _ = error "TODO"
+mkExists x rt c = case rt of
+             RBase (Bind y _) b p -> Any x b (varSubst (y |-> x) p) c
+             RRTy (Bind y _) rt reft -> All x (eraseRType rt) (varSubst (y |-> x) reft) (mkAll y rt c)
+             _ -> c
 
 splitImplicits :: RType r a -> ([(Id, RType r a)], RType r a)
 splitImplicits (RIFun b t t') = ((bindId b,t):bs, t'')
