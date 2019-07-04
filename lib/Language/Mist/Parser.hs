@@ -1,5 +1,6 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE TupleSections         #-}
+{-# LANGUAGE LambdaCase         #-}
 
 module Language.Mist.Parser
   (
@@ -257,6 +258,8 @@ mkApp e1 e2 = App e1 e2 (stretch [e1, e2])
 binops :: [[Operator Parser BareExpr]]
 binops =
   [ [ InfixL (pure op <*> primitive Times "*")
+    , InfixL (pure op <*> primitive Elem "∈")
+    , InfixL (pure op <*> primitive Union "∪")
     ]
   , [ InfixL (pure op <*> primitive Plus "+")
     , InfixL (pure op <*> primitive Minus "-")
@@ -280,7 +283,10 @@ primitive prim primSymbol = do
   pure $ Prim prim (SS p1 p2)
 
 idExpr :: Parser BareExpr
-idExpr = L.indentGuard sc GT pos1 *> (uncurry Id <$> identifier)
+idExpr = L.indentGuard sc GT pos1 *> flip fmap identifier (\case
+   ("setPlus", l) -> Prim SetAdd l
+   ("setMinus", l) -> Prim SetDel l
+   (id,l) -> Id id l)
 
 constExpr :: Parser BareExpr
 constExpr

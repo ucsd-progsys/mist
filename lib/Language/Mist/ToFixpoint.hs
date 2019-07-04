@@ -22,6 +22,7 @@ import qualified Language.Mist.Names as MN
 
 import qualified Language.Fixpoint.Types.Config as C
 import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Smt.Theories as T
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Horn.Solve as S
 import System.Console.CmdArgs.Verbosity
@@ -100,7 +101,7 @@ exprToFixpoint (AnnNumber n _ _)       = F.ECon (F.I n)
 exprToFixpoint (AnnBoolean True _ _)   = F.PTrue
 exprToFixpoint (AnnBoolean False _ _)  = F.PFalse
 exprToFixpoint (AnnId x _ _)           = idToFix x
-exprToFixpoint (AnnPrim _ _ _)         = error "primitives should be handled by appToFixpoing"
+exprToFixpoint (AnnPrim _ _ _)         = error "primitives should be handled by appToFixpoint"
 exprToFixpoint (AnnIf e1 e2 e3 _ _)    =
   F.EIte (exprToFixpoint e1) (exprToFixpoint e2) (exprToFixpoint e3)
 exprToFixpoint e@AnnApp{} = appToFixpoint e
@@ -109,10 +110,6 @@ exprToFixpoint (AnnUnit _ _)           = F.EVar (fromString "()")
 exprToFixpoint (AnnLam _bs _e2 _ _)      = error "TODO exprToFixpoint"
 exprToFixpoint (AnnTApp _e _typ _ _)      = error "TODO exprToFixpoint"
 exprToFixpoint (AnnTAbs _tvar _e _ _)      = error "TODO exprToFixpoint"
-
-    -- case prim2ToFixpoint o of
-    -- Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
-    -- Right bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
 
 appToFixpoint :: M.Expr t a -> F.Expr
 appToFixpoint e =
@@ -129,17 +126,23 @@ appToFixpoint e =
     binopToFixpoint And e1 e2 = F.PAnd [exprToFixpoint e1, exprToFixpoint e2]
     binopToFixpoint op e1 e2 =
       case prim2ToFixpoint op of
-        Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
-        Right bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
+        FBrel brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
+        FBop bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
+        FPrim e -> e
 
-prim2ToFixpoint :: Prim -> Either F.Brel F.Bop
-prim2ToFixpoint M.Plus  = Right F.Plus
-prim2ToFixpoint M.Minus = Right F.Minus
-prim2ToFixpoint M.Times = Right F.Times
-prim2ToFixpoint Less    = Left F.Lt
-prim2ToFixpoint Lte     = Left F.Le
-prim2ToFixpoint Greater = Left F.Gt
-prim2ToFixpoint Equal   = Left F.Eq
+data FPrim = FBop F.Bop | FBrel F.Brel | FPrim F.Expr
+
+prim2ToFixpoint :: Prim -> FPrim
+prim2ToFixpoint M.Plus  = FBop F.Plus
+prim2ToFixpoint M.Minus = FBop F.Minus
+prim2ToFixpoint M.Times = FBop F.Times
+prim2ToFixpoint Less    = FBrel F.Lt
+prim2ToFixpoint Lte     = FBrel F.Le
+prim2ToFixpoint Greater = FBrel F.Gt
+prim2ToFixpoint Equal   = FBrel F.Eq
+prim2ToFixpoint Elem    = FPrim (F.EVar T.setMem)
+prim2ToFixpoint SetAdd  = FPrim (F.EVar T.setAdd)
+prim2ToFixpoint SetDel = FPrim (F.EVar T.setSub)
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
 
 instance Predicate HC.Pred where
@@ -199,7 +202,7 @@ primOp op l =
       let returnType = RBase (Bind v l) TBool reft
       let typ1 = TVar $ TV a
       pure $ RForall (TV a) (RFun (Bind x l) (trivialBase typ1 v1) (RFun (Bind y l) (trivialBase typ1 v2) returnType))
-    And -> error "TODO"
+    _ -> error "TODO: primOp"
 
   where
     buildRFun oper typ1 typ2 = do

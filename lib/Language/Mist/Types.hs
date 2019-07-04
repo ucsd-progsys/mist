@@ -19,6 +19,9 @@ module Language.Mist.Types
   , Variance (..)
 
   , Measures
+  
+  -- * Built-in Types
+  , setType
 
   -- * Abstract syntax of Mist
   , Expr (..)
@@ -95,6 +98,10 @@ data Prim
   | Lte
   | Equal
   | And
+  | Elem
+  | Union
+  | SetAdd
+  | SetDel
   deriving (Show, Eq)
 
 -- | Mist expressions
@@ -205,6 +212,9 @@ data Variance = Invariant | Bivariant | Contravariant | Covariant
 
 type Measures = M.Map Id Type
 
+setType :: Type -> Type
+setType t = (TCtor (CT "Set") [(Bivariant, t)])
+
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
 data ParsedAnnotation r a
@@ -303,6 +313,10 @@ instance PPrint Prim where
   pprint Lte     = ">="
   pprint Equal   = "=="
   pprint And     = "&&"
+  pprint Elem    = "∈"
+  pprint Union   = "∪"
+  pprint SetDel  = "set_minus"
+  pprint SetAdd  = "set_add"
 
 instance PPrint Bool where
   pprint True  = "True"

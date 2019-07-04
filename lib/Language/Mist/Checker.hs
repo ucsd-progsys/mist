@@ -596,6 +596,23 @@ primType Times   = pure $ TInt :=> (TInt :=> TInt)
 primType Less    = pure $ TInt :=> (TInt :=> TBool)
 primType Greater = pure $ TInt :=> (TInt :=> TBool)
 primType Lte     = pure $ TInt :=> (TInt :=> TBool)
+primType Union   = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) (sa :=> sa :=> sa)
+primType Elem    = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) (sa :=> TVar (TV a) :=> TBool)
+primType SetAdd  = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) (sa :=> TVar (TV a) :=> sa)
+primType SetDel  = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) (sa :=> TVar (TV a) :=> sa)
+
 primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
