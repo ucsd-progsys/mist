@@ -37,6 +37,7 @@ module Language.Mist.Names
 import qualified Data.Map.Strict as M
 import Data.Maybe (fromMaybe, fromJust)
 import Data.List.Split (splitOn)
+import Data.Foldable (traverse_)
 import Control.Applicative (Alternative)
 
 import Language.Mist.Types
@@ -242,6 +243,21 @@ lookupNewName x env = fmap head $ M.lookup x env
 
 class Uniqable a where
   unique :: a -> UniqableContext a
+
+instance (Uniqable a) => Uniqable (Measures, a) where
+  unique (measures, x) = do
+    let (names, typs) = unzip $ M.toList measures
+    names' <- traverse renameMeasure names
+    let measures' = M.fromList $ zip names' typs
+    x' <- unique x
+    traverse_ (\name -> modify $ popNewName name) names
+    pure (measures', x')
+
+    where
+      renameMeasure name = do
+        name' <- refreshId name
+        modify $ pushNewName name name'
+        pure $ name'
 
 instance (Uniqable t) => Uniqable (Expr t a) where
   unique (AnnLam b body tag l) = do

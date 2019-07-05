@@ -12,6 +12,7 @@ module Language.Mist.ToFixpoint
 import Data.String (fromString)
 import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
+import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe)
 import Data.List (intercalate)
 import Text.Printf
@@ -27,13 +28,14 @@ import System.Console.CmdArgs.Verbosity
 
 -- | Solves the subtyping constraints we got from CGen.
 
-solve :: NNF HC.Pred -> IO (F.Result Integer)
-solve constraints = do
+solve :: Measures -> NNF HC.Pred -> IO (F.Result Integer)
+solve measures constraints = do
   setVerbosity Quiet
-  (fmap fst) <$> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint mempty mempty)
+  (fmap fst) <$> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint (measureHashMap measures) mempty)
   where
     fixpointConstraint = toHornClause constraints
     cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }
+    measureHashMap measures = HM.fromList $ (\(name, typ) -> (fromString name, typeToSort typ)) <$> MAP.toList measures
 
 -- TODO: HC.solve requires () but should take any type
 toHornClause :: NNF HC.Pred -> HC.Cstr ()

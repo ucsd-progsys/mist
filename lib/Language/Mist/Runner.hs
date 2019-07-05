@@ -38,13 +38,13 @@ runMist h f = act h f >>= \case
 
 act :: Handle -> FilePath -> IO (Result ())
 act h f = do
-  s    <- readFile f
-  e    <- parse f s
-  let r = mist e
+  s <- readFile f
+  (measures, e) <- parse f s
+  let r = mist measures e
   case r of
-    Right t -> do
+    Right (measures', t) -> do
       let c = generateConstraints (anormal (annotate t TUnit))
-      solverResult <- solve c
+      solverResult <- solve measures' c
       hPrint h solverResult
       case F.resStatus solverResult of
         F.Safe -> return (Right ())
@@ -55,13 +55,13 @@ esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
 esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 
 -----------------------------------------------------------------------------------
-mist :: SSParsedExpr -> Result (ElaboratedExpr R SourceSpan)
+mist :: Measures -> SSParsedExpr -> Result (Measures, ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
-mist expr =
+mist measures expr =
   case wellFormed expr of
     [] -> do
-      let uniqueExpr = uniquify expr
+      let (measures', uniqueExpr) = uniquify (measures, expr)
       let predExpr = parsedExprPredToFixpoint uniqueExpr
       result <- elaborate predExpr
-      pure result
+      pure (measures', result)
     errors -> Left errors

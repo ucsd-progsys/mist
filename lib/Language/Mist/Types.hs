@@ -18,6 +18,8 @@ module Language.Mist.Types
   , RType (..)
   , Variance (..)
 
+  , Measures
+
   -- * Abstract syntax of Mist
   , Expr (..)
   , Bind (..)
@@ -199,6 +201,8 @@ newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 
 data Variance = Invariant | Bivariant | Contravariant | Covariant
               deriving (Show, Eq, Ord, Read)
+
+type Measures = M.Map Id Type
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements

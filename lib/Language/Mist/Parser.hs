@@ -18,6 +18,7 @@ import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Megaparsec.Char
 import           Text.Megaparsec.Expr
 import qualified Data.List as L
+import qualified Data.Map.Strict as M
 import           Language.Mist.Types
 
 -- | parsed syntax elements with parsed expressions as the refinement
@@ -32,9 +33,9 @@ type SSParsedAnnotation = ParsedAnnotation BareExpr SourceSpan
 type SSParsedRType = RType BareExpr SourceSpan
 
 --------------------------------------------------------------------------------
-parse :: FilePath -> Text -> IO SSParsedExpr
+parse :: FilePath -> Text -> IO (Measures, SSParsedExpr)
 --------------------------------------------------------------------------------
-parse = parseWith (topExprs <* eof)
+parse = parseWith ((,) <$> measures <*> topExprs <* eof)
 
 parseWith  :: Parser a -> FilePath -> Text -> IO a
 parseWith p f s = case flip evalState 0 $ runParserT (whole p) f s of
@@ -51,7 +52,7 @@ instance ShowErrorComponent SourcePos where
   showErrorComponent = sourcePosPretty
 
 --------------------------------------------------------------------------------
-parseFile :: FilePath -> IO SSParsedExpr
+parseFile :: FilePath -> IO (Measures, SSParsedExpr)
 --------------------------------------------------------------------------------
 parseFile f = parse f =<< readFile f
 
@@ -185,6 +186,22 @@ exprAddParsedInfers = goE
 
     goB (AnnBind x _ l) = AnnBind x (Just ParsedInfer) l
 
+
+--------------------------------------------------------------------------------
+-- | Measures
+--------------------------------------------------------------------------------
+
+measures :: Parser Measures
+measures = M.fromList <$> many measure
+
+measure :: Parser (Id, Type)
+measure = do
+  _ <- L.nonIndented sc (rWord "measure")
+  (id, _) <- identifier
+  _ <- dcolon
+  typ <- typeType
+  pure (id, typ)
+
 --------------------------------------------------------------------------------
 -- | Parsing Definitions
 --------------------------------------------------------------------------------
@@ -210,6 +227,7 @@ defsExpr bs@((b,_):_)   = go (bindTag b) bs
     go l [] = Unit l
     go _ ((b, e) : ds) = Let b e (go l ds) l
       where l = bindTag b
+
 --------------------------------------------------------------------------------
 -- | Expressions
 --------------------------------------------------------------------------------
