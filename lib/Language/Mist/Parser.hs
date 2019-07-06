@@ -388,6 +388,8 @@ baseTypeNoCtor :: Parser Type
 baseTypeNoCtor
   =  (rWord "Int"   *> pure TInt)
  <|> (rWord "Bool"  *> pure TBool)
+ <|> (rWord "Set"   *> pure TSet)
+ <|> ctorType
  <|> (TVar <$> tvar)
 
 baseType :: Parser Type

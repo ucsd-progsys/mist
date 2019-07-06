@@ -80,6 +80,7 @@ typeToSort (TVar (TV t)) = F.FVar (MN.varNum t) -- TODO: this is bad and needs t
 typeToSort TUnit = F.FObj $ fromString "Unit"
 typeToSort TInt = F.FInt
 typeToSort TBool = F.boolSort
+typeToSort TSet = F.boolSort
 -- is this backwards?
 typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
 -- We can't actually build arbitary TyCons in FP, so for now we just use

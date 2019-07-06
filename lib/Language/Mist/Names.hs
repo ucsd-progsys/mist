@@ -156,6 +156,7 @@ instance Subable Type Type where
   _subst _ TUnit = TUnit
   _subst _ TInt  = TInt
   _subst _ TBool = TBool
+  _subst _ TSet = TSet
 
   _subst su (t1 :=> t2) = _subst su t1 :=> _subst su t2
   _subst su (TCtor c t2) = TCtor c (second (_subst su) <$> t2)
@@ -332,6 +333,7 @@ instance Uniqable Type where
   unique (TVar tvar) = TVar <$> uniquifyTVar tvar
   unique TInt = pure TInt
   unique TBool = pure TBool
+  unique TSet = pure TSet
   unique TUnit = pure TUnit
   unique (domain :=> codomain) =
     (:=>) <$> unique domain <*> unique codomain

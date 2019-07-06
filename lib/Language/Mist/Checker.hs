@@ -455,6 +455,7 @@ a <: b = do
 (<<:) :: Type -> Type -> Context ()
 TUnit <<: TUnit = pure ()
 TInt <<: TInt = pure ()
+TSet <<: TSet = pure ()
 TBool <<: TBool = pure ()
 a@(TVar _) <<: b@(TVar _) | a == b = pure ()
 (a1 :=> a2) <<: (b1 :=> b2) = do
@@ -462,7 +463,7 @@ a@(TVar _) <<: b@(TVar _) | a == b = pure ()
   env <- getEnv
   (applyEnv env a2) <: (applyEnv env b2)
 (TCtor ctor1 as) <<: (TCtor ctor2 bs)
-  | ctor1 /= ctor2 = error "TODO: constructor mismatch"
+  | ctor1 /= ctor2 = error $ "TODO: constructor mismatch" ++ show ctor1 ++ show ctor2
   | otherwise =
     if length as /= length bs
       then error "TODO: constructor application length mismatch"
@@ -714,6 +715,7 @@ freeEVars typ = eVars typ
     eVars TUnit = pure S.empty
     eVars TInt = pure S.empty
     eVars TBool = pure S.empty
+    eVars TSet = pure S.empty
     eVars (t1 :=> t2) = S.union <$> eVars t1 <*> eVars t2
     -- eVars (TPair t1 t2) = S.union <$> eVars t1 <*> eVars t2
     eVars (TCtor _ ts) = fold <$> mapM eVars (snd <$> ts)

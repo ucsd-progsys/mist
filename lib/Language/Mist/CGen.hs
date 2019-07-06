@@ -243,6 +243,7 @@ fresh l _ (TVar alpha) = do
 fresh loc env TUnit = freshBaseType loc env TUnit
 fresh loc env TInt = freshBaseType loc env TInt
 fresh loc env TBool = freshBaseType loc env TBool
+fresh loc env TSet = freshBaseType loc env TSet
 fresh loc env (typ1 :=> typ2) = do
   rtype1 <- fresh loc env typ1
   x <- refreshId $ "karg" ++ cSEPARATOR
@@ -270,6 +271,8 @@ foTypes ((x, t@TVar{}):xs) = (x, t):foTypes xs
 foTypes ((x, t@TUnit{}):xs) = (x, t):foTypes xs
 foTypes ((x, t@TInt{}):xs) = (x, t):foTypes xs
 foTypes ((x, t@TBool{}):xs) = (x, t):foTypes xs
+-- foTypes ((_,TSet):xs) = foTypes xs
+foTypes ((x,t@TSet):xs) = (x,t):foTypes xs
 foTypes ((_, _ :=> _):xs) = foTypes xs
 foTypes ((_, TCtor{}):xs) = foTypes xs
 foTypes ((_, TForall{}):xs) = foTypes xs
