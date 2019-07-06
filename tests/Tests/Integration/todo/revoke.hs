@@ -22,7 +22,5 @@ runPerm : forall a. acl -> Perm acl {v | True} a -> a
 foo :: file:File -> String
 foo f = runPerm [] (grant f >> read f >>= (\contents -> revoke f >> pure contents))
 
-
-type File = Int
 -}
 

@@ -15,9 +15,9 @@ app as env ~> env' -> Lin {v | v = env} -> Lin {v | v = env'} -> Lin {v | v = un
 typecheck as Lin {v | v = emptyset} -> L
 
 term :: L
-term = (app (fun 1 (var 1))) (app (fun 1 (var 1)))
+term = typecheck $ (app (fun 1 (var 1)) (fun 1 (var 1)))
 
 badTerm :: L
-badTerm = (fun 1 (app (var 1) (var 1)))
+badTerm = typecheck $ (fun 1 (app (var 1) (var 1)))
 
 -}
