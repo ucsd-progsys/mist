@@ -125,6 +125,7 @@ appToFixpoint e =
     _ -> error "non-application"
 
   where
+    binopToFixpoint And e1 e2 = F.PAnd [exprToFixpoint e1, exprToFixpoint e2]
     binopToFixpoint op e1 e2 =
       case prim2ToFixpoint op of
         Left brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)

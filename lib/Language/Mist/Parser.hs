@@ -266,6 +266,7 @@ binops =
     , InfixL (pure op <*> primitive Greater ">")
     , InfixL (pure op <*> primitive Lte "<=")
     , InfixL (pure op <*> primitive Less "<")
+    , InfixL (pure op <*> primitive And "/\\")
     ]
   ]
   where
@@ -343,7 +344,7 @@ typeType = mkArrow <$> sepBy1 baseType (symbol "->")
         <?> "Unrefined Type"
 
 typeRType :: Parser SSParsedRType
-typeRType = try rfun <|> try rapp <|> unrefined <|> rbase
+typeRType = try rfun <|>  try rbase <|> try unrefinedRApp <|> unrefined
          <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
@@ -370,18 +371,29 @@ rfun = do id <- (binder <* colon) <|> freshBinder
 unrefined :: Parser SSParsedRType
 unrefined = RBase <$> freshBinder <*> baseType <*> pure (Boolean True mempty)
 
+unrefinedRApp :: Parser SSParsedRType
+unrefinedRApp = RRTy <$> freshBinder <*> rapp <*> pure (Boolean True mempty)
+
 rbase :: Parser SSParsedRType
-rbase = braces $ RBase
-    <$> binder <* colon
-    <*> baseType <* suchthat
-    <*> expr
+rbase = braces $ do
+  b <- binder <* colon
+  rbaseOrRrtype b
+
+  where
+    rbaseOrRrtype bind =
+      try (RRTy bind <$> (try rapp <|> rbase) <* suchthat <*> expr)
+      <|> (RBase bind <$> baseTypeNoCtor <* suchthat <*> expr)
+
+baseTypeNoCtor :: Parser Type
+baseTypeNoCtor
+  =  (rWord "Int"   *> pure TInt)
+ <|> (rWord "Bool"  *> pure TBool)
+ <|> (TVar <$> tvar)
 
 baseType :: Parser Type
 baseType
-  =  (rWord "Int"   *> pure TInt)
- <|> (rWord "Bool"  *> pure TBool)
+  =  baseTypeNoCtor
  <|> ctorType
- <|> (TVar <$> tvar)
  <?> "Base Type"
 
 mkArrow :: [Type] -> Type

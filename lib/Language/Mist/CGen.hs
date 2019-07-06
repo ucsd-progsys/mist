@@ -67,7 +67,8 @@ _synth env (Let b e1 e2 loc) = do
   (c, tx, c', rtype) <- go b
   tHat <- fresh loc env (eraseRType rtype)
   cSub <- rtype <: tHat
-  pure (CAnd [c, mkAll (bindId b) tx (CAnd [c', cSub])], tHat)
+  let cs = (if c == CAnd [] then [] else [c]) ++ [mkAll (bindId b) tx (CAnd [c', cSub])]
+  pure (CAnd cs, tHat)
 
   where
   -- go returns c, tx, c', rtype where
@@ -247,7 +248,12 @@ fresh loc env (typ1 :=> typ2) = do
   x <- refreshId $ "karg" ++ cSEPARATOR
   rtype2 <- fresh loc ((x,rtype1):env) typ2
   pure $ RFun (Bind x loc) rtype1 rtype2
-fresh l env (TCtor ctor types) = RApp ctor <$> mapM (sequence . second (fresh l env)) types
+fresh l env (TCtor ctor types) = do -- TODO: reduce duplication with freshBaseType
+  kappa <- refreshId $ "kvar" ++ cSEPARATOR
+  v <- refreshId $ "VV" ++ cSEPARATOR
+  let k = buildKvar kappa $ v : map fst (foTypes (eraseRTypes env))
+  appType <- RApp ctor <$> mapM (sequence . second (fresh l env)) types
+  pure $ RRTy (Bind v l) appType k
 fresh l env (TForall tvar typ) = RForall tvar <$> fresh l env typ
 
 freshBaseType :: (Predicate r) => a -> Env r a -> Type -> Fresh (RType r a)
@@ -273,7 +279,12 @@ eraseRTypes :: Env r a -> [(Id, Type)]
 eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 
 (<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
-rtype1 <: rtype2 = go rtype1 rtype2
+rtype1 <: rtype2 = do
+  -- !_ <- traceM $ show ("<:", pprint rtype1, pprint rtype2)
+  rtype1 <<: rtype2
+
+(<<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
+rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
   where
     go (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
       | b1 == b2 = pure $ All x1 b1 p1 (Head $ varSubst (x2 |-> x1) p2)
@@ -286,38 +297,43 @@ rtype1 <: rtype2 = go rtype1 rtype2
       | alpha == beta = t1 <: t2
       | otherwise = error "Constraint generation subtyping error"
     go (RApp c1 vts1) (RApp c2 vts2)
-      | c1 == c2  = CAnd <$> sequence (concat $ zipWith (<<:) vts1 vts2)
+      | c1 == c2  = CAnd <$> sequence (concat $ zipWith constructorSub vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
     go (RIFun (Bind x _) t1 t1') t2 = do
       z <- refreshId x
       cSub <- substReftPred (x |-> z) t1' <: t2
       pure $ mkExists z t1 cSub
-    go (RRTy (Bind x _) rt1 reft) rt2 = All x (eraseRType rt1) reft <$> (rt1 <: rt2)
-    go rt1 (RRTy x rt2 reft) = do
-      subrt <- rt1 <: rt2
-      subreft <- rt1 <: RBase x (eraseRType rt2) reft
-      pure $ CAnd [subrt, subreft]
-    go _ _ = error $ "CGen subtyping error. Got " ++ pprint rtype1 ++ " but expected " ++ pprint rtype2
+    go (RRTy (Bind x1 _) rt1 p1) (RRTy (Bind x2 _) rt2 p2) = do
+      let outer = All x1 (eraseRType rt1) p1 (Head $ varSubst (x2 |-> x1) p2)
+      inner <- rt1 <: rt2
+      pure $ CAnd [outer, inner]
+    go _ _ = error $ "CGen subtyping error. Got:\n\n" ++ show rtype1 ++ "\n\nbut expected:\n\n" ++ show rtype2 ++ "\n"
 
-(v, rt1) <<: (_,rt2) = case v of
+(v, rt1) `constructorSub` (_,rt2) = case v of
                          -- TODO: write tests that over these two cases...
                          Invariant -> []
                          Bivariant -> [rt1 <: rt2, rt2 <: rt1]
                          Covariant -> [rt1 <: rt2]
                          Contravariant -> [rt2 <: rt1]
 
+flattenRType :: CGenConstraints r a => RType r a -> RType r a
+flattenRType rrty@(RRTy (Bind x _) rt p)
+  | (RBase by typ p') <- rt = RBase by typ (strengthen p' (varSubst (x |-> bindId by) p))
+  | (RRTy by rt' p') <- rt = flattenRType (RRTy by rt' (strengthen p' (varSubst (x |-> bindId by) p)))
+  | otherwise = rrty
+flattenRType rt = rt
 
+
+-- TODO: RApp?
 -- | (x :: t) => c
 mkAll :: CGenConstraints r a => Id -> RType r a -> NNF r -> NNF r
-mkAll x rt c = case rt of
+mkAll x rt c = case flattenRType rt of
    RBase (Bind y _) b p -> All x b (varSubst (y |-> x) p) c
-   RRTy (Bind y _) rt reft -> All x (eraseRType rt) (varSubst (y |-> x) reft) (mkAll y rt c)
    _ -> c
 
 -- | ∃ x :: t. c
-mkExists x rt c = case rt of
+mkExists x rt c = case flattenRType rt of
              RBase (Bind y _) b p -> Any x b (varSubst (y |-> x) p) c
-             RRTy (Bind y _) rt reft -> All x (eraseRType rt) (varSubst (y |-> x) reft) (mkAll y rt c)
              _ -> c
 
 splitImplicits :: RType r a -> ([(Id, RType r a)], RType r a)
