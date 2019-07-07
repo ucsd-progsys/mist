@@ -1,26 +1,36 @@
 {-
 
-Perm acl1 acl2 a = Perm a
+type Acl = Set String
+type AST ac1 acl2 Acl a = HST acl1 acl2 Acl a
 
-pure as forall a. acl ~> x:a -> Perm acl acl {v | v = x}
+pure :: acl ~> a -> AST acl acl a
+(>>=) :: acl1 acl2 acl3 ~> AST acl1 acl2 a -> (a -> AST acl2 acl3 b) -> AST acl3 b
 
-(>>=) as forall a, b. ac1 ~> acl2 ~> acl3
-  ~> Perm acl1 acl2 a
-  -> (a -> Perm acl2 acl3 b)
-  -> Perm acl1 acl3
+canRead :: acl ~> f:File -> AST acl acl {v | v = f ∈ acl}
+canRead f = State (\acl -> (acl, member f acl))
 
-canRead as acl ~> f:File -> Perm acl acl {v | v = f ∈ acl}
+grant :: acl ~> f:File -> AST acl {v | v = acl ∪ singleton f} ()
+grant f = State (\acl -> (insert f acl, ()))
 
-grant as acl ~> f:File -> Perm acl {v | v = acl + f} ()
+revoke :: acl ~> f:File -> AST acl {v | v = acl - singleton f} ()
+revoke f = State (\acl -> (delete f acl, ()))
 
-revoke as acl ~> f:File -> SST acl (acl - f) ()
+read :: acl ~> {f:File | f ∈ acl} -> AST acl acl String
+read f = State (\acl -> (acl, "file contents"))
 
-read as acl ~> {v:File | v ∈ acl} -> Perm acl acl String
+safeRead :: acl ~> f:File -> AST acl acl (Maybe String)
+safeRead f = do
+  allowed <- canRead
+  if allowed
+    then read >>= (\c -> Just c)
+    else Nothing
 
-runPerm : forall a. acl -> Perm acl {v | True} a -> a
-
-foo :: file:File -> String
-foo f = runPerm [] (grant f >> read f >>= (\contents -> revoke f >> pure contents))
-
+main :: String
+main = runST empty
+  (do
+    grant "f.txt"
+    c <- read "f.txt"
+    revoke "f.txt"
+    pure contents)
 -}
 
