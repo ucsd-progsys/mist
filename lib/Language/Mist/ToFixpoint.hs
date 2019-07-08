@@ -79,9 +79,9 @@ collectKVars cstr = go MAP.empty cstr
 typeToSort :: M.Type -> F.Sort
 typeToSort (TVar (TV t)) = F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed
 typeToSort TUnit = F.FObj $ fromString "Unit"
-typeToSort TInt = F.FInt
+typeToSort TInt = F.intSort
 typeToSort TBool = F.boolSort
-typeToSort TSet = F.boolSort
+typeToSort TSet = F.setSort F.intSort
 -- is this backwards?
 typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
 -- We can't actually build arbitary TyCons in FP, so for now we just use
