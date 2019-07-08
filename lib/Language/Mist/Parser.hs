@@ -350,7 +350,7 @@ typeType = mkArrow <$> sepBy1 baseType (symbol "->")
         <?> "Unrefined Type"
 
 typeRType :: Parser SSParsedRType
-typeRType = try rfun <|>  try rbase <|> try unrefinedRApp <|> unrefined
+typeRType = try rfun <|>  try rbase <|> try unrefined <|> unrefinedRApp
          <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
@@ -395,7 +395,6 @@ baseTypeNoCtor
   =  (rWord "Int"   *> pure TInt)
  <|> (rWord "Bool"  *> pure TBool)
  <|> (rWord "Set"   *> pure TSet)
- <|> ctorType
  <|> (TVar <$> tvar)
 
 baseType :: Parser Type

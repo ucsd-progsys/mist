@@ -128,7 +128,7 @@ appToFixpoint e =
       case prim2ToFixpoint op of
         FBrel brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
         FBop bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
-        FPrim e -> e
+        FPrim e -> F.EApp (F.EApp e (exprToFixpoint e1)) (exprToFixpoint e2)
 
 data FPrim = FBop F.Bop | FBrel F.Brel | FPrim F.Expr
 
