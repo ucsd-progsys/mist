@@ -12,14 +12,16 @@ thenn as forall s, a, b. w1:s ~> w2:s ~> w3:s ~> (ST <{v:s|v==w1} >{v:s|v==w2} >
   -> ST <{v:s|v==w1} >{v:s|v==w3} >b
 thenn = (0)
 
-get as forall s. w:s ~> Bool -> ST <{v:s|v==w} >{v:s|v==w} >{v:s|v==w}
+get as forall s. wg:s ~> Bool -> ST <{v:s|v==wg} >{v:s|v==wg} >{v:s|v==wg}
 get = (0)
 
-put as forall s. w:s -> ST <s >{v:s|v==w} >Unit
+put as forall s. wp:s -> ST <s >{v:s|v==wp} >Unit
 put = (0)
 
--- incr
--- incr :: ST <Int >Int >Unit
+-- fresh :: n:Int ~> ST <{w:Int|w==n} >{w:Int|w==n+1} >{v:Int|v==n}
+-- fresh = (bind (get True) (\n -> (thenn (put (n+1)) (ret n))))
+
+-- incr :: ST <{i:Int|i==2} >{w:Int|w==3} >Unit
 -- incr = (bind (get True) (\n -> (put (n+1))))
 
 incr2 :: ST <{i:Int|i==2} >{w:Int|w==2} >Int
