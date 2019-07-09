@@ -89,10 +89,15 @@ _synth _ App{} = error "argument is non-variable"
 
 _synth env (TApp e typ loc) = do
   (c, RForall (TV alpha) t) <- synth env e
-  tHat <- stale loc typ -- NOTE: this isn't actually wearing a hat
+  tHat <- if baseQuantifier alpha t then stale loc typ else fresh loc env typ
   pure (c, substReftReft (alpha |-> tHat) t)
 
 _synth _ _ = error "Internal Error: Synth called on non-application form"
+
+baseQuantifier :: Id -> RType r a -> Bool
+baseQuantifier alpha (RForall _ rt) = baseQuantifier alpha rt
+baseQuantifier alpha (RIFun _ xt rt) = eraseRType xt == TVar (TV alpha) || baseQuantifier alpha rt
+baseQuantifier _ _ = False
 
 stale :: CGenConstraints r a => a -> Type -> Fresh (RType r a)
 stale loc (TVar alpha) = do
