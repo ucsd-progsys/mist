@@ -46,7 +46,7 @@
 (define (pretty-print formula)
   (apply string-append (pretty-print-depth formula 0)))
 
-(define (cubify constraints)
+(define (cubify constraints pruning)
   ;; EHC -> (LinearEHC -> LinearEHC) -> List LinearEHC
   (define (cubify-help formula path-builder)
     (match formula
@@ -59,12 +59,14 @@
       [(list 'exists head body)
        (cubify-help body (lambda (x) (path-builder (list 'exists head x))))]
 
+      ['((true)) (if pruning '() '((true)))]
       [formula (list (path-builder formula))]))
 
   (cubify-help constraints identity))
 
 (define input-file (make-parameter #f))
 (define hypercube (make-parameter #f))
+(define prune-true (make-parameter #f))
 
 (command-line
  #:program "pretty-print"
@@ -73,7 +75,9 @@
                    "read input from file"
                    (input-file file-name)]
  [("--hypercube") "print the constraints as a hyper cube"
-                  (hypercube #t)])
+                  (hypercube #t)]
+ [("--prune-true") "remove the constraints with head true"
+                   (prune-true #t)])
 
 
 (current-input-port (if (input-file)
@@ -81,8 +85,6 @@
                         (current-input-port)))
 (define constraints (read))
 
-(displayln (pretty-print constraints))
-
-(when (hypercube)
-  (displayln "")
-  (for-each displayln (cubify constraints)))
+(if (hypercube)
+  (for-each displayln (cubify constraints (prune-true)))
+  (displayln (pretty-print constraints)))
