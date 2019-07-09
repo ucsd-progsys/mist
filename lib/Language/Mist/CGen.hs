@@ -89,10 +89,34 @@ _synth _ App{} = error "argument is non-variable"
 
 _synth env (TApp e typ loc) = do
   (c, RForall (TV alpha) t) <- synth env e
-  tHat <- fresh loc env typ
+  tHat <- stale loc typ -- NOTE: this isn't actually wearing a hat
   pure (c, substReftReft (alpha |-> tHat) t)
 
 _synth _ _ = error "Internal Error: Synth called on non-application form"
+
+stale :: CGenConstraints r a => a -> Type -> Fresh (RType r a)
+stale loc (TVar alpha) = do
+  x <- refreshId $ "staleArg" ++ cSEPARATOR
+  pure $ RBase (Bind x loc) (TVar alpha) true
+stale loc TUnit = staleBaseType loc TUnit
+stale loc TInt = staleBaseType loc TInt
+stale loc TBool = staleBaseType loc TBool
+stale loc TSet = staleBaseType loc TSet
+stale loc (typ1 :=> typ2) = do
+  rtype1 <- stale loc typ1
+  x <- refreshId $ "staleArg" ++ cSEPARATOR
+  rtype2 <- stale loc typ2
+  pure $ RFun (Bind x loc) rtype1 rtype2
+stale l (TCtor ctor types) = do -- TODO: reduce duplication with staleBaseType
+  v <- refreshId $ "VV" ++ cSEPARATOR
+  appType <- RApp ctor <$> mapM (sequence . second (stale l)) types
+  pure $ RRTy (Bind v l) appType true
+stale l (TForall tvar typ) = RForall tvar <$> stale l typ
+
+staleBaseType :: (Predicate r) => a -> Type -> Fresh (RType r a)
+staleBaseType l baseType = do
+  v <- refreshId $ "VV" ++ cSEPARATOR
+  pure $ RBase (Bind v l) baseType true
 
 appSynth :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> Fresh (NNF r, RType r a)
 appSynth env t y loc = do
@@ -278,7 +302,7 @@ rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
       let outer = All x1 (eraseRType rt1) p1 (Head $ varSubst (x2 |-> x1) p2)
       inner <- rt1 <: rt2
       pure $ CAnd [outer, inner]
-    go _ _ = error $ "CGen subtyping error. Got:\n\n" ++ show rtype1 ++ "\n\nbut expected:\n\n" ++ show rtype2 ++ "\n"
+    go _ _ = error $ "CGen subtyping error. Got:\n\n" ++ pprint rtype1 ++ "\n\nbut expected:\n\n" ++ pprint rtype2 ++ "\n"
 
 (v, rt1) `constructorSub` (_,rt2) = case v of
                          -- TODO: write tests that over these two cases...

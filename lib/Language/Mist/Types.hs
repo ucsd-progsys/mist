@@ -434,7 +434,7 @@ prType TBool        = PP.text "Bool"
 prType TSet         = PP.text "Set"
 prType (t1 :=> t2)   = PP.parens (prType t1) PP.<+> PP.text "=>" PP.<+> prType t2
 -- prType (TPair t s)  = PP.parens $ prType t PP.<> PP.text "," PP.<+> prType s
-prType (TCtor c ts) = prCtor c PP.<> PP.brackets (prTypeArgs ts)
+prType (TCtor c ts) = prCtor c PP.<> PP.braces (prTypeArgs ts)
 prType (TForall a t)  = PP.text "Forall" PP.<+>
                           prTVar a
                           PP.<> PP.text "." PP.<+> prType t
