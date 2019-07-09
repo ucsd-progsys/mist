@@ -71,8 +71,8 @@ substReftPred su (RApp c ts) =
   RApp c $ second (substReftPred su) <$> ts
 substReftPred su (RBase bind typ expr) =
   RBase bind typ (subst (M.delete (bindId bind) su) expr)
-substReftPred su (RIFun bind rtype1 rtype2) =
-  RIFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
+substReftPred su (RIFun bind typ1 rtype2) =
+  RIFun bind typ1 (substReftPred (M.delete (bindId bind) su) rtype2)
 substReftPred su (RFun bind rtype1 rtype2) =
   RFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
 substReftPred su (RRTy bind rtype expr) =
@@ -86,8 +86,8 @@ substReftType su (RBase bind typ p) =
   RBase bind (subst su typ) p
 substReftType su (RFun bind rtype1 rtype2) =
   RFun bind (substReftType su rtype1) (substReftType su rtype2)
-substReftType su (RIFun bind rtype1 rtype2) =
-  RIFun bind (substReftType su rtype1) (substReftType su rtype2)
+substReftType su (RIFun bind typ1 rtype2) =
+  RIFun bind (subst su typ1) (substReftType su rtype2)
 substReftType su (RApp c ts) =
   RApp c $ second (substReftType su) <$> ts
 substReftType su (RRTy bind rtype expr) =
@@ -103,8 +103,8 @@ substReftReft su (RBase bind typ expr) = -- TODO: handle polymorphism more appro
       Just rt -> RRTy bind rt expr
 substReftReft su (RFun bind rtype1 rtype2) =
   RFun bind (substReftReft su rtype1) (substReftReft su rtype2)
-substReftReft su (RIFun bind rtype1 rtype2) =
-  RIFun bind (substReftReft su rtype1) (substReftReft su rtype2)
+substReftReft su (RIFun bind typ1 rtype2) =
+  RIFun bind typ1 (substReftReft su rtype2)
 substReftReft su (RApp c ts) =
   RApp c $ second (substReftReft su) <$> ts
 substReftReft su (RRTy bind rtype expr) =

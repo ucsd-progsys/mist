@@ -367,12 +367,13 @@ variance =  char '>' *> pure Covariant
 
 
 arrow :: Parser (BareBind -> SSParsedRType -> SSParsedRType -> SSParsedRType)
-arrow = symbol "~>" *> pure RIFun <|> symbol "->" *> pure RFun
+arrow = symbol "~>" *> pure (\id rin -> RIFun id (eraseRType rin)) <|> symbol "->" *> pure RFun
 
 rfun :: Parser SSParsedRType
-rfun = do id <- (binder <* colon) <|> freshBinder
-          tin <- (unrefined <|> rbase <|> parens typeRType)
-          arrow <*> pure id <*> pure tin <*> typeRType
+rfun = do
+  id <- (binder <* colon) <|> freshBinder
+  tin <- (unrefined <|> rbase <|> parens typeRType)
+  arrow <*> pure id <*> pure tin <*> typeRType
 
 unrefined :: Parser SSParsedRType
 unrefined = RBase <$> freshBinder <*> baseType <*> pure (Boolean True mempty)

@@ -105,12 +105,13 @@ _appSynth env (RFun x tx t) y loc = do
   c <- check env (Id y loc) tx
   pure (c, substReftPred (bindId x |-> y) t)
 
-_appSynth env (RIFun (Bind x _) tx t) y loc = do
+_appSynth env (RIFun (Bind x l) typX t) y loc = do
   z <- refreshId x
+  let tx = RBase (Bind x l) typX true
   (c, t') <- appSynth ((z, tx):env) (substReftPred (x |-> z) t) y loc
   tHat <- fresh loc env (eraseRType t')
   c' <- t' <: tHat
-  pure (mkExists z tx (CAnd [c, c']), tHat)
+  pure (Any z typX (CAnd [c, c']), tHat)
 
 _appSynth _ _ _ _ = error "Applying non function"
 
@@ -197,10 +198,11 @@ _appCheck env (RFun (Bind x _) tx t) y loc t' = do
   cSub <- substReftPred (x |-> y) t <: t'
   pure $ CAnd [c, cSub]
 
-_appCheck env (RIFun (Bind x _) tx t) y loc t' = do
+_appCheck env (RIFun (Bind x l) typX t) y loc t' = do
   z <- refreshId x
+  let tx = RBase (Bind x l) typX true
   c <- appCheck ((z, tx):env) (substReftPred (x |-> z) t) y loc t'
-  pure $ mkExists z tx c
+  pure $ Any z typX c
 
 _appCheck _ _ _ _ _ = error "application at non function type"
 
@@ -270,10 +272,10 @@ rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go (RApp c1 vts1) (RApp c2 vts2)
       | c1 == c2  = CAnd <$> sequence (concat $ zipWith constructorSub vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
-    go (RIFun (Bind x _) t1 t1') t2 = do
+    go (RIFun (Bind x _) typ1 t1') t2 = do
       z <- refreshId x
       cSub <- substReftPred (x |-> z) t1' <: t2
-      pure $ mkExists z t1 cSub
+      pure $ Any z typ1 cSub
     go (RRTy (Bind x1 _) rt1 p1) (RRTy (Bind x2 _) rt2 p2) = do
       let outer = All x1 (eraseRType rt1) p1 (Head $ varSubst (x2 |-> x1) p2)
       inner <- rt1 <: rt2
@@ -302,13 +304,8 @@ mkAll x rt c = case flattenRType rt of
    RBase (Bind y _) b p -> All x b (varSubst (y |-> x) p) c
    _ -> c
 
--- | ∃ x :: t. c
-mkExists x rt c = case flattenRType rt of
-             RBase (Bind y _) b p -> Any x b (varSubst (y |-> x) p) c
-             _ -> c
-
-splitImplicits :: RType r a -> ([(Id, RType r a)], RType r a)
-splitImplicits (RIFun b t t') = ((bindId b,t):bs, t'')
+splitImplicits :: CGenConstraints r a => RType r a -> ([(Id, RType r a)], RType r a)
+splitImplicits (RIFun b typ t') = ((bindId b, RBase b typ true):bs, t'')
     where (bs,t'') = splitImplicits t'
 splitImplicits rt = ([],rt)
 

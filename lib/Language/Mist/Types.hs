@@ -188,7 +188,7 @@ data RType r a
   = RBase !(Bind () a) Type !r
   | RApp !Ctor ![(Variance, RType r a)]
   | RFun !(Bind () a) !(RType r a) !(RType r a)
-  | RIFun !(Bind () a) !(RType r a) !(RType r a)
+  | RIFun !(Bind () a) Type !(RType r a)
   | RRTy !(Bind () a) !(RType r a) r
   | RForall TVar !(RType r a)
   deriving (Show, Functor)
@@ -465,7 +465,7 @@ data NNF r
   = Head r                             -- ^ p
   | CAnd [NNF r]                -- ^ c1 /\ c2
   | All Id Type r (NNF r)       -- ^ ∀x:τ.p => c
-  | Any Id Type r (NNF r)       -- ^ :x:τ.p => c
+  | Any Id Type (NNF r)         -- ^ :x:τ.p => c
   deriving (Show, Functor, Eq)
 
 -- | Type class to represent predicates
@@ -550,7 +550,7 @@ instance Bifunctor RType where
   first f (RBase b t r) = RBase b t (f r)
   first f (RApp c ts) = RApp c $ (\(a, b) -> (a, first f b)) <$> ts
   first f (RFun b rt1 rt2) = RFun b (first f rt1) (first f rt2)
-  first f (RIFun b rt1 rt2) = RIFun b (first f rt1) (first f rt2)
+  first f (RIFun b t1 rt2) = RIFun b t1 (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)
   first f (RForall tvar rt) = RForall tvar (first f rt)
 

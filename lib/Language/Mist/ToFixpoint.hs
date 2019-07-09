@@ -48,8 +48,8 @@ toHornClause' (CAnd cs) =
   HC.CAnd (fmap toHornClause' cs)
 toHornClause' (All x typ r c) =
   HC.All (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
-toHornClause' (Any x typ r c) =
-  HC.Any (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
+toHornClause' (Any x typ c) =
+  HC.Any (HC.Bind (fromString x) (typeToSort typ) true) (toHornClause' c)
 
 collectKVars :: HC.Cstr a -> [HC.Var ()]
 collectKVars cstr = go MAP.empty cstr
