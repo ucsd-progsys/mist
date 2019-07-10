@@ -21,8 +21,8 @@ put = (0)
 -- fresh :: n:Int ~> ST <{w:Int|w==n} >{w:Int|w==n+1} >{v:Int|v==n}
 -- fresh = (bind (get True) (\n -> (thenn (put (n+1)) (ret n))))
 
-incr :: ST <{i:Int|i==2} >{w:Int|w==3} >Unit
-incr = (bind (get True) (\n -> (put (n+1))))
+incr :: ST <{i:Int|i==2} >{w:Int|w==3} >{v: Int | v = 2}
+incr = (bind (get True) (\n -> (thenn (put (n+1)) (ret n))))
 
 -- incr2 :: ST <{i:Int|i==2} >{w:Int|w==2} >Int
 -- incr2 = thenn (get True) (get True)

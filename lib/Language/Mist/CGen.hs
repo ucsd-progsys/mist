@@ -339,6 +339,7 @@ flattenRType rt = rt
 mkAll :: CGenConstraints r a => Id -> RType r a -> NNF r -> NNF r
 mkAll x rt c = case flattenRType rt of
    RBase (Bind y _) b p -> All x b (varSubst (y |-> x) p) c
+   RRTy (Bind y _) rt p -> All x (eraseRType rt) (varSubst (y |-> x) p) c
    _ -> c
 
 -- | ∃ x :: t. c

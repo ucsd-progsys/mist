@@ -14,7 +14,7 @@ import Data.String (fromString)
 import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
 import qualified Data.HashMap.Strict as HM
-import Data.Maybe (fromMaybe)
+import Data.Maybe (fromMaybe, fromJust)
 import Data.List (intercalate)
 import Text.Printf
 
@@ -32,7 +32,7 @@ import System.Console.CmdArgs.Verbosity
 
 solve :: Measures -> NNF HC.Pred -> IO (F.Result Integer)
 solve measures constraints = do
-  setVerbosity Quiet
+  setVerbosity Loud
   (fmap fst) <$> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint (measureHashMap measures) mempty)
   where
     fixpointConstraint = toHornClause constraints
@@ -78,22 +78,25 @@ collectKVars cstr = go MAP.empty cstr
 -- | Translate base `Type`s to `Sort`s
 --------------------------------------------------------------------
 typeToSort :: M.Type -> F.Sort
-typeToSort (TVar (TV t)) = F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed
-typeToSort TUnit = F.FObj $ fromString "Unit"
-typeToSort TInt = F.intSort
-typeToSort TBool = F.boolSort
-typeToSort TSet = F.setSort F.intSort
+typeToSort = fromJust . safeTypeToSort
+
+safeTypeToSort :: M.Type -> Maybe F.Sort
+safeTypeToSort (TVar (TV t)) = Just $ F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed
+safeTypeToSort TUnit = Just $ F.FObj $ fromString "Unit"
+safeTypeToSort TInt = Just $ F.intSort
+safeTypeToSort TBool = Just $ F.boolSort
+safeTypeToSort TSet = Just $ F.setSort F.intSort
 -- TODO: fix after popl
-typeToSort (TCtor "Set" []) = F.setSort F.intSort
+safeTypeToSort (TCtor "Set" []) = Just $ F.setSort F.intSort
 -- is this backwards?
-typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
+safeTypeToSort (t1 :=> t2) = F.FFunc <$> safeTypeToSort t1 <*> safeTypeToSort t2
 -- We can't actually build arbitary TyCons in FP, so for now we just use
 -- the constructor for Map for everything. Later we should make this work
 -- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
 -- with FTyCon right now.
--- typeToSort (TPair t1 t2) = F.FApp (F.FApp (F.FTC F.mapFTyCon) (typeToSort t1)) (typeToSort t2)
-typeToSort (TCtor _ t2) = foldr F.FApp (F.FTC F.mapFTyCon) (typeToSort . snd <$> t2)
-typeToSort (TForall{}) = error "TODO?"
+-- safeTypeToSort (TPair t1 t2) = F.FApp (F.FApp (F.FTC F.mapFTyCon) (safeTypeToSort t1)) (safeTypeToSort t2)
+safeTypeToSort (TCtor _ t2) = foldr F.FApp (F.FTC F.mapFTyCon) <$> (mapM (safeTypeToSort . snd) t2)
+safeTypeToSort (TForall{}) = Nothing
 
 
 --------------------------------------------------------------------
