@@ -32,7 +32,7 @@ import System.Console.CmdArgs.Verbosity
 
 solve :: Measures -> NNF HC.Pred -> IO (F.Result Integer)
 solve measures constraints = do
-  setVerbosity Loud
+  setVerbosity Quiet
   (fmap fst) <$> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint (measureHashMap measures) mempty)
   where
     fixpointConstraint = toHornClause constraints

@@ -37,7 +37,7 @@ main = runST empty
 pure as forall a. acl:Set ~> x:a -> Perm <{v:Set | v == acl} >{v:Set | v == acl} >{v:a | v == x}
 pure = 0
 
-bind as rforall a, b. acl1:Set ~> acl2:Set ~> acl3:Set ~> (Perm <{v:Set | v == acl1} >{v:Set | v == acl2} >a) -> (x:a -> Perm <{v:Set | v == acl2} >{v:Set | v == acl3} >b) -> Perm <{v:Set | v == acl2} >{v:Set | v == acl3} >b
+bind as rforall a, b. acl1:Set ~> acl2:Set ~> acl3:Set ~> (Perm <{v:Set | v == acl1} >{v:Set | v == acl2} >a) -> (x:a -> Perm <{v:Set | v == acl2} >{v:Set | v == acl3} >b) -> Perm <{v:Set | v == acl1} >{v:Set | v == acl3} >b
 bind = 0
 
 thenn as rforall a, b. acl1:Set ~> acl2:Set ~> acl3:Set ~> (Perm <{v:Set|v==acl1} >{v:Set|v==acl2} >a)

@@ -20,7 +20,6 @@ module Language.Mist.CGen
 import Language.Mist.Types
 import Language.Mist.Names
 import Data.Bifunctor (second)
-
 import Debug.Trace
 
 -------------------------------------------------------------------------------
@@ -45,7 +44,7 @@ isApplicationForm Number{} = True
 isApplicationForm Boolean{} = True
 isApplicationForm Unit{} = True
 isApplicationForm _ = False
- 
+
 strengthening :: CGenConstraints r a =>
         Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 strengthening env t e = do
@@ -374,5 +373,3 @@ splitImplicits :: RType r a -> ([(Id, RType r a)], RType r a)
 splitImplicits (RIFun b t t') = ((bindId b,t):bs, t'')
     where (bs,t'') = splitImplicits t'
 splitImplicits rt = ([],rt)
-
-
