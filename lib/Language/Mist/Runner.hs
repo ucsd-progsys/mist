@@ -17,6 +17,8 @@ import qualified Language.Fixpoint.Types as F
 
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
+import Debug.Trace
+
 type R = HC.Pred
 
 {-
@@ -43,6 +45,7 @@ act h f = do
   let r = mist measures e
   case r of
     Right (measures', t) -> do
+      !_ <- traceM $ pprint (anormal (annotate t TUnit))
       let c = generateConstraints (anormal (annotate t TUnit))
       solverResult <- solve measures' c
       hPrint h solverResult

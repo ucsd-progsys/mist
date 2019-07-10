@@ -241,6 +241,6 @@ idToFix x = F.EVar (fromString x)
 ------------------------------------------------------------------------------
 
 instance PPrint (HC.Pred) where
-  pprint (HC.Reft expr) = printf "(%s)" (show expr)
+  pprint (HC.Reft expr) = printf "(%s)" (F.showpp expr)
   pprint (HC.Var kvar args) = printf "%s(%s)" (show kvar) (intercalate "," (fmap show args))
   pprint (HC.PAnd preds) = intercalate "/\\" (fmap pprint preds)

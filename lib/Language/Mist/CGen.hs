@@ -21,6 +21,8 @@ import Language.Mist.Types
 import Language.Mist.Names
 import Data.Bifunctor (second)
 
+import Debug.Trace
+
 -------------------------------------------------------------------------------
 -- Data Structures
 -------------------------------------------------------------------------------
@@ -47,8 +49,9 @@ isApplicationForm _ = False
 strengthening :: CGenConstraints r a =>
         Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 strengthening env t e = do
-  -- !_ <- traceM $ show ("strengthening", pprint t, pprint e)
-  _strengthening env t e
+  (c, outT) <- _strengthening env t e
+  !_ <- traceM $ "strengthening: " <> "⊢ " <> pprint e <> " <= " <> pprint t <> " ↑ " <> pprint outT
+  pure (c, outT)
 
 _strengthening :: CGenConstraints r a =>
         Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
@@ -76,8 +79,9 @@ _strengthening env typ e = do
 synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 synth env e = do
-  -- !_ <- traceM $ show ("synth", pprint e)
-  _synth env e
+  (c, outT) <- _synth env e
+  !_ <- traceM $ "synth: " <> "⊢ " <> pprint e <> " => " <> pprint outT
+  pure (c, outT)
 
 _synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
@@ -133,8 +137,9 @@ staleBaseType l baseType = do
 
 appSynth :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> Fresh (NNF r, RType r a)
 appSynth env t y loc = do
-  -- !_ <- traceM $ show ("appSynth", y, pprint t)
-  _appSynth env t y loc
+  (c, outT) <- _appSynth env t y loc
+  !_ <- traceM $ "appSynth: " <> pprint t <> " ⊢ " <> y <> " >> " <> pprint outT
+  pure (c, outT)
 
 -- | env | tfun ⊢ y >>
 _appSynth :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> Fresh (NNF r, RType r a)
@@ -164,7 +169,7 @@ single env x = case lookup x env of
 
 check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 check env e t = do
-  -- !_ <- traceM $ show ("check", pprint e, pprint t)
+  !_ <- traceM $ "check: " <> "⊢ " <> pprint e <> " <= " <> pprint t
   _check env e t
 
 _check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
@@ -230,7 +235,7 @@ _check env e t = do
 
 appCheck :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> RType r a -> Fresh (NNF r)
 appCheck env t y loc t' = do
-  -- !_ <- traceM $ show ("appCheck", pprint t, y)
+  !_ <- traceM $ "appCheck: " <> pprint t <> " ⊢ " <> y <> " << " <> pprint t'
   _appCheck env t y loc t'
 
 -- | env | t ⊢ y << t'
@@ -294,7 +299,7 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 
 (<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
 rtype1 <: rtype2 = do
-  -- !_ <- traceM $ show ("<:", pprint rtype1, pprint rtype2)
+  !_ <- traceM $ "subtyping: " <> "⊢ " <> pprint rtype1 <> " <: " <> pprint rtype2
   rtype1 <<: rtype2
 
 (<<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
