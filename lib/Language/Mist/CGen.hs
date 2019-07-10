@@ -5,6 +5,7 @@
 {-# LANGUAGE PatternGuards #-}
 {-# LANGUAGE ConstraintKinds #-}
 {-# LANGUAGE BangPatterns #-}
+{-# OPTIONS_GHC "-fmax-pmcheck-iterations=10000000" #-}
 
 --------------------------------------------------------------------------------
 -- | This module generates refinement type constraints
@@ -323,12 +324,17 @@ rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
       let outer = All x1 (eraseRType rt1) p1 (Head $ varSubst (x2 |-> x1) p2)
       inner <- rt1 <: rt2
       pure $ CAnd [outer, inner]
-    go rt1 (RRTy x rt2 reft) = do
+    go rt1 (RRTy (Bind x _) rt2 reft) = do
+      let (y,r) = rtsymreft rt1
+      let subreft = All y (eraseRType rt1) r (Head $ varSubst (x |-> y) reft)
       inner <- rt1 <: rt2
-      subreft <- rt1 <: RBase x (eraseRType rt2) reft
       pure $ CAnd [inner, subreft]
     go (RRTy (Bind x _) rt1 reft) rt2 = All x (eraseRType rt1) reft <$> (rt1 <: rt2)
     go _ _ = error $ "CGen subtyping error. Got:\n\n" ++ pprint rtype1 ++ "\n\nbut expected:\n\n" ++ pprint rtype2 ++ "\n" ++ "i.e. Got:\n\n" ++ pprint (eraseRType rtype1) ++ "\n\nbut expected:\n\n" ++ pprint (eraseRType rtype2) ++ "\n"
+
+rtsymreft (RBase (Bind x _) _ r) = (x,r)
+rtsymreft (RRTy (Bind x _) _ r) = (x,r)
+rtsymreft _ = ("_",true)
 
 (v, rt1) `constructorSub` (_,rt2) = case v of
                          -- TODO: write tests that over these two cases...

@@ -485,6 +485,19 @@ class Predicate r where
   varSubst :: Subst Id -> r -> r -- ^ [x/y]r
   buildKvar :: Id -> [Id] -> r -- ^ k(x1, ..., xn)
 
+
+instance Predicate () where
+    true = ()
+    false = ()
+    var _ = ()
+    varNot _ = ()
+    varsEqual _ _ = ()
+    prim _ = undefined
+
+    strengthen _ _ = ()
+    varSubst _ _ = ()
+    buildKvar _ _ = ()
+
 --------------------------------------------------------------------------------
 -- | A MonadFresh encompasses the operations for generating fresh, scoped names
 --------------------------------------------------------------------------------
