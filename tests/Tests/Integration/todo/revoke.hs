@@ -63,5 +63,5 @@ runPerm = 0
 -- foo :: Int -> Perm <{v:Set | v == v} >{v:Set | v == v} >String
 -- foo = \f -> (bind (grant f) (\asdf -> (read f)))
 
-foo :: Set -> Int -> Perm <{v:Set | v == acl} >{v:Set | v == acl} >String
+foo :: acl:Set -> Int -> Perm <{v:Set | v == acl} >{v:Set | v == acl} >String
 foo = \acl -> (\f -> (bind (grant f) (\asdf -> bind (read f) (\contents -> bind (revoke f) (\asdf -> pure contents)))))

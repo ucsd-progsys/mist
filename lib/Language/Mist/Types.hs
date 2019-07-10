@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving        #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
@@ -204,7 +205,7 @@ data Type = TVar TVar           -- a
           | TForall TVar Type   -- ∀a.t
           deriving (Eq, Ord, Show, Read)
 
-newtype Ctor = CT Id deriving (Eq, Ord, Show, Read)
+newtype Ctor = CT Id deriving (Eq, Ord, Show, Read, IsString)
 
 newtype TVar = TV Id deriving (Eq, Ord, Show, Read)
 

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE OverloadedStrings #-}
 
 module Language.Mist.ToFixpoint
   ( solve
@@ -82,6 +83,8 @@ typeToSort TUnit = F.FObj $ fromString "Unit"
 typeToSort TInt = F.intSort
 typeToSort TBool = F.boolSort
 typeToSort TSet = F.setSort F.intSort
+-- TODO: fix after popl
+typeToSort (TCtor "Set" []) = F.setSort F.intSort
 -- is this backwards?
 typeToSort (t1 :=> t2) = F.FFunc (typeToSort t1) (typeToSort t2)
 -- We can't actually build arbitary TyCons in FP, so for now we just use
@@ -128,7 +131,12 @@ appToFixpoint e =
       case prim2ToFixpoint op of
         FBrel brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
         FBop bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
-        FPrim e -> F.EApp (F.EApp e (exprToFixpoint e1)) (exprToFixpoint e2)
+        FPrim e -> if e == F.EVar T.setSub
+                          -- TODO: fix after popl. Apparently
+                          -- fixpoint's set_sng doesn't really work?
+                     then F.EApp (F.EApp (F.EVar T.setDif) $ exprToFixpoint e1)
+                                 (F.EApp (F.EApp (F.EVar T.setAdd) (F.EApp (F.EVar T.setEmpty) (F.ECon $ F.I 0))) $ exprToFixpoint e2)
+                     else F.EApp (F.EApp e (exprToFixpoint e1)) (exprToFixpoint e2)
 
 data FPrim = FBop F.Bop | FBrel F.Brel | FPrim F.Expr
 
