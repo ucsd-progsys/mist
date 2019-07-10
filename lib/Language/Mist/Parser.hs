@@ -126,7 +126,7 @@ keywords =
   [ "if"      , "else"  , "then"
   , "true"    , "false"
   , "let"     , "in"
-  , "Int"     , "Bool"  , "forall"  , "as"
+  , "Int"     , "Bool"  , "forall"  , "as", "rforall"
   ]
 
 -- | `identifier` parses identifiers: lower-case alphabets followed by alphas or digits
@@ -335,15 +335,14 @@ typeSig
   <?> "Type Signature"
 
 scheme :: Parser SSParsedRType
-scheme
-  =  schemeForall
- <|> typeRType
+scheme =  schemeForall
 
 schemeForall :: Parser SSParsedRType
 schemeForall = do
-  tvars <- rWord "forall" *> sepBy tvar comma <* symbol "."
+  rvars <- option [] $ rWord "rforall" *> sepBy tvar comma <* symbol "."
+  tvars <- option [] $ rWord "forall" *> sepBy tvar comma <* symbol "."
   bodyType <- typeRType
-  pure $ foldr (\tvar t -> RForall tvar t) bodyType tvars
+  pure $ foldr RForallP (foldr RForall bodyType tvars) rvars
 
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")

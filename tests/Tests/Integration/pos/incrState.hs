@@ -1,5 +1,5 @@
 -- Monadic Interface
-ret as forall a. wr:Int ~> x:a -> ST <{ri:Int|ri==wr} >{ro:Int|ro==wr} >a
+ret as rforall a. wr:Int ~> x:a -> ST <{ri:Int|ri==wr} >{ro:Int|ro==wr} >a
 ret = 0
 
 thenn as w1:Int ~> w2:Int ~> w3:Int ~> (ST <{v:Int|v==w1} >{v:Int|v==w2} >Unit)
@@ -7,7 +7,7 @@ thenn as w1:Int ~> w2:Int ~> w3:Int ~> (ST <{v:Int|v==w1} >{v:Int|v==w2} >Unit)
   -> ST <{v:Int|v==w1} >{v:Int|v==w3} >Int
 thenn = 0
 
-bind as forall a, b. w1:Int ~> w2:Int ~> w3:Int ~> (ST <{v:Int|v==w1} >{v:Int|v==w2} >a)
+bind as rforall a, b. w1:Int ~> w2:Int ~> w3:Int ~> (ST <{v:Int|v==w1} >{v:Int|v==w2} >a)
   -> (unused:a -> ST <{v:Int|v==w2} >{v:Int|v==w3} >b)
   -> ST <{v:Int|v==w1} >{v:Int|v==w3} >b
 bind = 0

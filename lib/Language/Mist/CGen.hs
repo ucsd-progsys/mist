@@ -60,7 +60,7 @@ strengthening _ _ (Lam _ _ _)
   = error "should not occur"
 strengthening env (TForall _ typ) (TAbs tvar e _) = do
   (c, t) <- strengthening env typ e
-  pure (c, RForall tvar t)
+  pure (c, RForallP tvar t)
 strengthening env typ e = do
   tHat <- fresh (extractLoc e) env typ
   c <- check env e tHat
@@ -88,16 +88,17 @@ _synth env (App e (Id y loc) _) = do
 _synth _ App{} = error "argument is non-variable"
 
 _synth env (TApp e typ loc) = do
-  (c, RForall (TV alpha) t) <- synth env e
-  tHat <- if baseQuantifier alpha t then stale loc typ else fresh loc env typ
-  pure (c, substReftReft (alpha |-> tHat) t)
+  (c, scheme ) <- synth env e
+  case scheme of
+     RForall (TV alpha) t -> do
+        tHat <- stale loc typ
+        pure (c, substReftReft (alpha |-> tHat) t)
+     RForallP (TV alpha) t -> do
+        tHat <- fresh loc env typ
+        pure (c, substReftReft (alpha |-> tHat) t)
+     _ -> error "TApp on not-a-scheme"
 
 _synth _ _ = error "Internal Error: Synth called on non-application form"
-
-baseQuantifier :: Id -> RType r a -> Bool
-baseQuantifier alpha (RForall _ rt) = baseQuantifier alpha rt
-baseQuantifier alpha (RIFun _ xt rt) = eraseRType xt == TVar (TV alpha) || baseQuantifier alpha rt
-baseQuantifier _ _ = False
 
 stale :: CGenConstraints r a => a -> Type -> Fresh (RType r a)
 stale loc (TVar alpha) = do
@@ -204,6 +205,12 @@ _check _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) _ = pure (CAnd [])
 _check env (Lam (AnnBind x _ _) e _) (RFun y ty t) =
   mkAll x ty <$> check ((x, ty):env) e (substReftPred (bindId y |-> x) t)
 
+_check env (TAbs tvar' e loc) (RForallP (TV tvar) t)  = do
+  stalert <- stale loc (TVar tvar')
+  check env e (substReftReft (tvar |-> stalert) t)
+_check env (TAbs tvar' e _) (RForall (TV tvar) t) =
+  check env e (substReftType (tvar |-> TVar tvar') t)
+
 _check env (App e (Id y loc) _) t = do
   (c, t') <- synth env e
   c' <- appCheck env t' y loc t
@@ -294,6 +301,9 @@ rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
       c' <- substReftPred (x1 |-> x2) t1' <: t2'
       pure $ CAnd [c, mkAll x2 t2 c']
     go (RForall alpha t1) (RForall beta t2)
+      | alpha == beta = t1 <: t2
+      | otherwise = error "Constraint generation subtyping error"
+    go (RForallP alpha t1) (RForallP beta t2)
       | alpha == beta = t1 <: t2
       | otherwise = error "Constraint generation subtyping error"
     go (RApp c1 vts1) (RApp c2 vts2)

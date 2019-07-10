@@ -1,10 +1,10 @@
-fst as forall a, b. (Pair >a >b) -> a
+fst as rforall a, b. (Pair >a >b) -> a
 fst = True
 
-snd as forall a, b. (Pair >a >b) -> b
+snd as rforall a, b. (Pair >a >b) -> b
 snd = True
 
-mkPair as forall a, b. x:a -> y:b -> Pair >a >b
+mkPair as rforall a, b. x:a -> y:b -> Pair >a >b
 mkPair = True
 
 foo :: {v:Int | v == 1}

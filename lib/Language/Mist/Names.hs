@@ -79,6 +79,8 @@ substReftPred su (RRTy bind rtype expr) =
   RRTy bind (substReftPred su rtype) (subst (M.delete (bindId bind) su) expr)
 substReftPred su (RForall tvars r) =
   RForall tvars (substReftPred su r)
+substReftPred su (RForallP tvars r) =
+  RForallP tvars (substReftPred su r)
 
 -- | Substitutes in the Types of an RType
 substReftType :: (Subable t Type) => Subst t -> RType r a -> RType r a
@@ -94,6 +96,8 @@ substReftType su (RRTy bind rtype expr) =
   RRTy bind (substReftType su rtype) expr
 substReftType su (RForall tvar r) =
   RForall tvar (substReftType (M.delete (unTV tvar) su) r)
+substReftType su (RForallP tvar r) =
+  RForallP tvar (substReftType (M.delete (unTV tvar) su) r)
 
 -- | Substitutes an RType for an RType
 substReftReft :: Subst (RType r a) -> RType r a -> RType r a
@@ -111,6 +115,8 @@ substReftReft su (RRTy bind rtype expr) =
   RRTy bind (substReftReft su rtype) expr
 substReftReft su (RForall tvar r) =
   RForall tvar (substReftReft (M.delete (unTV tvar) su) r)
+substReftReft su (RForallP tvar r) =
+  RForallP tvar (substReftReft (M.delete (unTV tvar) su) r)
 
 toTVar :: Type -> Maybe Id
 toTVar (TVar (TV t)) = Just t
@@ -328,6 +334,11 @@ instance (Uniqable r) => Uniqable (RType r a) where
     rtype' <- unique rtype
     modify $ popNewName (unTV tvar)
     pure $ RForall tvar' rtype'
+  unique (RForallP tvar rtype) = do
+    tvar' <- uniquifyBindingTVar tvar
+    rtype' <- unique rtype
+    modify $ popNewName (unTV tvar)
+    pure $ RForallP tvar' rtype'
 
 instance Uniqable Type where
   unique (TVar tvar) = TVar <$> uniquifyTVar tvar

@@ -191,6 +191,7 @@ data RType r a
   | RIFun !(Bind () a) !(RType r a) !(RType r a)
   | RRTy !(Bind () a) !(RType r a) r
   | RForall TVar !(RType r a)
+  | RForallP TVar !(RType r a)
   deriving (Show, Functor)
 
 data Type = TVar TVar           -- a
@@ -384,6 +385,7 @@ instance (PPrint r) => PPrint (RType r a) where
   pprint (RRTy b t e) =
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
+  pprint (RForallP tv t) = printf "rforall %s. %s" (pprint tv) (pprint t)
 
 --------------------------------------------------------------------------------
 -- | The `Parsed` types are for parsed ASTs.
@@ -410,6 +412,7 @@ eraseRType (RFun _ t1 t2) = eraseRType t1 :=> eraseRType t2
 eraseRType (RIFun _ _t1 t2) = eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
+eraseRType (RForallP alphas t) = TForall alphas (eraseRType t)
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor
@@ -553,6 +556,7 @@ instance Bifunctor RType where
   first f (RIFun b rt1 rt2) = RIFun b (first f rt1) (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)
   first f (RForall tvar rt) = RForall tvar (first f rt)
+  first f (RForallP tvar rt) = RForallP tvar (first f rt)
 
 class Default a where
   defaultVal :: a
