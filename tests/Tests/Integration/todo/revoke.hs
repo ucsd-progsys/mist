@@ -40,6 +40,11 @@ pure = 0
 bind as rforall a, b. acl1:Set ~> acl2:Set ~> acl3:Set ~> (Perm <{v:Set | v == acl1} >{v:Set | v == acl2} >a) -> (x:a -> Perm <{v:Set | v == acl2} >{v:Set | v == acl3} >b) -> Perm <{v:Set | v == acl2} >{v:Set | v == acl3} >b
 bind = 0
 
+thenn as rforall a, b. acl1:Set ~> acl2:Set ~> acl3:Set ~> (Perm <{v:Set|v==acl1} >{v:Set|v==acl2} >a)
+  -> (Perm <{v:Set|v==acl2} >{v:Set|v==acl3} >b)
+  -> Perm <{v:Set|v==acl1} >{v:Set|v==acl3} >b
+thenn = (0)
+
 canRead as acl:Set ~> f:Int -> Perm <{v:Set | v == acl}  >{v:Set | v == acl} >{v:Bool | v == f ∈ acl}
 canRead = 0
 
@@ -62,6 +67,9 @@ runPerm = 0
 
 foo :: start:Set ~> f:Int -> Perm <{v:Set | v == start} >{v:Set | f ∈ v} >String
 foo = \f -> (bind (grant f) (\asdf -> (read f)))
+
+-- foo :: start:Set ~> f:Int -> Perm <{v:Set | v == start} >{v:Set | f ∈ v} >Unit
+-- foo = \f -> (grant f)
 
 -- foo :: acl:Set -> Int -> Perm <{v:Set | v == acl} >{v:Set | v == acl} >String
 -- foo = \acl -> (\f -> (bind (grant f) (\asdf -> bind (read f) (\contents -> bind (revoke f) (\asdf -> pure contents)))))
