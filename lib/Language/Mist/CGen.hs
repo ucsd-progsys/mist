@@ -45,23 +45,29 @@ isApplicationForm _ = False
  
 strengthening :: CGenConstraints r a =>
         Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-strengthening env _ e
+strengthening env t e = do
+  -- !_ <- traceM $ show ("strengthening", pprint t, pprint e)
+  _strengthening env t e
+
+_strengthening :: CGenConstraints r a =>
+        Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
+_strengthening env _ e
   | isApplicationForm e = synth env e
-strengthening _ _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _)
+_strengthening _ _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _)
   = pure (CAnd [], tx)
-strengthening env (_ :=> te) (Lam (AnnBind x (Just (ElabUnrefined tx)) l) e _) = do
+_strengthening env (_ :=> te) (Lam (AnnBind x (Just (ElabUnrefined tx)) l) e _) = do
   tHat <- fresh l env tx
   (c, t) <- strengthening ((x, tHat):env) te e
   pure (mkAll x tHat c, RFun (Bind x l) tHat t)
-strengthening env (_ :=> te) (Lam (AnnBind x (Just (ElabRefined tx)) loc) e _) = do
+_strengthening env (_ :=> te) (Lam (AnnBind x (Just (ElabRefined tx)) loc) e _) = do
   (c, t) <- strengthening ((x, tx):env) te e
   pure (mkAll x tx c, RFun (Bind x loc) tx t)
-strengthening _ _ (Lam _ _ _)
+_strengthening _ _ (Lam _ _ _)
   = error "should not occur"
-strengthening env (TForall _ typ) (TAbs tvar e _) = do
+_strengthening env (TForall _ typ) (TAbs tvar e _) = do
   (c, t) <- strengthening env typ e
   pure (c, RForallP tvar t)
-strengthening env typ e = do
+_strengthening env typ e = do
   tHat <- fresh (extractLoc e) env typ
   c <- check env e tHat
   pure (c,tHat)
@@ -84,7 +90,7 @@ _synth env (App e (Id y loc) _) = do
   (c, t) <- synth env e
   (c', t') <- appSynth env t y loc
   pure (CAnd [c, c'], t')
-  
+
 _synth _ App{} = error "argument is non-variable"
 
 _synth env (TApp e typ loc) = do
@@ -126,7 +132,7 @@ staleBaseType l baseType = do
 
 appSynth :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> Fresh (NNF r, RType r a)
 appSynth env t y loc = do
-  -- !_ <- traceM $ show ("appSynth", pprint t, y)
+  -- !_ <- traceM $ show ("appSynth", y, pprint t)
   _appSynth env t y loc
 
 -- | env | tfun ⊢ y >>
@@ -345,6 +351,7 @@ mkAll x rt c = case flattenRType rt of
 -- | ∃ x :: t. c
 mkExists x rt c = case flattenRType rt of
              RBase (Bind y _) b p -> Any x b (varSubst (y |-> x) p) c
+             RRTy (Bind y _) rt p -> Any x (eraseRType rt) (varSubst (y |-> x) p) c
              _ -> c
 
 splitImplicits :: RType r a -> ([(Id, RType r a)], RType r a)
