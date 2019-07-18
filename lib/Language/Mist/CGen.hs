@@ -20,7 +20,6 @@ module Language.Mist.CGen
 import Language.Mist.Types
 import Language.Mist.Names
 import Data.Bifunctor (second)
-import Debug.Trace
 
 -------------------------------------------------------------------------------
 -- Data Structures
@@ -49,7 +48,7 @@ strengthening :: CGenConstraints r a =>
         Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 strengthening env t e = do
   (c, outT) <- _strengthening env t e
-  !_ <- traceM $ "strengthening: " <> "⊢ " <> pprint e <> " <= " <> pprint t <> " ↑ " <> pprint outT
+  -- !_ <- traceM $ "strengthening: " <> "⊢ " <> pprint e <> " <= " <> pprint t <> " ↑ " <> pprint outT
   pure (c, outT)
 
 _strengthening :: CGenConstraints r a =>
@@ -79,7 +78,7 @@ synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 synth env e = do
   (c, outT) <- _synth env e
-  !_ <- traceM $ "synth: " <> "⊢ " <> pprint e <> " => " <> pprint outT
+  -- !_ <- traceM $ "synth: " <> "⊢ " <> pprint e <> " => " <> pprint outT
   pure (c, outT)
 
 _synth :: CGenConstraints r a =>
@@ -137,7 +136,7 @@ staleBaseType l baseType = do
 appSynth :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> Fresh (NNF r, RType r a)
 appSynth env t y loc = do
   (c, outT) <- _appSynth env t y loc
-  !_ <- traceM $ "appSynth: " <> pprint t <> " ⊢ " <> y <> " >> " <> pprint outT
+  -- !_ <- traceM $ "appSynth: " <> pprint t <> " ⊢ " <> y <> " >> " <> pprint outT
   pure (c, outT)
 
 -- | env | tfun ⊢ y >>
@@ -156,19 +155,22 @@ _appSynth env (RIFun (Bind x _) tx t) y loc = do
 _appSynth _ _ _ _ = error "Applying non function"
 
 single :: CGenConstraints r a => Env r a -> Id -> Fresh (RType r a)
-single env x = case lookup x env of
+single env x = case flattenRType <$> lookup x env of
   Just (RBase (Bind y l) baseType reft) -> do
   -- `x` is already bound, so instead of "re-binding" x we should selfify
   -- (al la Ou et al. IFIP TCS '04)
     v <- refreshId $ "VV" ++ cSEPARATOR
     pure $ RBase (Bind v l) baseType (strengthen (subst (y |-> v) reft) (varsEqual v x))
+  Just (RRTy (Bind y l) rt reft) -> do
+    v <- refreshId $ "VV" ++ cSEPARATOR
+    pure $ RRTy (Bind v l) rt (strengthen (subst (y |-> v) reft) (varsEqual v x))
   Just rt -> pure rt
   Nothing -> error $ "Unbound Variable " ++ show x ++ show env
 
 
 check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 check env e t = do
-  !_ <- traceM $ "check: " <> "⊢ " <> pprint e <> " <= " <> pprint t
+  -- !_ <- traceM $ "check: " <> "⊢ " <> pprint e <> " <= " <> pprint t
   _check env e t
 
 _check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
@@ -234,7 +236,7 @@ _check env e t = do
 
 appCheck :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> RType r a -> Fresh (NNF r)
 appCheck env t y loc t' = do
-  !_ <- traceM $ "appCheck: " <> pprint t <> " ⊢ " <> y <> " << " <> pprint t'
+  -- !_ <- traceM $ "appCheck: " <> pprint t <> " ⊢ " <> y <> " << " <> pprint t'
   _appCheck env t y loc t'
 
 -- | env | t ⊢ y << t'
@@ -298,8 +300,9 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 
 (<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
 rtype1 <: rtype2 = do
-  !_ <- traceM $ "subtyping: " <> "⊢ " <> pprint rtype1 <> " <: " <> pprint rtype2
-  rtype1 <<: rtype2
+  c <- rtype1 <<: rtype2
+  -- !_ <- traceM $ "subtyping: " <> "⊢ " <> pprint rtype1 <> "\n\t<: " <> pprint rtype2 <> "\n\t⊣  " <> show c <> "\n\n"
+  pure c
 
 (<<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
 rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)

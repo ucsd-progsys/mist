@@ -48,33 +48,33 @@ reverse [] = pure []
 reverse (x:xs) = reverse xs >>= (++ [x])
 -}
 
+measure mNil :: List [>Int] -> Bool
+measure mCons :: List [>Int] -> Bool
+measure mLength :: List [>Int] -> Int
+measure not :: Bool -> Bool
 
-measure mNil :: List [] -> Bool
-measure mCons :: List [] -> Bool
-measure mLength :: List [] -> Int
-
-empty as rforall a. x:(List >a) -> {v: Bool | v == mNil x}
+empty as x:(List >Int) -> {v: Bool | (v == mNil x) /\ (v == not (mCons x)) /\ (v == (mLength x == 0))}
 empty = (0)
 
-nil as rforall a. {v: List >a | (mNil v) /\ (mLength v = 0)}
+nil as {v: List >Int | (mNil v) /\ (mLength v = 0) /\ (not (mCons v))}
 nil = (0)
 
-cons as rforall a. x:a -> xs:(List >a) -> {v: List >a | (mCons v) /\ (mLength v = mLength xs + 1)}
+cons as x:Int -> xs:(List >Int) -> {v: List >Int | (mCons v) /\ (mLength v = mLength xs + 1) /\ (not (mNil v))}
 cons = (0)
 
-first as rforall a. {v: List >a | mCons v} -> a
+first as {v: List >Int | mCons v} -> Int
 first = (0)
 
-rest as rforall a. {v: List >a | mCons v} -> List >a
+rest as rs:{v: List >Int | mCons v} -> {v: List >Int | mLength v + 1 == mLength rs }
 rest = (0)
 
-pure as rforall a. x:a -> Tick ^{v:Int | v == 0} >a
+pure as rforall a. x:a -> Tick >{v:Int | v == 0} >a
 pure = (0)
 
-ap as rforall a, b. t1:Int ~> t2:Int ~> (Tick ^{v:Int | v == t1} >x:a -> b) -> (Tick ^{v:Int | v == t2} >a) -> Tick ^{v:Int | v == t1 + t2} >b
+ap as rforall a, b. t1:Int ~> t2:Int ~> (Tick >{v:Int | v == t1} >x:a -> b) -> (Tick >{v:Int | v == t2} >a) -> Tick >{v:Int | v == t1 + t2 + 1} >b
 ap = (0)
 
-append :: rforall a. xs:(List >a) -> ys:(List >a) -> Tick ^{v:Int | v = mLength xs} >{v: List >a | mLength v = (mLength xs) + (mLength ys)}
+append :: xs:(List >Int) -> ys:(List >Int) -> Tick >{v:Int | v = mLength xs} >{v: List >Int | mLength v = (mLength xs) + (mLength ys)}
 append = \xs -> \ys ->
   if empty xs
     then pure ys

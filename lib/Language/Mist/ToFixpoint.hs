@@ -118,15 +118,17 @@ exprToFixpoint (AnnTApp _e _typ _ _)      = error "TODO exprToFixpoint"
 exprToFixpoint (AnnTAbs _tvar _e _ _)      = error "TODO exprToFixpoint"
 
 appToFixpoint :: M.Expr t a -> F.Expr
-appToFixpoint e =
-  case e of
-    AnnApp (AnnApp (AnnPrim op _ _) e1 _ _) e2 _ _ ->
+appToFixpoint e
+    | (AnnApp (AnnId n _ _ ) e1 _ _) <- e
+    , "not" == MN.varHead n =
+      F.PNot (exprToFixpoint e1)
+    | AnnApp (AnnApp (AnnPrim op _ _) e1 _ _) e2 _ _ <- e =
       binopToFixpoint op e1 e2
-    AnnApp (AnnApp (AnnTApp (AnnPrim op _ _) _ _ _) e1 _ _) e2 _ _ ->
+    | AnnApp (AnnApp (AnnTApp (AnnPrim op _ _) _ _ _) e1 _ _) e2 _ _ <- e =
       binopToFixpoint op e1 e2
-    AnnApp f x _ _ ->
+    | AnnApp f x _ _ <- e =
       F.EApp (exprToFixpoint f) (exprToFixpoint x)
-    _ -> error "non-application"
+    | otherwise = error "non-application"
 
   where
     binopToFixpoint And e1 e2 = F.PAnd [exprToFixpoint e1, exprToFixpoint e2]

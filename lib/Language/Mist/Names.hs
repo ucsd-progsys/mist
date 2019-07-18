@@ -14,6 +14,7 @@ module Language.Mist.Names
   , cSEPARATOR
 
   , varNum
+  , varHead
 
   , FreshT
   , Fresh
@@ -56,6 +57,8 @@ import Control.Monad.Fail
 cSEPARATOR = "##"
 varNum :: Id -> Int
 varNum = read . last . splitOn cSEPARATOR
+varHead :: Id -> Id
+varHead = head . splitOn cSEPARATOR
 -- change this if it's too slow
 createInternalName name number = head (splitOn cSEPARATOR name) ++ cSEPARATOR ++ show number
 

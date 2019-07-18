@@ -200,7 +200,7 @@ measure = do
   _ <- L.nonIndented sc (rWord "measure")
   (id, _) <- identifier
   _ <- dcolon
-  typ <- typeType
+  typ <- unrefinedScheme
   pure (id, typ)
 
 --------------------------------------------------------------------------------
@@ -334,11 +334,15 @@ typeSig
   <|> pure ParsedInfer
   <?> "Type Signature"
 
-scheme :: Parser SSParsedRType
-scheme =  schemeForall
+unrefinedScheme :: Parser Type
+unrefinedScheme = do
+  tvars <- option [] $ rWord "forall" *> sepBy tvar comma <* symbol "."
+  bodyType <- typeType
+  pure $ foldr TForall bodyType tvars
 
-schemeForall :: Parser SSParsedRType
-schemeForall = do
+
+scheme :: Parser SSParsedRType
+scheme = do
   rvars <- option [] $ rWord "rforall" *> sepBy tvar comma <* symbol "."
   tvars <- option [] $ rWord "forall" *> sepBy tvar comma <* symbol "."
   bodyType <- typeRType
