@@ -89,6 +89,18 @@ isFile = 0
 
 -- NEXT: forShill
 
+-- GOAL:
+-- copyRec :: Bool -> FHandle -> FHandle -> RIO ()
+-- copyRec recur f d = do cs <- contents f
+--                        forM_ cs $ \p -> do
+--                          x <- flookup f p
+--                          when (isFile x) $ do
+--                            z <- create d p
+--                            s <- fread x
+--                            write z s
+--                          when (recur && isDir x) $ do
+-- createDir d p >>= copyRec recur x
+
 -- The "Client"
 
 copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
