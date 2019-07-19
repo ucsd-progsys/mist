@@ -103,6 +103,7 @@ data Prim
   | Union
   | SetAdd
   | SetDel
+  | SetSub
   deriving (Show, Eq)
 
 -- | Mist expressions
@@ -317,8 +318,9 @@ instance PPrint Prim where
   pprint And     = "&&"
   pprint Elem    = "∈"
   pprint Union   = "∪"
-  pprint SetDel  = "set_minus"
-  pprint SetAdd  = "set_add"
+  pprint SetDel  = "setMinus"
+  pprint SetAdd  = "setAdd"
+  pprint SetSub  = "setSubset"
 
 instance PPrint Bool where
   pprint True  = "True"

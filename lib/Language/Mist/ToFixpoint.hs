@@ -136,12 +136,10 @@ appToFixpoint e
       case prim2ToFixpoint op of
         FBrel brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
         FBop bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
-        FPrim e -> if e == F.EVar T.setSub
-                          -- TODO: fix after popl. Apparently
-                          -- fixpoint's set_sng doesn't really work?
-                     then F.EApp (F.EApp (F.EVar T.setDif) $ exprToFixpoint e1)
-                                 (F.EApp (F.EApp (F.EVar T.setAdd) (F.EApp (F.EVar T.setEmpty) (F.ECon $ F.I 0))) $ exprToFixpoint e2)
-                     else F.EApp (F.EApp e (exprToFixpoint e1)) (exprToFixpoint e2)
+        FPrim (F.EVar "internal_setDel") -> -- fixpoint's set_sng doesn't really work?
+          F.EApp (F.EApp (F.EVar T.setDif) $ exprToFixpoint e1)
+                 (F.EApp (F.EApp (F.EVar T.setAdd) (F.EApp (F.EVar T.setEmpty) (F.ECon $ F.I 0))) $ exprToFixpoint e2)
+        FPrim e -> F.EApp (F.EApp e (exprToFixpoint e1)) (exprToFixpoint e2)
 
 data FPrim = FBop F.Bop | FBrel F.Brel | FPrim F.Expr
 
@@ -155,7 +153,8 @@ prim2ToFixpoint Greater = FBrel F.Gt
 prim2ToFixpoint Equal   = FBrel F.Eq
 prim2ToFixpoint Elem    = FPrim (F.EVar T.setMem)
 prim2ToFixpoint SetAdd  = FPrim (F.EVar T.setAdd)
-prim2ToFixpoint SetDel = FPrim (F.EVar T.setSub)
+prim2ToFixpoint SetDel  = FPrim (F.EVar "internal_setDel")
+prim2ToFixpoint SetSub  = FPrim (F.EVar T.setSub)
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
 
 instance Predicate HC.Pred where

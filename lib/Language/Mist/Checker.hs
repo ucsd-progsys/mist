@@ -612,6 +612,10 @@ primType SetDel  = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
   pure $ TForall (TV a) (sa :=> TVar (TV a) :=> sa)
+primType SetSub  = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) (sa :=> sa :=> TBool)
 
 primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR

@@ -28,7 +28,7 @@ lst as rforall a. lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:S
   Shill
     <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
     >{v:Set | v == lstSet} >{v:Set | v == lookupSet} >{v:Set | v == contentsSet} >{v:Set | v == readSet} >{v:Set | v == createSet} >{v:Set | v == writeSet}
-    >a
+    >(List >a)
 lst = 0
 
 -- this is what is called createWO
@@ -84,6 +84,9 @@ thenn as rforall a, b .
     >b
 thenn = 0
 
+isFile as f:Int -> Bool
+isFile = 0
+
 -- The "Client"
 
 copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
@@ -93,4 +96,4 @@ copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  
     <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
     >{v:Set | setSubset v lstSet} >{v:Set | setSubset v lookupSet} >{v:Set | setSubset v contentsSet} >{v:Set | setSubset v readSet} >{v:Set | setSubset v createSet} >{v:Set | setSubset v writeSet}
     >Int -- This should return a Unit, right? Do we not have value-level Unit, still?
-copyRec = \f -> \t -> (pure 0)
+copyRec = \f -> \t -> lst f
