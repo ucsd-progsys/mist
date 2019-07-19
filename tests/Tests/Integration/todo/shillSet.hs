@@ -87,6 +87,8 @@ thenn = 0
 isFile as f:Int -> Bool
 isFile = 0
 
+-- NEXT: forShill
+
 -- The "Client"
 
 copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
