@@ -71,10 +71,14 @@ rest = (0)
 pure as rforall a. x:a -> Tick >{v:Int | v == 0} >a
 pure = (0)
 
-ap as rforall a, b. t1:Int ~> t2:Int ~> (Tick >{v:Int | v == t1} >x:a -> b) -> (Tick >{v:Int | v == t2} >a) -> Tick >{v:Int | v == t1 + t2 + 1} >b
+ap as rforall a, b. t1:Int ~> t2:Int ~>
+  (Tick >{v:Int | v == t1} >x:a -> b) ->
+  Tick >{v:Int | v == t2} >a ->
+  Tick >{v:Int | v == t1 + t2 + 1} >b
 ap = (0)
 
-append :: xs:(List >Int) -> ys:(List >Int) -> Tick >{v:Int | v = mLength xs} >{v: List >Int | mLength v = (mLength xs) + (mLength ys)}
+append :: xs:(List >Int) -> ys:(List >Int) ->
+  Tick >{v:Int | v = mLength xs} >{v: List >Int | mLength v = (mLength xs) + (mLength ys)}
 append = \xs -> \ys ->
   if empty xs
     then pure ys

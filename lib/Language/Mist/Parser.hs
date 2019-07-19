@@ -375,7 +375,7 @@ arrow = symbol "~>" *> pure RIFun <|> symbol "->" *> pure RFun
 
 rfun :: Parser SSParsedRType
 rfun = do id <- (binder <* colon) <|> freshBinder
-          tin <- (unrefined <|> rbase <|> parens typeRType)
+          tin <- (try unrefined <|> rbase <|> parens typeRType <|> unrefinedRApp)
           arrow <*> pure id <*> pure tin <*> typeRType
 
 unrefined :: Parser SSParsedRType
