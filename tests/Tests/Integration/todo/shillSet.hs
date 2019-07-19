@@ -94,6 +94,6 @@ copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  
   t:{v:Int | v ∈ createSet /\ v ∈ writeSet} ->
   Shill
     <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | setSubset v lstSet} >{v:Set | setSubset v lookupSet} >{v:Set | setSubset v contentsSet} >{v:Set | setSubset v readSet} >{v:Set | setSubset v createSet} >{v:Set | setSubset v writeSet}
+    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
     >Int -- This should return a Unit, right? Do we not have value-level Unit, still?
 copyRec = \f -> \t -> lst f
