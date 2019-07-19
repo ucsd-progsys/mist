@@ -1,39 +1,3 @@
-{-
-
-type Acl = Set String
-type AST ac1 acl2 Acl a = HST acl1 acl2 Acl a
-
-pure :: acl ~> a -> AST acl acl a
-(>>=) :: acl1 acl2 acl3 ~> AST acl1 acl2 a -> (a -> AST acl2 acl3 b) -> AST acl3 b
-
-canRead :: acl ~> f:File -> AST acl acl {v | v = f ∈ acl}
-canRead f = State (\acl -> (acl, member f acl))
-
-grant :: acl ~> f:File -> AST acl {v | v = acl ∪ singleton f} ()
-grant f = State (\acl -> (insert f acl, ()))
-
-revoke :: acl ~> f:File -> AST acl {v | v = acl - singleton f} ()
-revoke f = State (\acl -> (delete f acl, ()))
-
-read :: acl ~> {f:File | f ∈ acl} -> AST acl acl String
-read f = State (\acl -> (acl, "file contents"))
-
-safeRead :: acl ~> f:File -> AST acl acl (Maybe String)
-safeRead f = do
-  allowed <- canRead
-  if allowed
-    then read >>= (\c -> Just c)
-    else Nothing
-
-main :: String
-main = runST empty
-  (do
-    grant "f.txt"
-    c <- read "f.txt"
-    revoke "f.txt"
-    pure contents)
--}
-
 pure as forall a. acl:Set ~> x:a -> Perm <{v:Set | v == acl} >{v:Set | v == acl} >{v:a | v == x}
 pure = 0
 
@@ -65,8 +29,8 @@ runPerm = 0
 -- emptySet as {v: Set | 0 == 0}
 -- emptySet = 0
 
-foo :: start:Set ~> f:Int -> Perm <{v:Set | v == start} >{v:Set | f ∈ v} >String
-foo = \f -> (bind (grant f) (\asdf -> (read f)))
+foo :: start:Set ~> f:Int -> Perm <{v:Set | v == start} >{v:Set | 0 == 0} >String
+foo = \f -> (bind (grant f) (\asdf -> (bind (read f) (\contents -> (bind (revoke f) (\asdf -> pure contents))))))
 
 -- foo :: start:Set ~> f:Int -> Perm <{v:Set | v == start} >{v:Set | f ∈ v} >Unit
 -- foo = \f -> (grant f)
