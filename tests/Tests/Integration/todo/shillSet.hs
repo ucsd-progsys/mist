@@ -89,7 +89,20 @@ isFile = 0
 
 -- NEXT: forShill
 
+-- Hmm, I think forShill needs to enforece that @f@ is monotonic and return
+-- a monotonically larger world in order to account for creation, but the
+-- BRTs example simply returns a world over which all the same predicates
+-- hold, so let's try that first
+
+forShill as rforall a, b, c, d, e, f, g, h. List >a ->
+  (x:a -> Shill >b >c >d >e >f >g <b <c <d <e <f <g >h) ->
+  Shill >b >c >d >e >f >g <b <c <d <e <f <g >h
+-- We can implement forShill using Lists (see append.hs)
+forShill = 0
+
+
 -- GOAL:
+-- https://github.com/ucsd-progsys/liquidhaskell/blob/develop/benchmarks/icfp15/pos/CopyRec.hs
 -- copyRec :: Bool -> FHandle -> FHandle -> RIO ()
 -- copyRec recur f d = do cs <- contents f
 --                        forM_ cs $ \p -> do
@@ -101,6 +114,9 @@ isFile = 0
 --                          when (recur && isDir x) $ do
 -- createDir d p >>= copyRec recur x
 
+undefined as rforall a . a
+undefined = 0
+
 -- The "Client"
 
 copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
@@ -109,5 +125,10 @@ copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  
   Shill
     <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
     >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
-    >Int -- This should return a Unit, right? Do we not have value-level Unit, still?
-copyRec = \f -> \t -> lst f
+    >Int -- This should return a Unit, but we don't have a value-level unit terms
+copyRec = \f -> \t -> forShill undefined (\y -> pure 0)
+
+-- doesn't work:
+-- copyRec = \f -> \t -> bind (lst f) (\x -> (forShill x (\y -> pure 0)))
+-- works:
+-- copyRec = \f -> \t -> bind (lst f) (\x -> pure 0)
