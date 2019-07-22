@@ -84,8 +84,12 @@ thenn as rforall a, b .
     >b
 thenn = 0
 
+-- should be in the monad
 isFile as f:Int -> Bool
 isFile = 0
+
+isDir as f:Int -> Bool
+isDir  = 0
 
 -- NEXT: forShill
 
@@ -93,42 +97,58 @@ isFile = 0
 -- a monotonically larger world in order to account for creation, but the
 -- BRTs example simply returns a world over which all the same predicates
 -- hold, so let's try that first
+--
+-- Actually, this doesn't seem to work, so let's do it with subsets, but
+-- let's do the inside of that loop first
 
-forShill as rforall a, b, c, d, e, f, g, h. List >a ->
-  (x:a -> Shill >b >c >d >e >f >g <b <c <d <e <f <g >h) ->
-  Shill >b >c >d >e >f >g <b <c <d <e <f <g >h
+forShill as rforall a, b, c, d, e, f, g, h.
+  lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+  (x:a ->
+  Shill
+    <{v:Set | setSubset lstSet v} <{v:Set | setSubset lookupSet v} <{v:Set | setSubset contentsSet v} <{v:Set | setSubset readSet v} <{v:Set | setSubset createSet v} <{v:Set | setSubset writeSet v}
+    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+    >h) ->
+  List >a ->
+  Shill
+    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
+    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+    >h
 -- We can implement forShill using Lists (see append.hs)
 forShill = 0
 
 
--- GOAL:
--- https://github.com/ucsd-progsys/liquidhaskell/blob/develop/benchmarks/icfp15/pos/CopyRec.hs
--- copyRec :: Bool -> FHandle -> FHandle -> RIO ()
--- copyRec recur f d = do cs <- contents f
---                        forM_ cs $ \p -> do
---                          x <- flookup f p
---                          when (isFile x) $ do
---                            z <- create d p
---                            s <- fread x
---                            write z s
---                          when (recur && isDir x) $ do
--- createDir d p >>= copyRec recur x
-
 undefined as rforall a . a
 undefined = 0
 
+-- why does this fail? do we not encode bools properly?
+and as a:Bool -> b:Bool -> {v:Bool | v == a /\ b}
+and = \a -> \b -> if a == True then (if b == True then True else False) else False
+
 -- The "Client"
 
-copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
-  f:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
-  t:{v:Int | v ∈ createSet /\ v ∈ writeSet} ->
-  Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
-    >Int -- This should return a Unit, but we don't have a value-level unit terms
-copyRec = \f -> \t -> forShill undefined (\y -> pure 0)
+-- copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+--   f:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
+--   t:{v:Int | v ∈ createSet /\ v ∈ writeSet} ->
+--   Shill
+--     <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
+--     >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+--     >Unit -- This should return a Unit, but we don't have a value-level unit terms
+-- copyRec = \f -> \t -> bind (read f) (write t)
 
 -- doesn't work:
 -- copyRec = \f -> \t -> bind (lst f) (\x -> (forShill x (\y -> pure 0)))
 -- works:
 -- copyRec = \f -> \t -> bind (lst f) (\x -> pure 0)
+
+-- oops, copyRec is a BRTs invention. Let's do `find` from the shill papers
+
+find :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+  ({v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} -> Bool) ->
+  cur:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
+  Shill
+    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
+    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+    >Int -- This should return a Unit, but we don't have a value-level unit terms
+find = \filter -> \f -> if and (isFile f) (filter f)
+               then pure f
+             else (if (isDir f) then (bind (lst f) (forShill (find filter))) else (pure 0))
