@@ -85,9 +85,9 @@ safeTypeToSort (TVar (TV t)) = Just $ F.FVar (MN.varNum t) -- TODO: this is bad 
 safeTypeToSort TUnit = Just $ F.FObj $ fromString "Unit"
 safeTypeToSort TInt = Just $ F.intSort
 safeTypeToSort TBool = Just $ F.boolSort
-safeTypeToSort TSet = Just $ F.setSort F.intSort
--- TODO: fix after popl
-safeTypeToSort (TCtor "Set" []) = Just $ F.setSort F.intSort
+safeTypeToSort (TCtor "Set" [(_,t)]) = F.setSort <$> safeTypeToSort t
+-- TODO: still don't know where Set[] is coming from
+safeTypeToSort (TCtor "Set" _) = Just $ F.setSort F.intSort
 -- is this backwards?
 safeTypeToSort (t1 :=> t2) = F.FFunc <$> safeTypeToSort t1 <*> safeTypeToSort t2
 -- We can't actually build arbitary TyCons in FP, so for now we just use

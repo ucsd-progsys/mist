@@ -200,7 +200,6 @@ data Type = TVar TVar           -- a
           | TUnit               -- 1
           | TInt                -- Int
           | TBool               -- Bool
-          | TSet                -- Set (of ints, for now)
           | Type :=> Type       -- t1 => t2
           | TCtor Ctor [(Variance, Type)]   -- Ctor [t1,...,tn]
           | TForall TVar Type   -- ∀a.t
@@ -216,7 +215,7 @@ data Variance = Invariant | Bivariant | Contravariant | Covariant
 type Measures = M.Map Id Type
 
 setType :: Type -> Type
-setType t = (TCtor (CT "Set") [(Bivariant, t)])
+setType t = (TCtor (CT "Set") [(Covariant, t)])
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
@@ -437,7 +436,6 @@ prType TUnit        = PP.text "Unit"
 prType (TVar a)     = prTVar a
 prType TInt         = PP.text "Int"
 prType TBool        = PP.text "Bool"
-prType TSet         = PP.text "Set"
 prType (t1 :=> t2)   = PP.parens (prType t1) PP.<+> PP.text "=>" PP.<+> prType t2
 -- prType (TPair t s)  = PP.parens $ prType t PP.<> PP.text "," PP.<+> prType s
 prType (TCtor c ts) = prCtor c PP.<> PP.braces (prTypeArgs ts)
