@@ -287,6 +287,7 @@ idExpr = L.indentGuard sc GT pos1 *> flip fmap identifier (\case
    ("setPlus", l) -> Prim SetAdd l
    ("setMinus", l) -> Prim SetDel l
    ("setSubset", l) -> Prim SetSub l
+   ("store", l) -> Prim Store l
    (id,l) -> Id id l)
 
 constExpr :: Parser BareExpr

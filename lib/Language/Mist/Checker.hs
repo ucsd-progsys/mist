@@ -616,6 +616,13 @@ primType SetSub  = do
   let sa = setType $ TVar $ TV a
   pure $ TForall (TV a) (sa :=> sa :=> TBool)
 
+primType Store = do
+  k <- refreshId $ "k" ++ cSEPARATOR
+  let tk = TVar $ TV k
+  v <- refreshId $ "v" ++ cSEPARATOR
+  let tv = TVar $ TV v
+  pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> tk :=> tv :=> mapType tk tv
+
 primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))

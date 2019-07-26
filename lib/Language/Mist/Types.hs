@@ -23,6 +23,7 @@ module Language.Mist.Types
   
   -- * Built-in Types
   , setType
+  , mapType
 
   -- * Abstract syntax of Mist
   , Expr (..)
@@ -104,6 +105,7 @@ data Prim
   | SetAdd
   | SetDel
   | SetSub
+  | Store
   deriving (Show, Eq)
 
 -- | Mist expressions
@@ -215,7 +217,10 @@ data Variance = Invariant | Bivariant | Contravariant | Covariant
 type Measures = M.Map Id Type
 
 setType :: Type -> Type
-setType t = (TCtor (CT "Set") [(Covariant, t)])
+setType t = TCtor (CT "Set") [(Covariant, t)]
+
+mapType :: Type -> Type -> Type
+mapType t t'= TCtor (CT "Set") [(Contravariant, t), (Covariant, t')]
 
 -- | The type of Mist type annotations after parsing
 -- r is the type of refinements
@@ -320,6 +325,7 @@ instance PPrint Prim where
   pprint SetDel  = "setMinus"
   pprint SetAdd  = "setAdd"
   pprint SetSub  = "setSubset"
+  pprint Store  = "store"
 
 instance PPrint Bool where
   pprint True  = "True"

@@ -83,11 +83,12 @@ typeToSort = fromJust . safeTypeToSort
 safeTypeToSort :: M.Type -> Maybe F.Sort
 safeTypeToSort (TVar (TV t)) = Just $ F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed
 safeTypeToSort TUnit = Just $ F.FObj $ fromString "Unit"
-safeTypeToSort TInt = Just $ F.intSort
-safeTypeToSort TBool = Just $ F.boolSort
+safeTypeToSort TInt = Just F.intSort
+safeTypeToSort TBool = Just F.boolSort
 safeTypeToSort (TCtor "Set" [(_,t)]) = F.setSort <$> safeTypeToSort t
 -- TODO: still don't know where Set[] is coming from
 safeTypeToSort (TCtor "Set" _) = Just $ F.setSort F.intSort
+safeTypeToSort (TCtor "Map" [(_,t),(_,t')]) = F.mapSort <$> safeTypeToSort t <*> safeTypeToSort t'
 -- is this backwards?
 safeTypeToSort (t1 :=> t2) = F.FFunc <$> safeTypeToSort t1 <*> safeTypeToSort t2
 -- We can't actually build arbitary TyCons in FP, so for now we just use
@@ -155,6 +156,7 @@ prim2ToFixpoint Elem    = FPrim (F.EVar T.setMem)
 prim2ToFixpoint SetAdd  = FPrim (F.EVar T.setAdd)
 prim2ToFixpoint SetDel  = FPrim (F.EVar "internal_setDel")
 prim2ToFixpoint SetSub  = FPrim (F.EVar T.setSub)
+prim2ToFixpoint Store  = FPrim (F.EVar T.mapSto)
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
 
 instance Predicate HC.Pred where
