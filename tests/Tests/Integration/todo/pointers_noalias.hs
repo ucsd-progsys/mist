@@ -11,13 +11,13 @@
 -- | Library ----------------------------------------------------------------
 -----------------------------------------------------------------------------
 pure as forall a. acl:(Map <Int >Int) ~>
-  x:a -> Perm <{v:Map <Int >Int | v == acl} >{v:Map <Int >Int | v == acl} >{v:a | v == x}
+  x:a -> ST <{v:Map <Int >Int | v == acl} >{v:Map <Int >Int | v == acl} >{v:a | v == x}
 pure = 0
 
 bind as rforall a, b. acl1:(Map <Int >Int) ~> acl2:(Map <Int >Int) ~> acl3:(Map <Int >Int) ~>
-  Perm <{v:Map <Int >Int | v == acl1} >{v:Map <Int >Int | v == acl2} >a ->
-  (x:a -> Perm <{v:Map <Int >Int | v == acl2} >{v:Map <Int >Int | v == acl3} >b) ->
-  Perm <{v:Map <Int >Int | v == acl1} >{v:Map <Int >Int | v == acl3} >b
+  ST <{v:Map <Int >Int | v == acl1} >{v:Map <Int >Int | v == acl2} >a ->
+  (x:a -> ST <{v:Map <Int >Int | v == acl2} >{v:Map <Int >Int | v == acl3} >b) ->
+  ST <{v:Map <Int >Int | v == acl1} >{v:Map <Int >Int | v == acl3} >b
 bind = 0
 
 thenn as rforall a, b. acl1:(Map <Int >Int) ~> acl2:(Map <Int >Int) ~> acl3:(Map <Int >Int) ~>
@@ -45,18 +45,13 @@ set as h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >
 set = undefined
 
 -----------------------------------------------------------------------------
--- decr :: r:Int -> ST ()
--- decr r = do
---    n <- get r
---    set r (n - 1)
---    return ()
--- 
--- init :: n:Int -> ST Int
--- init n = do
---    r <- new
---    set r n
---    return r
--- 
+decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)-1) == v} >Unit
+decr = \r -> bind (get r) (\n -> set r (n-1))
+
+-- checker bug?
+-- init :: h:(Map<Int >Int) ~> r:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r n == v} >{v:Int | v == n}
+-- init = \n -> bind (new) (\r -> bind (set r n) (pure r))
+
 -- zero :: r:Int -> ST ()
 -- zero r = do
 --    n <- get
