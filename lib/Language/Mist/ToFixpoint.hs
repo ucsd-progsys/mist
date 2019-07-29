@@ -157,6 +157,7 @@ prim2ToFixpoint SetAdd  = FPrim (F.EVar T.setAdd)
 prim2ToFixpoint SetDel  = FPrim (F.EVar "internal_setDel")
 prim2ToFixpoint SetSub  = FPrim (F.EVar T.setSub)
 prim2ToFixpoint Store  = FPrim (F.EVar T.mapSto)
+prim2ToFixpoint Select  = FPrim (F.EVar T.mapSel)
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
 
 instance Predicate HC.Pred where

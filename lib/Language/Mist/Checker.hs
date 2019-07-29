@@ -622,6 +622,12 @@ primType Store = do
   v <- refreshId $ "v" ++ cSEPARATOR
   let tv = TVar $ TV v
   pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> tk :=> tv :=> mapType tk tv
+primType Select = do
+  k <- refreshId $ "k" ++ cSEPARATOR
+  let tk = TVar $ TV k
+  v <- refreshId $ "v" ++ cSEPARATOR
+  let tv = TVar $ TV v
+  pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> tk :=> tv
 
 primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR

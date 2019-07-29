@@ -106,6 +106,7 @@ data Prim
   | SetDel
   | SetSub
   | Store
+  | Select
   deriving (Show, Eq)
 
 -- | Mist expressions
@@ -326,6 +327,7 @@ instance PPrint Prim where
   pprint SetAdd  = "setAdd"
   pprint SetSub  = "setSubset"
   pprint Store  = "store"
+  pprint Select  = "select"
 
 instance PPrint Bool where
   pprint True  = "True"

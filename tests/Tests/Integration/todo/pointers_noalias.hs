@@ -21,9 +21,9 @@ bind as rforall a, b. acl1:(Map <Int >Int) ~> acl2:(Map <Int >Int) ~> acl3:(Map 
 bind = 0
 
 thenn as rforall a, b. acl1:(Map <Int >Int) ~> acl2:(Map <Int >Int) ~> acl3:(Map <Int >Int) ~>
-  Perm <{v:Map <Int >Int|v==acl1} >{v:Map <Int >Int|v==acl2} >a
-  -> Perm <{v:Map <Int >Int|v==acl2} >{v:Map <Int >Int|v==acl3} >b
-  -> Perm <{v:Map <Int >Int|v==acl1} >{v:Map <Int >Int|v==acl3} >b
+  ST <{v:Map <Int >Int|v==acl1} >{v:Map <Int >Int|v==acl2} >a
+  -> ST <{v:Map <Int >Int|v==acl2} >{v:Map <Int >Int|v==acl3} >b
+  -> ST <{v:Map <Int >Int|v==acl1} >{v:Map <Int >Int|v==acl3} >b
 thenn = (0)
 
 -- | Some opaque implementation of pointers to `Int` ------------------------
@@ -37,7 +37,7 @@ new as rforall a. ST <a >a >Int
 new = undefined
 
 -- | Read a `Int`
-get as hg:(Map <Int >Int) ~> p:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
+get as hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
 get = undefined
 
 -- | Write a `Int`
@@ -76,5 +76,5 @@ set = undefined
 --    return ()
 -----------------------------------------------------------------------------
 
-simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >Unit
-simple = \p -> \n -> set p n
+simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >{v:Int | v == n}
+simple = \p -> \n -> thenn (set p n) (get p)
