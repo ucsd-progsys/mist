@@ -1,8 +1,9 @@
 for as rforall a, b.
   s:Set ~>
-  (x:a ->
+  (s:Set ~>
+  x:a ->
   SetST
-    <{v:Set | setSubset s v}
+    <{v:Set | s == v}
     >{v:Set | setSubset s v}
     >b) ->
   List >a ->

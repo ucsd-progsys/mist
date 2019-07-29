@@ -320,6 +320,10 @@ rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go (RApp c1 vts1) (RApp c2 vts2)
       | c1 == c2  = CAnd <$> sequence (concat $ zipWith constructorSub vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
+    go t2 (RIFun (Bind x _) t1 t1') = do
+      z <- refreshId x
+      cSub <- t2 <: substReftPred (x |-> z) t1'
+      pure $ mkAll z t1 cSub
     go (RIFun (Bind x _) t1 t1') t2 = do
       z <- refreshId x
       cSub <- substReftPred (x |-> z) t1' <: t2
