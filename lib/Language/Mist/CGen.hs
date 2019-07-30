@@ -217,10 +217,10 @@ _check _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) _ = pure (CAnd [])
 _check env (Lam (AnnBind x _ _) e _) (RFun y ty t) =
   mkAll x ty <$> check ((x, ty):env) e (substReftPred (bindId y |-> x) t)
 
-_check env (TAbs tvar' e loc) (RForallP (TV tvar) t)  = do
+_check env (TAbs tvar' e loc) (RForall (TV tvar) t)  = do
   stalert <- stale loc (TVar tvar')
   check env e (substReftReft (tvar |-> stalert) t)
-_check env (TAbs tvar' e _) (RForall (TV tvar) t) =
+_check env (TAbs tvar' e _) (RForallP (TV tvar) t) =
   check env e (substReftType (tvar |-> TVar tvar') t)
 
 _check env (App e (Id y loc) _) t = do
