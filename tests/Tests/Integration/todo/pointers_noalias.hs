@@ -10,47 +10,72 @@
 -----------------------------------------------------------------------------
 -- | Library ----------------------------------------------------------------
 -----------------------------------------------------------------------------
-pure as forall a. acl:(Map <Int >Int) ~>
-  x:a -> ST <{v:Map <Int >Int | v == acl} >{v:Map <Int >Int | v == acl} >{v:a | v == x}
-pure = 0
+-- pure as forall a. acl:(Map <Int >Int) ~>
+--   x:a -> ST <{v:Map <Int >Int | v == acl} >{v:Map <Int >Int | v == acl} >{v:a | v == x}
+-- pure = 0
 
-bind as rforall a, b. acl1:(Map <Int >Int) ~> acl2:(Map <Int >Int) ~> acl3:(Map <Int >Int) ~>
-  ST <{v:Map <Int >Int | v == acl1} >{v:Map <Int >Int | v == acl2} >a ->
-  (x:a -> ST <{v:Map <Int >Int | v == acl2} >{v:Map <Int >Int | v == acl3} >b) ->
-  ST <{v:Map <Int >Int | v == acl1} >{v:Map <Int >Int | v == acl3} >b
-bind = 0
-
-thenn as rforall a, b. acl1:(Map <Int >Int) ~> acl2:(Map <Int >Int) ~> acl3:(Map <Int >Int) ~>
-  ST <{v:Map <Int >Int|v==acl1} >{v:Map <Int >Int|v==acl2} >a
-  -> ST <{v:Map <Int >Int|v==acl2} >{v:Map <Int >Int|v==acl3} >b
-  -> ST <{v:Map <Int >Int|v==acl1} >{v:Map <Int >Int|v==acl3} >b
-thenn = (0)
-
--- | Some opaque implementation of pointers to `Int` ------------------------
--- type Int = ()
-
+-- bind as rforall a, b. forall s. acl1:(s) ~> acl2:(s) ~> acl3:(s) ~>
+--   ST <{v:s | v == acl1} >{v:s | v == acl2} >a ->
+--   (x:a -> ST <{v:s | v == acl2} >{v:s | v == acl3} >b) ->
+--   ST <{v:s | v == acl1} >{v:s | v == acl3} >b
+-- bind = 0
+-- 
+-- thenn as rforall a, b. tcl1:(Map <Int >Int) ~> tcl2:(Map <Int >Int) ~> tcl3:(Map <Int >Int) ~>
+--   ST <{v:Map <Int >Int|v==tcl1} >{v:Map <Int >Int|v==tcl2} >a
+--   -> ST <{v:Map <Int >Int|v==tcl2} >{v:Map <Int >Int|v==tcl3} >b
+--   -> ST <{v:Map <Int >Int|v==tcl1} >{v:Map <Int >Int|v==tcl3} >b
+-- thenn = (0)
+--
+-- debugging bind as rforall a, b, p, q, r.
+-- debugging   ST <p >q >a ->
+-- debugging   (x:a -> ST <q >r >b) ->
+-- debugging   ST <p >r >b
+-- debugging bind = 0
+-- debugging 
+-- debugging thenn as rforall a, b, p, q, r.
+-- debugging   ST <p >q >a
+-- debugging   -> ST <q >r >b
+-- debugging   -> ST <p >r >b
+-- debugging thenn = (0)
+-- debugging 
+-- debugging pure as rforall a, p, q.  x:a -> ST <p >q >a
+-- debugging pure = 0
+-- debugging 
+-- debugging -- | Some opaque implementation of pointers to `Int` ------------------------
+-- debugging -- type Int = ()
+-- debugging 
 undefined as forall a. a
 undefined = 0
-
--- | Allocating a fresh `Int` with value `0`
-new as rforall a. ST <a >a >Int
-new = undefined
-
--- | Read a `Int`
-get as hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
-get = undefined
-
+-- debugging 
+-- debugging -- | Allocating a fresh `Int` with value `0`
+-- debugging new as rforall a. ST <a >a >Int
+-- debugging new = undefined
+-- debugging 
+-- debugging -- | Read a `Int`
+-- debugging get as hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
+-- debugging get = undefined
+-- debugging 
 -- | Write a `Int`
 set as h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
 set = undefined
 
------------------------------------------------------------------------------
-decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)-1) == v} >Unit
-decr = \r -> bind (get r) (\n -> set r (n-1))
 
--- checker bug?
--- init :: h:(Map<Int >Int) ~> r:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r n == v} >{v:Int | v == n}
--- init = \n -> bind (new) (\r -> bind (set r n) (pure r))
+-----------------------------------------------------------------------------
+--- what's wrong here?
+-- setprime :: forall a. h:(Map <Int >Int) ~> p:Int -> v:Int -> (z:a -> a) -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
+-- setprime = \p -> \n -> \f -> set p n
+
+setprime :: h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
+setprime = \p -> \n -> set p n
+
+-- works:
+-- decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)-1) == v} >Unit
+-- decr = \r -> bind (get r) (\n -> set r (n-1))
+
+-- should work
+-- init :: rforall p, q, a. hinit:(Map<Int >Int) ~> n:Int -> (r:Int ~> (ST <{v:Map <Int >Int | v == hinit} >{v:Map <Int >Int| store hinit r n == v} >{v:Int | v == r}) -> ST <p >q >a ) -> ST <p >q >a
+-- init = \n -> \f -> (bind (new) (\ptr -> f (thenn (set ptr n) (pure ptr))))
+
 
 -- zero :: r:Int -> ST ()
 -- zero r = do
@@ -71,5 +96,5 @@ decr = \r -> bind (get r) (\n -> set r (n-1))
 --    return ()
 -----------------------------------------------------------------------------
 
-simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >{v:Int | v == n}
-simple = \p -> \n -> thenn (set p n) (get p)
+-- simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >{v:Int | v == n}
+-- simple = \p -> \n -> thenn (set p n) (get p)
