@@ -25,52 +25,43 @@
 --   -> ST <{v:Map <Int >Int|v==tcl2} >{v:Map <Int >Int|v==tcl3} >b
 --   -> ST <{v:Map <Int >Int|v==tcl1} >{v:Map <Int >Int|v==tcl3} >b
 -- thenn = (0)
---
--- debugging bind as rforall a, b, p, q, r.
--- debugging   ST <p >q >a ->
--- debugging   (x:a -> ST <q >r >b) ->
--- debugging   ST <p >r >b
--- debugging bind = 0
--- debugging 
--- debugging thenn as rforall a, b, p, q, r.
--- debugging   ST <p >q >a
--- debugging   -> ST <q >r >b
--- debugging   -> ST <p >r >b
--- debugging thenn = (0)
--- debugging 
--- debugging pure as rforall a, p, q.  x:a -> ST <p >q >a
--- debugging pure = 0
--- debugging 
--- debugging -- | Some opaque implementation of pointers to `Int` ------------------------
--- debugging -- type Int = ()
--- debugging 
+
+bind as rforall a, b, p, q, r.
+  ST <p >q >a ->
+  (x:a -> ST <q >r >b) ->
+  ST <p >r >b
+bind = 0
+
+thenn as rforall a, b, p, q, r.
+  ST <p >q >a
+  -> ST <q >r >b
+  -> ST <p >r >b
+thenn = (0)
+
+pure as rforall a, p, q.  x:a -> ST <p >q >a
+pure = 0
+
+-- | Some opaque implementation of pointers to `Int` ------------------------
+-- type Int = ()
+
 undefined as forall a. a
 undefined = 0
--- debugging 
--- debugging -- | Allocating a fresh `Int` with value `0`
--- debugging new as rforall a. ST <a >a >Int
--- debugging new = undefined
--- debugging 
--- debugging -- | Read a `Int`
--- debugging get as hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
--- debugging get = undefined
--- debugging 
+
+-- | Allocating a fresh `Int` with value `0`
+new as rforall a. ST <a >a >Int
+new = undefined
+
+-- | Read a `Int`
+get as hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
+get = undefined
+
 -- | Write a `Int`
 set as h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
 set = undefined
 
-
 -----------------------------------------------------------------------------
---- what's wrong here?
--- setprime :: forall a. h:(Map <Int >Int) ~> p:Int -> v:Int -> (z:a -> a) -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
--- setprime = \p -> \n -> \f -> set p n
-
-setprime :: h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
-setprime = \p -> \n -> set p n
-
--- works:
--- decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)-1) == v} >Unit
--- decr = \r -> bind (get r) (\n -> set r (n-1))
+decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)-1) == v} >Unit
+decr = \r -> bind (get r) (\n -> set r (n-1))
 
 -- should work
 -- init :: rforall p, q, a. hinit:(Map<Int >Int) ~> n:Int -> (r:Int ~> (ST <{v:Map <Int >Int | v == hinit} >{v:Map <Int >Int| store hinit r n == v} >{v:Int | v == r}) -> ST <p >q >a ) -> ST <p >q >a
@@ -83,7 +74,10 @@ setprime = \p -> \n -> set p n
 --    if (n <= 0)
 --        then return ()
 --        else decr r >> zero r
--- 
+
+zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| v == store h r (min 0 (select h r))} >{v:Int | v == 0}
+zero = \r -> bind (get) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero r))
+
 -- test :: Nat -> Nat -> ST ()
 -- test n1 n2 = do
 --    r1 <- init n1
@@ -96,5 +90,5 @@ setprime = \p -> \n -> set p n
 --    return ()
 -----------------------------------------------------------------------------
 
--- simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >{v:Int | v == n}
--- simple = \p -> \n -> thenn (set p n) (get p)
+simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >{v:Int | v == n}
+simple = \p -> \n -> thenn (set p n) (get p)
