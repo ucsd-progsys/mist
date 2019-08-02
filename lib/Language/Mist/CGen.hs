@@ -48,7 +48,7 @@ strengthening :: CGenConstraints r a =>
         Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 strengthening env t e = do
   (c, outT) <- _strengthening env t e
-  -- !_ <- traceM $ "strengthening: " <> "⊢ " <> pprint e <> " <= " <> pprint t <> " ↑ " <> pprint outT
+  -- !_ <- traceM $ "strengthening: " <> "⊢ " <> pprint e <> "\n\t<= " <> pprint t <> "\n\t ↑ " <> pprint outT <> "\n\t ⊣ " <> show c <> "\n\n"
   pure (c, outT)
 
 _strengthening :: CGenConstraints r a =>
@@ -78,7 +78,7 @@ synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 synth env e = do
   (c, outT) <- _synth env e
-  -- !_ <- traceM $ "synth: " <> "⊢ " <> pprint e <> " => " <> pprint outT
+  -- !_ <- traceM $ "synth: " <> "⊢  " <> pprint e <> "\n\t => " <> pprint outT <> "\n\t ⊣ " <> show c <> "\n\n"
   pure (c, outT)
 
 _synth :: CGenConstraints r a =>
@@ -122,14 +122,14 @@ stale loc (typ1 :=> typ2) = do
   rtype2 <- stale loc typ2
   pure $ RFun (Bind x loc) rtype1 rtype2
 stale l (TCtor ctor types) = do -- TODO: reduce duplication with staleBaseType
-  v <- refreshId $ "VV" ++ cSEPARATOR
+  v <- refreshId $ "staleCtorVV" ++ cSEPARATOR
   appType <- RApp ctor <$> mapM (sequence . second (stale l)) types
   pure $ RRTy (Bind v l) appType true
 stale l (TForall tvar typ) = RForall tvar <$> stale l typ
 
 staleBaseType :: (Predicate r) => a -> Type -> Fresh (RType r a)
 staleBaseType l baseType = do
-  v <- refreshId $ "VV" ++ cSEPARATOR
+  v <- refreshId $ "staleBaseVV" ++ cSEPARATOR
   pure $ RBase (Bind v l) baseType true
 
 appSynth :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> Fresh (NNF r, RType r a)
@@ -158,10 +158,10 @@ single env x = case flattenRType <$> lookup x env of
   Just (RBase (Bind y l) baseType reft) -> do
   -- `x` is already bound, so instead of "re-binding" x we should selfify
   -- (al la Ou et al. IFIP TCS '04)
-    v <- refreshId $ "VV" ++ cSEPARATOR
+    v <- refreshId $ "singleVV" ++ cSEPARATOR
     pure $ RBase (Bind v l) baseType (strengthen (subst (y |-> v) reft) (varsEqual v x))
   Just (RRTy (Bind y l) rt reft) -> do
-    v <- refreshId $ "VV" ++ cSEPARATOR
+    v <- refreshId $ "singleRR" ++ cSEPARATOR
     pure $ RRTy (Bind v l) rt (strengthen (subst (y |-> v) reft) (varsEqual v x))
   Just rt -> pure rt
   Nothing -> error $ "Unbound Variable " ++ show x ++ show env
@@ -169,8 +169,9 @@ single env x = case flattenRType <$> lookup x env of
 
 check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 check env e t = do
-  -- !_ <- traceM $ "check: " <> "⊢ " <> pprint e <> " <= " <> pprint t
-  _check env e t
+  c <- _check env e t
+  -- !_ <- traceM $ "check: " <> "⊢ " <> pprint e <> "\n\t <= " <> pprint t <> "\n\t ⊣ " <> show c <> "\n\n"
+  pure c
 
 _check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 _check env (Let b e1 e2 _) t2
@@ -235,8 +236,9 @@ _check env e t = do
 
 appCheck :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> RType r a -> Fresh (NNF r)
 appCheck env t y loc t' = do
-  -- !_ <- traceM $ "appCheck: " <> pprint t <> " ⊢ " <> y <> " << " <> pprint t'
-  _appCheck env t y loc t'
+  c <- _appCheck env t y loc t'
+  -- !_ <- traceM $ "appCheck: " <> pprint t <> "⊢ " <> y <> "\n\t << " <> pprint t' <> "\n\t ⊣ " <> show c <> "\n\n"
+  pure c
 
 -- | env | t ⊢ y << t'
 _appCheck :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> RType r a -> Fresh (NNF r)
@@ -266,7 +268,7 @@ fresh loc env (typ1 :=> typ2) = do
   pure $ RFun (Bind x loc) rtype1 rtype2
 fresh l env (TCtor ctor types) = do -- TODO: reduce duplication with freshBaseType
   kappa <- refreshId $ "kvar" ++ cSEPARATOR
-  v <- refreshId $ "VV" ++ cSEPARATOR
+  v <- refreshId $ "freshCtorVV" ++ cSEPARATOR
   let k = buildKvar kappa $ v : map fst (foTypes (eraseRTypes env))
   appType <- RApp ctor <$> mapM (sequence . second (fresh l env)) types
   pure $ RRTy (Bind v l) appType k
@@ -275,7 +277,7 @@ fresh l env (TForall tvar typ) = RForall tvar <$> fresh l env typ
 freshBaseType :: (Predicate r) => a -> Env r a -> Type -> Fresh (RType r a)
 freshBaseType l env baseType = do
   kappa <- refreshId $ "kvar" ++ cSEPARATOR
-  v <- refreshId $ "VV" ++ cSEPARATOR
+  v <- refreshId $ "freshBaseVV" ++ cSEPARATOR
   let k = buildKvar kappa $ v : map fst (foTypes (eraseRTypes env))
   pure $ RBase (Bind v l) baseType k
 
