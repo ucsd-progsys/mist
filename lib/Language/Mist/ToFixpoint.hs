@@ -210,22 +210,23 @@ primOp op l =
       a <- refreshId $ "A" ++ MN.cSEPARATOR
       x <- refreshId $ "X" ++ MN.cSEPARATOR
       y <- refreshId $ "Y" ++ MN.cSEPARATOR
-      v <- refreshId $ "VV" ++ MN.cSEPARATOR
-      v1 <- refreshId $ "VV" ++ MN.cSEPARATOR
-      v2 <- refreshId $ "VV" ++ MN.cSEPARATOR
-      let reft = HC.Reft $ F.PAtom F.Eq (idToFix x) (idToFix y)
+      v <- refreshId $ "EQ" ++ MN.cSEPARATOR
+      v1 <- refreshId $ "VX" ++ MN.cSEPARATOR
+      v2 <- refreshId $ "VY" ++ MN.cSEPARATOR
+      let reft = HC.Reft $ F.PAtom F.Eq (idToFix v) $ F.PAtom F.Eq (idToFix x) (idToFix y)
       let returnType = RBase (Bind v l) TBool reft
       let typ1 = TVar $ TV a
       pure $ RForall (TV a) (RFun (Bind x l) (trivialBase typ1 v1) (RFun (Bind y l) (trivialBase typ1 v2) returnType))
-    _ -> error "TODO: primOp"
+    And -> buildRFun (\x y -> F.PAnd [x,y]) TBool TBool
+    _ -> error $ "TODO: primOp " ++ show op
 
   where
     buildRFun oper typ1 typ2 = do
       x <- refreshId $ "X" ++ MN.cSEPARATOR
       y <- refreshId $ "Y" ++ MN.cSEPARATOR
-      v <- refreshId $ "VV" ++ MN.cSEPARATOR
-      v1 <- refreshId $ "VV" ++ MN.cSEPARATOR
-      v2 <- refreshId $ "VV" ++ MN.cSEPARATOR
+      v <- refreshId $ "OP" ++ MN.cSEPARATOR
+      v1 <- refreshId $ "VX" ++ MN.cSEPARATOR
+      v2 <- refreshId $ "VY" ++ MN.cSEPARATOR
       let reft = HC.Reft $ F.PAtom F.Eq (idToFix v) (oper (idToFix x) (idToFix y))
       let returnType = RBase (Bind v l) typ2 reft
       pure $ RFun (Bind x l) (trivialBase typ1 v1) (RFun (Bind y l) (trivialBase typ1 v2) returnType)

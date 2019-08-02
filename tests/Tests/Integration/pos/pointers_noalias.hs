@@ -63,7 +63,7 @@ set = undefined
 decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)-1) == v} >Unit
 decr = \r -> bind (get r) (\n -> set r (n-1))
 
--- should work
+-- TODO should work, blocked on tests/Tests/Integration/todo/tabs_with_ifun.hs
 -- init :: rforall p, q, a. hinit:(Map<Int >Int) ~> n:Int -> (r:Int ~> (ST <{v:Map <Int >Int | v == hinit} >{v:Map <Int >Int| store hinit r n == v} >{v:Int | v == r}) -> ST <p >q >a ) -> ST <p >q >a
 -- init = \n -> \f -> (bind (new) (\ptr -> f (thenn (set ptr n) (pure ptr))))
 
@@ -75,8 +75,12 @@ decr = \r -> bind (get r) (\n -> set r (n-1))
 --        then return ()
 --        else decr r >> zero r
 
-zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| v == store h r (min 0 (select h r))} >{v:Int | v == 0}
-zero = \r -> bind (get) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero r))
+-- TODO implement `min`
+-- zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| v == store h r (min 0 (select h r))} >{v:Int | v == 0}
+-- zero = \r -> bind (get r) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero r)))
+
+zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h /\ (0 <= select h r) } >{v:Map <Int >Int| v == store h r 0} >{v:Int | v == 0}
+zero = \r -> bind (get r) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero r)))
 
 -- test :: Nat -> Nat -> ST ()
 -- test n1 n2 = do
@@ -88,6 +92,19 @@ zero = \r -> bind (get) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero 
 --    v2 <- get r2
 --    assert (v1 == 0 && v2 == 0)
 --    return ()
+assert as {v:Bool | v} -> Unit
+assert = 0
+
+test :: h:(Map<Int >Int) ~> n1:{v:Int | 0 <= v} -> n2:{v: Int | 0 <= v} -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| 0 == 0} >Unit
+test = \n1 -> \n2 -> bind new (\r1 ->
+      (thenn (set r1 n1)
+      (bind new (\r2 ->
+      (thenn (set r2 n2)
+      (thenn (zero r1)
+      (thenn (zero r2)
+      (bind (get r1) (\v1 ->
+      (bind (get r2) (\v2 ->
+      (pure (assert ((v1 == 0) /\ (v2 == 0)))))))))))))))
 -----------------------------------------------------------------------------
 
 simple :: h:(Map<Int >Int) ~> p:Int -> n:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h p n == v} >{v:Int | v == n}
