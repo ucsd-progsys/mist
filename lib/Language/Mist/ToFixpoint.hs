@@ -3,6 +3,9 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE OverloadedStrings #-}
+-- pattern checker isn't smart enough to check this file
+{-# OPTIONS_GHC "-fno-warn-incomplete-patterns" #-}
+{-# OPTIONS_GHC "-fno-warn-overlapping-patterns" #-}
 
 module Language.Mist.ToFixpoint
   ( solve
