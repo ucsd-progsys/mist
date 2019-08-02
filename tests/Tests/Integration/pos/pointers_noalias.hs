@@ -76,11 +76,11 @@ decr = \r -> bind (get r) (\n -> set r (n-1))
 --        else decr r >> zero r
 
 -- TODO implement `min`
--- zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| v == store h r (min 0 (select h r))} >{v:Int | v == 0}
--- zero = \r -> bind (get r) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero r)))
+-- zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| v == store h r (min 0 (select h r))} >Unit
+-- zero = \r -> bind (get r) (\n -> if n <= 0 then pure Unit else (thenn (decr r) (zero r)))
 
-zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h /\ (0 <= select h r) } >{v:Map <Int >Int| v == store h r 0} >{v:Int | v == 0}
-zero = \r -> bind (get r) (\n -> if n <= 0 then pure 0 else (thenn (decr r) (zero r)))
+zero :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h /\ (0 <= select h r) } >{v:Map <Int >Int| v == store h r 0} >Unit
+zero = \r -> bind (get r) (\n -> if n <= 0 then pure Unit else (thenn (decr r) (zero r)))
 
 -- test :: Nat -> Nat -> ST ()
 -- test n1 n2 = do
