@@ -296,6 +296,7 @@ constExpr
    =  (uncurry Number <$> integer)
   <|> (Boolean True   <$> rWord "True")
   <|> (Boolean False  <$> rWord "False")
+  <|> (Unit           <$> rWord "Unit")
 
 letExpr :: Parser BareExpr
 letExpr = withSpan' $ do
@@ -400,6 +401,7 @@ baseTypeNoCtor :: Parser Type
 baseTypeNoCtor
   =  (rWord "Int"   *> pure TInt)
  <|> (rWord "Bool"  *> pure TBool)
+ <|> (rWord "Unit"  *> pure TUnit)
  <|> (rWord "Set"   *> pure (setType TInt))
  <|> (TVar <$> tvar)
 

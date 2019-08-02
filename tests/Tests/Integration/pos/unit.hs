@@ -1,0 +1,2 @@
+unit :: Unit
+unit = Unit
