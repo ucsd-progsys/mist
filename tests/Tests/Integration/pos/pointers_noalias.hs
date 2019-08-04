@@ -64,8 +64,8 @@ decr :: h:(Map<Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int
 decr = \r -> bind (get r) (\n -> set r (n-1))
 
 -- TODO should work, blocked on tests/Tests/Integration/todo/tabs_with_ifun.hs
--- init :: rforall p, q, a. hinit:(Map<Int >Int) ~> n:Int -> (r:Int ~> (ST <{v:Map <Int >Int | v == hinit} >{v:Map <Int >Int| store hinit r n == v} >{v:Int | v == r}) -> ST <p >q >a ) -> ST <p >q >a
--- init = \n -> \f -> (bind (new) (\ptr -> f (thenn (set ptr n) (pure ptr))))
+init :: rforall p, q, a. hinit:(Map<Int >Int) ~> n:Int -> (r:Int ~> (ST <{v:Map <Int >Int | v == hinit} >{v:Map <Int >Int| store hinit r n == v} >{v:Int | v == r}) -> ST <p >q >a ) -> ST <p >q >a
+init = \n -> \f -> (bind (new) (\ptr -> f (thenn (set ptr n) (pure ptr))))
 
 
 -- zero :: r:Int -> ST ()

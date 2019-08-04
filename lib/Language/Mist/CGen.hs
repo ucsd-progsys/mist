@@ -174,19 +174,16 @@ check env e t = do
   pure c
 
 _check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
+_check env e rt@RIFun{} = do
+    let (ns, tx) = splitImplicits rt
+    c1 <- check (ns ++ env) e tx
+    pure $ foldr (\(z, tz) c -> mkAll z tz c) c1 ns
+
 _check env (Let b e1 e2 _) t2
   -- Annotated with an assume
   | (AnnBind x (Just (ElabAssume tx)) _) <- b = do
     c <- check ((x, tx):env) e2 t2
     pure $ mkAll x tx c
-
-  -- Annotated with an RType (Implicit Parameter)
-  | (AnnBind x (Just (ElabRefined rt@RIFun{})) _) <- b = do
-    let (ns, tx) = splitImplicits rt
-    c1 <- check (ns ++ ((x, rt):env)) e1 tx
-    let c1' = foldr (\(z, tz) c -> mkAll z tz c) c1 ns
-    c2 <- check ((x, rt):env) e2 t2
-    pure $ mkAll x rt (CAnd [c1', c2])
 
   -- Annotated with an RType
   | (AnnBind x (Just (ElabRefined tx)) _) <- b = do
@@ -342,10 +339,6 @@ rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
     go (RRTy (Bind x _) rt1 reft) rt2 = All x (eraseRType rt1) reft <$> (rt1 <: rt2)
     go _ _ = error $ "CGen subtyping error. Got:\n\n" ++ pprint rtype1 ++ "\n\nbut expected:\n\n" ++ pprint rtype2 ++ "\n" ++ "i.e. Got:\n\n" ++ pprint (eraseRType rtype1) ++ "\n\nbut expected:\n\n" ++ pprint (eraseRType rtype2) ++ "\n"
 
-rtsymreft (RBase (Bind x _) _ r) = (x,r)
-rtsymreft (RRTy (Bind x _) _ r) = (x,r)
-rtsymreft _ = ("_",true)
-
 (v, rt1) `constructorSub` (_,rt2) = case v of
                          -- TODO: write tests that over these two cases...
                          Invariant -> []
@@ -353,13 +346,17 @@ rtsymreft _ = ("_",true)
                          Covariant -> [rt1 <: rt2]
                          Contravariant -> [rt2 <: rt1]
 
+rtsymreft :: Predicate r => RType r a -> (Id, r)
+rtsymreft (RBase (Bind x _) _ r) = (x,r)
+rtsymreft (RRTy (Bind x _) _ r) = (x,r)
+rtsymreft _ = ("_",true)
+
 flattenRType :: CGenConstraints r a => RType r a -> RType r a
 flattenRType rrty@(RRTy (Bind x _) rt p)
   | (RBase by typ p') <- rt = RBase by typ (strengthen p' (varSubst (x |-> bindId by) p))
   | (RRTy by rt' p') <- rt = flattenRType (RRTy by rt' (strengthen p' (varSubst (x |-> bindId by) p)))
   | otherwise = rrty
 flattenRType rt = rt
-
 
 -- TODO: RApp?
 -- | (x :: t) => c
