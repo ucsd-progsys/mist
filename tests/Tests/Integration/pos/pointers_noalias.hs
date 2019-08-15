@@ -1,7 +1,8 @@
 -- module State where
 
 -- rjhala [10:45 AM]
--- The idris people have a bunch of nice STATE examples here:https://github.com/idris-lang/Idris-dev/tree/master/samples/STFor a start, how about [login.idr](https://github.com/idris-lang/Idris-dev/blob/master/samples/ST/Login.idr)
+-- The idris people have a bunch of nice STATE examples here:https://github.com/idris-lang/Idris-dev/tree/master/samples/ST
+-- For a start, how about [login.idr](https://github.com/idris-lang/Idris-dev/blob/master/samples/ST/Login.idr)
 -- except in a way where you can clearly tell what’s going on…
 --
 -- rjhala [11:43 AM]

@@ -237,8 +237,8 @@ primOp op l =
 
 
 -- | Converts a ParsedExpr's predicates from Exprs to Fixpoint Exprs
-parsedExprPredToFixpoint :: ParsedExpr (Expr t a) a -> ParsedExpr HC.Pred a
-parsedExprPredToFixpoint = first $ fmap (first (HC.Reft . exprToFixpoint))
+parsedExprPredToFixpoint :: SSParsedExpr -> ParsedExpr HC.Pred SourceSpan
+parsedExprPredToFixpoint = (first $ fmap (first (HC.Reft . exprToFixpoint . unSSParsedExpr))) . unSSParsedExpr
 
 idToFix :: Id -> F.Expr
 idToFix x = F.EVar (fromString x)

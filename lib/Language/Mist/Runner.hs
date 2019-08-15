@@ -64,7 +64,7 @@ esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 mist :: Measures -> SSParsedExpr -> Result (Measures, ElaboratedExpr R SourceSpan)
 -----------------------------------------------------------------------------------
 mist measures expr =
-  case wellFormed expr of
+  case wellFormed (unSSParsedExpr expr) of
     [] -> do
       let (measures', uniqueExpr) = uniquify (measures, expr)
       let predExpr = parsedExprPredToFixpoint uniqueExpr

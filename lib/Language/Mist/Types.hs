@@ -44,6 +44,7 @@ module Language.Mist.Types
 
   , ParsedAnnotation (..)
   , ParsedExpr, ParsedBind
+  , SSParsedExpr (..)
 
   , ElaboratedAnnotation (..)
   , ElaboratedExpr, ElaboratedBind
@@ -233,6 +234,7 @@ data ParsedAnnotation r a
 
 type ParsedExpr r a = Expr (Maybe (ParsedAnnotation r a)) a
 type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
+newtype SSParsedExpr = SSParsedExpr { unSSParsedExpr :: ParsedExpr SSParsedExpr SourceSpan } deriving Read
 
 -- | The type of Mist type annotations after elaboration
 -- r is the type of refinements

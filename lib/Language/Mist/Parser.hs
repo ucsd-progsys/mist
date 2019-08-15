@@ -6,8 +6,6 @@ module Language.Mist.Parser
   (
     parse
   , parseFile
-
-  , SSParsedExpr
   ) where
 
 import qualified Control.Exception          as Ex
@@ -24,14 +22,10 @@ import           Language.Mist.Types
 
 -- | parsed syntax elements with parsed expressions as the refinement
 -- | Refinement expressions are Bare*, Mist expressions are SSParsed*
-type BareExpr = Expr () SourceSpan
-type BareBind = Bind () SourceSpan
-
-type SSParsedExpr = ParsedExpr BareExpr SourceSpan
-type SSParsedBind = ParsedBind BareExpr SourceSpan
+type SSParsedBind = ParsedBind SSParsedExpr SourceSpan
 type SSParsedDef = (SSParsedBind, SSParsedExpr)
-type SSParsedAnnotation = ParsedAnnotation BareExpr SourceSpan
-type SSParsedRType = RType BareExpr SourceSpan
+type SSParsedAnnotation = ParsedAnnotation SSParsedExpr SourceSpan
+type SSParsedRType = RType SSParsedExpr SourceSpan
 
 --------------------------------------------------------------------------------
 parse :: FilePath -> Text -> IO (Measures, SSParsedExpr)
@@ -143,11 +137,14 @@ identStart start = lexeme (p >>= check)
                 else return x
 
 -- | `binder` parses BareAnnBind, used for let-binds and function parameters.
-binder :: Parser BareBind
+binder :: Parser SSParsedBind
 binder = uncurry Bind <$> identifier
 
-freshBinder :: Parser BareBind
+freshBinder :: Parser SSParsedBind
 freshBinder = uncurry Bind <$> (lexeme $ ("fresh" ++) . show <$> lift get)
+
+freshBareBinder :: Parser (Bind () SourceSpan)
+freshBareBinder = eraseBind <$> freshBinder
 
 --------------------------------------------------------------------------------
 -- | Locations
@@ -207,7 +204,7 @@ measure = do
 -- | Parsing Definitions
 --------------------------------------------------------------------------------
 topExprs :: Parser SSParsedExpr
-topExprs = defsExpr <$> topDefs
+topExprs = defsExpr (SSParsedExpr . Unit) <$> topDefs
 
 topDefs :: Parser [SSParsedDef]
 topDefs = many topDef
@@ -219,14 +216,14 @@ topDef = do
   _ <- L.nonIndented sc $ lexeme (string id) <* symbol "="
   e <- expr
   let annBind = AnnBind id (Just ann) tag
-  return (annBind, exprAddParsedInfers e)
+  return (annBind, SSParsedExpr $ exprAddParsedInfers $ unSSParsedExpr e)
 
-defsExpr :: [SSParsedDef] -> SSParsedExpr
-defsExpr [] = error "list of defintions is empty"
-defsExpr bs@((b,_):_)   = go (bindTag b) bs
+defsExpr :: (SourceSpan -> SSParsedExpr) -> [SSParsedDef] -> SSParsedExpr
+defsExpr _ [] = error "list of defintions is empty"
+defsExpr base bs@((b,_):_) = SSParsedExpr $ go (bindTag b) bs
   where
-    go l [] = Unit l
-    go _ ((b, e) : ds) = Let b e (go l ds) l
+    go l [] = unSSParsedExpr $ base l
+    go _ ((b, SSParsedExpr e) : ds) = Let b e (go l ds) l
       where l = bindTag b
 
 --------------------------------------------------------------------------------
@@ -235,27 +232,27 @@ defsExpr bs@((b,_):_)   = go (bindTag b) bs
 
 -- NOTE: all applications require parentheses, except for operators.
 
-expr :: Parser BareExpr
+expr :: Parser SSParsedExpr
 expr = makeExprParser expr0 binops
 
-expr0 :: Parser BareExpr
+expr0 :: Parser SSParsedExpr
 expr0 = mkApps <$> sepBy1 simpleExpr sc
             <|> lamExpr  -- starts with \\
             <|> letExpr  -- starts with let
             <|> ifExpr   -- starts with if
 
 -- A simpleExpr is one that has an end deliminator
-simpleExpr :: Parser BareExpr
+simpleExpr :: Parser SSParsedExpr
 simpleExpr  = try constExpr
             <|> try idExpr
             <|> parens expr
 
-mkApps :: [BareExpr] -> BareExpr
+mkApps :: [SSParsedExpr] -> SSParsedExpr
 mkApps = L.foldl1' mkApp
-mkApp :: BareExpr -> BareExpr -> BareExpr
-mkApp e1 e2 = App e1 e2 (stretch [e1, e2])
+mkApp :: SSParsedExpr -> SSParsedExpr -> SSParsedExpr
+mkApp (SSParsedExpr e1) (SSParsedExpr e2) = SSParsedExpr $ App e1 e2 (stretch [e1, e2])
 
-binops :: [[Operator Parser BareExpr]]
+binops :: [[Operator Parser SSParsedExpr]]
 binops =
   [ [ InfixL (pure op <*> primitive Times "*")
     , InfixL (pure op <*> primitive Elem "∈")
@@ -273,58 +270,59 @@ binops =
     ]
   ]
   where
-    op o e1 e2 = App (App o e1 (stretch [e1, o])) e2 (stretch [e1, e2])
+    op o e1 e2 = mkApps [o, e1, e2]
 
-primitive :: Prim -> String -> Parser BareExpr
+primitive :: Prim -> String -> Parser SSParsedExpr
 primitive prim primSymbol = do
   p1 <- getPosition
   symbol primSymbol
   p2 <- getPosition
-  pure $ Prim prim (SS p1 p2)
+  pure $ SSParsedExpr $ Prim prim (SS p1 p2)
 
-idExpr :: Parser BareExpr
-idExpr = L.indentGuard sc GT pos1 *> flip fmap identifier (\case
+idExpr :: Parser SSParsedExpr
+idExpr = L.indentGuard sc GT pos1 *> (SSParsedExpr <$> (\case
    ("setPlus", l) -> Prim SetAdd l
    ("setMinus", l) -> Prim SetDel l
    ("setSubset", l) -> Prim SetSub l
    ("store", l) -> Prim Store l
    ("select", l) -> Prim Select l
-   (id,l) -> Id id l)
+   (id,l) -> Id id l) <$> identifier)
 
-constExpr :: Parser BareExpr
+constExpr :: Parser SSParsedExpr
 constExpr
-   =  (uncurry Number <$> integer)
+   = fmap SSParsedExpr $
+      (uncurry Number <$> integer)
   <|> (Boolean True   <$> rWord "True")
   <|> (Boolean False  <$> rWord "False")
   <|> (Unit           <$> rWord "Unit")
 
-letExpr :: Parser BareExpr
-letExpr = withSpan' $ do
+letExpr :: Parser SSParsedExpr
+letExpr = fmap SSParsedExpr $ withSpan' $ do
   rWord "let"
-  bs <- sepBy1 bind comma
+  bs <- fmap (fmap unSSParsedExpr) <$> sepBy1 bind comma
   rWord "in"
-  e  <- expr
-  return (bindsExpr bs e ())
+  SSParsedExpr e  <- expr
+  return (bindsExpr bs e $ Just ParsedInfer)
 
 bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
 bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
 
-bind :: Parser (BareBind, BareExpr)
+bind :: Parser (SSParsedBind, SSParsedExpr)
 bind = (,) <$> binder <* symbol "=" <*> expr
 
-ifExpr :: Parser BareExpr
-ifExpr = withSpan' $ do
+ifExpr :: Parser SSParsedExpr
+ifExpr = fmap SSParsedExpr $ withSpan' $ do
   rWord "if"
-  b  <- expr
-  e1 <- between (rWord "then") (rWord "else") expr
-  e2 <- expr
+  SSParsedExpr b  <- expr
+  SSParsedExpr e1 <- between (rWord "then") (rWord "else") expr
+  SSParsedExpr e2 <- expr
   return (If b e1 e2)
 
-lamExpr :: Parser BareExpr
-lamExpr = withSpan' $ do
+lamExpr :: Parser SSParsedExpr
+lamExpr = fmap SSParsedExpr $ withSpan' $ do
   char '\\' <* sc
   xs    <- sepBy binder sc <* symbol "->"
-  e     <- expr
+  SSParsedExpr e     <- expr
   return (\span -> (foldr (\x e -> Lam x e span) e xs))
 
 --------------------------------------------------------------------------------
@@ -343,7 +341,6 @@ unrefinedScheme = do
   tvars <- option [] $ rWord "forall" *> sepBy tvar comma <* symbol "."
   bodyType <- typeType
   pure $ foldr TForall bodyType tvars
-
 
 scheme :: Parser SSParsedRType
 scheme = do
@@ -373,8 +370,8 @@ variance =  char '>' *> pure Covariant
         <|> char 'v' *> pure Bivariant
 
 
-arrow :: Parser (BareBind -> SSParsedRType -> SSParsedRType -> SSParsedRType)
-arrow = symbol "~>" *> pure RIFun <|> symbol "->" *> pure RFun
+arrow :: Parser (SSParsedBind -> SSParsedRType -> SSParsedRType -> SSParsedRType)
+arrow = symbol "~>" *> pure (RIFun . eraseBind) <|> symbol "->" *> pure (RFun . eraseBind)
 
 rfun :: Parser SSParsedRType
 rfun = do id <- (binder <* colon) <|> freshBinder
@@ -382,15 +379,15 @@ rfun = do id <- (binder <* colon) <|> freshBinder
           arrow <*> pure id <*> pure tin <*> typeRType
 
 unrefined :: Parser SSParsedRType
-unrefined = RBase <$> freshBinder <*> baseType <*> pure (Boolean True mempty)
+unrefined = RBase <$> freshBareBinder <*> baseType <*> pure (SSParsedExpr $ Boolean True mempty)
 
 unrefinedRApp :: Parser SSParsedRType
-unrefinedRApp = RRTy <$> freshBinder <*> rapp <*> pure (Boolean True mempty)
+unrefinedRApp = RRTy <$> freshBareBinder <*> rapp <*> pure (SSParsedExpr $ Boolean True mempty)
 
 rbase :: Parser SSParsedRType
 rbase = braces $ do
   b <- binder <* colon
-  rbaseOrRrtype b
+  rbaseOrRrtype $ eraseBind b
 
   where
     rbaseOrRrtype bind =
@@ -427,3 +424,7 @@ ctorType = TCtor <$> ctor <*> brackets (sepBy ((,) <$> variance <*> typeType) co
 
 ctor :: Parser Ctor
 ctor = CT . fst <$> identStart upperChar
+
+-- discard types in refinements, maybe change RType to not do this?
+eraseBind :: SSParsedBind -> Bind () SourceSpan
+eraseBind (Bind id s) = Bind id s
