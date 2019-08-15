@@ -17,6 +17,7 @@ Library
                        Language.Mist.Parser,
                        Language.Mist.Checker,
                        Language.Mist.CGen,
+                       Language.Mist.Config,
                        Language.Mist.ToFixpoint,
                        Language.Mist.Names,
                        Language.Mist.Normalizer,
@@ -54,7 +55,9 @@ Executable mist
   build-depends:       base,
                        directory,
                        filepath,
-                       text, mist 
+                       cmdargs,
+                       text,
+                       mist
 
 test-suite test
   default-language: Haskell98

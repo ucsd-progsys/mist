@@ -9,6 +9,7 @@ import Language.Mist.Types
 import Language.Mist.Parser
 import Language.Mist.Checker
 import Language.Mist.CGen
+import Language.Mist.Config
 import Language.Mist.ToFixpoint
 import Language.Mist.Normalizer
 import Language.Mist.Names
@@ -30,16 +31,20 @@ type R = HC.Pred
 -}
 
 ---------------------------------------------------------------------------
-runMist :: Handle -> FilePath -> IO (Result ())
+runMist :: Handle -> Config -> IO (Result ())
 ---------------------------------------------------------------------------
-runMist h f = act h f >>= \case
+runMist h config = act h config >>= \case
   r@Right{} -> hPutStrLn h "SAFE" >> return r
   Left es -> esHandle h (return . Left) es
 
-act :: Handle -> FilePath -> IO (Result ())
-act h f = do
+act :: Handle -> Config -> IO (Result ())
+act h config = do
+  let f = (srcFile config)
   s <- readFile f
-  (measures, e) <- parse f s
+  (measures, e) <-
+    if (readInput config)
+    then pure $ read s
+    else parse f s
   let r = mist measures e
   case r of
     Right (measures', t) -> do

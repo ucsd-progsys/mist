@@ -64,7 +64,7 @@ data SourceSpan = SS
   { ssBegin :: !SourcePos
   , ssEnd   :: !SourcePos
   }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Read)
 
 instance Semigroup SourceSpan where
   s1 <> s2 = mappendSpan s1 s2

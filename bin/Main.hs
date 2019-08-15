@@ -1,20 +1,13 @@
-import Language.Mist.Types
 import Language.Mist.Runner
-import System.Environment (getArgs)
+import Language.Mist.Config
+import System.Console.CmdArgs (cmdArgs)
 import System.Exit
 import System.IO
 
 main :: IO ()
 main = do
-  f <- getSrcFile
-  r <- runMist stderr f
+  config <- cmdArgs defConfig
+  r <- runMist stderr config
   case r of
     Left _  -> exitFailure
     Right _ -> exitSuccess
-
-getSrcFile :: IO Text
-getSrcFile = do
-  args <- getArgs
-  case args of
-    [f] -> return f
-    _   -> error "Please run with a single file as input"

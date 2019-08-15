@@ -107,7 +107,7 @@ data Prim
   | SetSub
   | Store
   | Select
-  deriving (Show, Eq)
+  deriving (Show, Eq, Read)
 
 -- | Mist expressions
 -- Parameterized by the type of annotations
@@ -124,14 +124,14 @@ data Expr t a
   | AnnLam !(Bind t a) !(Expr t a) !t !a
   | AnnTApp !(Expr t a) !Type !t !a
   | AnnTAbs TVar !(Expr t a) !t !a
-  deriving (Show, Functor, Eq)
+  deriving (Show, Functor, Eq, Read)
 
 data Bind t a = AnnBind
   { bindId :: !Id
   , bindAnn :: !t
   , bindTag :: !a
   }
-  deriving (Show, Functor, Eq)
+  deriving (Show, Functor, Eq, Read)
 
 {-# COMPLETE Number, Boolean, Unit, Id, Prim, If, Let, Lam, App, TApp, TAbs #-}
 
@@ -197,7 +197,7 @@ data RType r a
   | RRTy !(Bind () a) !(RType r a) r
   | RForall TVar !(RType r a)
   | RForallP TVar !(RType r a)
-  deriving (Show, Functor)
+  deriving (Show, Functor, Read)
 
 data Type = TVar TVar           -- a
           | TUnit               -- 1
@@ -229,7 +229,7 @@ data ParsedAnnotation r a
   = ParsedCheck !(RType r a)
   | ParsedAssume !(RType r a)
   | ParsedInfer
-  deriving (Functor, Show)
+  deriving (Functor, Show, Read)
 
 type ParsedExpr r a = Expr (Maybe (ParsedAnnotation r a)) a
 type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
