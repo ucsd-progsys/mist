@@ -54,7 +54,7 @@ act h config = do
       hPrint h solverResult
       case F.resStatus solverResult of
         F.Safe -> return (Right ())
-        _ -> return $ Left [mkError ("solver failed: " ++ show solverResult) (SS {ssBegin = initialPos f, ssEnd = initialPos f})] -- TODO: proper error
+        _ -> return $ Left [mkError ("solver failed: " ++ (renderFixResult . F.resStatus) solverResult) (SS {ssBegin = initialPos f, ssEnd = initialPos f})] -- TODO: proper error
     Left l -> return (Left l)
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a

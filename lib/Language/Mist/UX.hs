@@ -27,6 +27,7 @@ module Language.Mist.UX
   , abort
   , panic
   , renderErrors
+  , renderFixResult
 
   -- * Pretty Printing
   , Text
@@ -41,6 +42,7 @@ import qualified Data.List as L
 import           Text.Megaparsec
 import           Text.Printf (printf)
 import           Language.Mist.Utils
+import qualified Language.Fixpoint.Types as F
 
 
 type Text = String
@@ -225,3 +227,9 @@ renderError e = do
 
 pprintMany :: (PPrint a) => [a] -> Text
 pprintMany xs = L.intercalate ", " (map pprint xs)
+
+
+renderFixResult :: (Show a) => F.FixResult a -> Text
+renderFixResult (F.Crash _ str) = str
+renderFixResult F.Safe = "Safe"
+renderFixResult (F.Unsafe as) = "Unsafe: " ++ show as
