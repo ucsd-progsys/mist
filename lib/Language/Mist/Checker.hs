@@ -69,7 +69,7 @@ addRecursiveBinder
 addRecursiveBinder _ env = env
 
 -- | `wellFormed e` returns the list of errors for an expression `e`
-wellFormed :: (Located a) => ParsedExpr r a -> [UserError]
+wellFormed :: (Located a) => RefinedExpr r a -> [UserError]
 wellFormed = go emptyWEnv
   where
     go _ (Number n l)             = largeNumberErrors n (sourceSpan l)
@@ -265,7 +265,7 @@ type ElaborateConstraints r a = (Located a, PPrint r)
 -- - adds explicit type application
 -- - adds explicit type abstraction
 -- - assumes every name is unique
-elaborate :: ElaborateConstraints r a => ParsedExpr r a -> Result (ElaboratedExpr r a)
+elaborate :: ElaborateConstraints r a => RefinedExpr r a -> Result (ElaboratedExpr r a)
 elaborate e =
   if __debug
   then do
@@ -281,7 +281,7 @@ elaborate e =
 
 
 -- DEBUGGING
-synthesize :: ElaborateConstraints r a => ParsedExpr r a -> Context (ElaboratedExpr r a, Type)
+synthesize :: ElaborateConstraints r a => RefinedExpr r a -> Context (ElaboratedExpr r a, Type)
 synthesize e = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
@@ -332,7 +332,7 @@ _synthesize (TApp _e _typ _l) = error "TODO"
 _synthesize (TAbs _alpha _e _l) = error "TODO"
 
 -- DEBUGGING
-check :: ElaborateConstraints r a => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+check :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
 check e t = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
@@ -378,20 +378,20 @@ _check expr typ = do
     go (TAbs _alpha _e _l) _ = error "TODO"
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
-synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
+synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
 synthesizeApp tFun cFun eArg l = do
   (cInstantiatedFun, cArg, resultType) <- synthesizeSpine tFun cFun eArg
   pure (App cInstantiatedFun cArg l, resultType)
 
 -- DEBUGGING
-synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 synthesizeSpine funType cFun eArg = do
   env <- getEnv
   tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
   _synthesizeSpine funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
-_synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> ParsedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+_synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 _synthesizeSpine funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
@@ -634,7 +634,7 @@ primType Equal   = do
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
 primType And     = pure $ TBool :=> (TBool :=> TBool)
 
-checkSub :: ElaborateConstraints r a => ParsedExpr r a -> Type -> Context (ElaboratedExpr r a)
+checkSub :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
 checkSub e t1 = do
   (c, t2) <- synthesize e
   env <- getEnv
@@ -643,10 +643,10 @@ checkSub e t1 = do
 typeCheckLet ::
   ElaborateConstraints r a =>
   ParsedBind r a ->
-  ParsedExpr r a ->
-  ParsedExpr r a ->
+  RefinedExpr r a ->
+  RefinedExpr r a ->
   a ->
-  (ElaboratedBind r a -> ElaboratedExpr r a -> ParsedExpr r a -> a -> Context b) ->
+  (ElaboratedBind r a -> ElaboratedExpr r a -> RefinedExpr r a -> a -> Context b) ->
   Context b
 typeCheckLet binding@(AnnBind{bindAnn = Just ParsedInfer}) e1 e2 tag handleBody = do
   alpha <- generateExistential

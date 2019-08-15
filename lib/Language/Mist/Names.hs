@@ -268,8 +268,8 @@ instance (Uniqable a) => Uniqable (Measures, a) where
         modify $ pushNewName name name'
         pure $ name'
 
-instance Uniqable SSParsedExpr where
-  unique (SSParsedExpr e) = SSParsedExpr <$> unique e
+instance Uniqable (ParsedExpr a) where
+  unique (ParsedExpr e) = ParsedExpr <$> unique e
 
 instance (Uniqable t) => Uniqable (Expr t a) where
   unique (AnnLam b body tag l) = do

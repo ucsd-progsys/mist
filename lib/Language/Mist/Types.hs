@@ -43,8 +43,8 @@ module Language.Mist.Types
   , pattern Bind
 
   , ParsedAnnotation (..)
-  , ParsedExpr, ParsedBind
-  , SSParsedExpr (..)
+  , RefinedExpr, ParsedBind
+  , ParsedExpr (..)
 
   , ElaboratedAnnotation (..)
   , ElaboratedExpr, ElaboratedBind
@@ -232,9 +232,9 @@ data ParsedAnnotation r a
   | ParsedInfer
   deriving (Functor, Show, Read)
 
-type ParsedExpr r a = Expr (Maybe (ParsedAnnotation r a)) a
+type RefinedExpr r a = Expr (Maybe (ParsedAnnotation r a)) a
 type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
-newtype SSParsedExpr = SSParsedExpr { unSSParsedExpr :: ParsedExpr SSParsedExpr SourceSpan } deriving Read
+newtype ParsedExpr a = ParsedExpr { unParsedExpr :: RefinedExpr (ParsedExpr a) a } deriving Read
 
 -- | The type of Mist type annotations after elaboration
 -- r is the type of refinements
