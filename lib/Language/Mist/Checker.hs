@@ -579,7 +579,7 @@ alpha `assertLeftOf` beta = do
   alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
   if alphaToLeft
     then pure ()
-    else error (printf "TODO: expected Γ[%0$s][%1$s] but got Γ[%1$s][%2$s]" (show alpha) (show beta))
+    else error (printf "TODO: expected Γ[%s][%s] but got Γ[%s][%s]" (show alpha) (show beta) (show beta) (show alpha))
 
 occurrenceCheck :: EVar -> Type -> Context ()
 occurrenceCheck alpha typ = do
