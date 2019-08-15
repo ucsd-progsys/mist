@@ -89,8 +89,6 @@ safeTypeToSort TUnit = Just $ F.FObj $ fromString "Unit"
 safeTypeToSort TInt = Just F.intSort
 safeTypeToSort TBool = Just F.boolSort
 safeTypeToSort (TCtor "Set" [(_,t)]) = F.setSort <$> safeTypeToSort t
--- TODO: still don't know where Set[] is coming from
-safeTypeToSort (TCtor "Set" _) = Just $ F.setSort F.intSort
 safeTypeToSort (TCtor "Map" [(_,t),(_,t')]) = F.mapSort <$> safeTypeToSort t <*> safeTypeToSort t'
 -- is this backwards?
 safeTypeToSort (t1 :=> t2) = F.FFunc <$> safeTypeToSort t1 <*> safeTypeToSort t2

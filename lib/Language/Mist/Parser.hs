@@ -402,7 +402,6 @@ baseTypeNoCtor
   =  (rWord "Int"   *> pure TInt)
  <|> (rWord "Bool"  *> pure TBool)
  <|> (rWord "Unit"  *> pure TUnit)
- <|> (rWord "Set"   *> pure (setType TInt))
  <|> (TVar <$> tvar)
 
 baseType :: Parser Type

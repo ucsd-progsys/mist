@@ -1,21 +1,21 @@
 for as rforall a, b.
-  s:Set ~>
-  (s:Set ~>
-  x:a ->
-  SetST
-    <{v:Set | s == v}
-    >{v:Set | setSubset s v}
-    >b) ->
+  s:(Set >Int) ~>
+  (set:(Set >Int) ~>
+   x:a ->
+   SetST
+   <{v:Set >Int | v == set}
+   >{v:Set >Int | setSubset set v}
+   >b) ->
   List >a ->
   SetST
-    <{v:Set | v == s}
-    >{v:Set | setSubset s v}
+    <{v:Set >Int | v == s}
+    >{v:Set >Int | setSubset s v}
     >b
 -- We can implement for using Lists (see append.hs)
 for = 0
 
-f as forall a. fs:Set ~> x:a -> SetST <{v:Set | v == fs} >{v:Set | setSubset fs v} >Int
+f as forall a. fs:(Set >Int) ~> x:a -> SetST <{v:Set >Int | v == fs} >{v:Set >Int | setSubset fs v} >Int
 f = 0
 
-foo :: foos:Set ~> acts:(List >Int) -> SetST <{v:Set | v == foos} >{v:Set | setSubset foos v} >Int
+foo :: foos:(Set >Int) ~> acts:(List >Int) -> SetST <{v:Set >Int | v == foos} >{v:Set >Int | setSubset foos v} >Int
 foo = \acts -> for f acts
