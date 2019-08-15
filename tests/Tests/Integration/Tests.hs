@@ -18,6 +18,7 @@ import Test.Tasty.HUnit
 import Tests.Utils
 
 import Language.Mist.Runner
+import Language.Mist.Config
 import Language.Mist.UX (Result, SourceSpan, UserError)
 
 integrationTests = testGroupM "Integration"
@@ -43,7 +44,7 @@ mkTest :: (Result () -> IO ()) -> FilePath -> TestName -> TestTree
 mkTest testPred dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
   withFile log WriteMode $ \h -> do
-    ec <- runMist h test
+    ec <- runMist h (defConfig {srcFile = test})
     testPred ec
   where
     test = dir </> file
@@ -59,7 +60,7 @@ crashTest :: FilePath -> TestName -> TestTree
 crashTest dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
   withFile log WriteMode $ \h -> (do
-    ec <- (runMist h test) `catch` (\(SomeException _) -> pure $ Left [])
+    ec <- (runMist h (defConfig {srcFile = test})) `catch` (\(SomeException _) -> pure $ Left [])
     case ec of
       Right _ -> throw Success
       Left errors -> throw $ Failure errors) `catch` handler
