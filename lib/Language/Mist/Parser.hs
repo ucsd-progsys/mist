@@ -15,7 +15,7 @@ import           Text.Megaparsec hiding (parse, State)
 import           Data.List.NonEmpty         as NE
 import qualified Text.Megaparsec.Char.Lexer as L
 import           Text.Megaparsec.Char
-import           Text.Megaparsec.Expr
+import           Control.Monad.Combinators.Expr
 import qualified Data.List as L
 import qualified Data.Map.Strict as M
 import           Language.Mist.Types
@@ -38,14 +38,26 @@ parseWith p f s = case flip evalState 0 $ runParserT (whole p) f s of
                     Left err -> Ex.throw [parseUserError err]
                     Right e  -> return e
 
-parseUserError :: ParseError Char SourcePos -> UserError
+parseUserError :: ParseErrorBundle Text SourcePos -> UserError
 parseUserError err = mkError msg sp
   where
-    msg            = "parse error\n" ++ parseErrorTextPretty err
-    sp             = posSpan . NE.head . errorPos $ err
+    msg            = "parse error\n" ++ errorBundlePretty err
+    sp             = posSpan . snd . NE.head . fst $ attachSourcePos errorOffset (bundleErrors err) (bundlePosState err)
 
 instance ShowErrorComponent SourcePos where
   showErrorComponent = sourcePosPretty
+
+-- Megaparsec 7.0 changes
+-- https://markkarpov.com/post/megaparsec-7.html
+getPosition :: MonadParsec e s m => m SourcePos
+getPosition = do
+  st <- getParserState
+  -- We're not interested in the line at which the offset is located in
+  -- this case, but the same 'reachOffset' function is used in
+  -- 'errorBundlePretty'.
+  let (pos, _, pst) = reachOffset (stateOffset st) (statePosState st)
+  setParserState st { statePosState = pst }
+  return pos
 
 --------------------------------------------------------------------------------
 parseFile :: FilePath -> IO (Measures, SSParsedExpr)

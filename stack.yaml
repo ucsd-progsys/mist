@@ -1,4 +1,4 @@
-resolver: lts-12.15
+resolver: lts-14.0
 
 packages:
 - '.'
@@ -6,7 +6,6 @@ packages:
 flags: {}
 
 extra-deps:
-- tasty-rerun-1.1.12
 - './liquid-fixpoint/'
 # liquid-fixpoint and deps
 #- github: ucsd-progsys/liquid-fixpoint
@@ -16,5 +15,6 @@ extra-deps:
 - intern-0.9.2
 - located-base-0.1.1.1
 - text-format-0.3.2
+- tasty-rerun-1.1.14
 
 extra-package-dbs: []
