@@ -41,7 +41,7 @@ parseWith p f s = case flip evalState 0 $ runParserT (whole p) f s of
 parseUserError :: ParseErrorBundle Text SourcePos -> UserError
 parseUserError err = mkError msg sp
   where
-    msg            = "parse error\n" ++ errorBundlePretty err
+    msg            = "parse error\n" ++ parseErrorTextPretty (NE.head (bundleErrors err))
     sp             = posSpan . snd . NE.head . fst $ attachSourcePos errorOffset (bundleErrors err) (bundlePosState err)
 
 instance ShowErrorComponent SourcePos where
@@ -228,7 +228,9 @@ topDef :: Parser SSParsedDef
 topDef = do
   Bind id tag <- L.nonIndented sc binder
   ann <- typeSig
-  _ <- L.nonIndented sc $ lexeme (string id) <* symbol "="
+  depth <- L.indentLevel
+  if depth > pos1 then fail $ "Expected start of binding for `" <> id <> "' here" else pure ()
+  _ <- lexeme (string id) <* symbol "="
   e <- expr
   let annBind = AnnBind id (Just ann) tag
   return (annBind, exprAddParsedInfers $ unParsedExpr e)

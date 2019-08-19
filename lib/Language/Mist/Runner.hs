@@ -15,6 +15,7 @@ import Language.Mist.Normalizer
 import Language.Mist.Names
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Types as F
+import qualified Control.Exception as Ex
 
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
@@ -33,9 +34,11 @@ type R = HC.Pred
 ---------------------------------------------------------------------------
 runMist :: Handle -> Config -> IO (Result ())
 ---------------------------------------------------------------------------
-runMist h config = act h config >>= \case
+runMist h config = (act h config >>= \case
   r@Right{} -> hPutStrLn h "SAFE" >> return r
-  Left es -> esHandle h (return . Left) es
+  Left es -> esHandle h (return . Left) es)
+                `Ex.catch`
+                   esHandle h (return . Left)
 
 act :: Handle -> Config -> IO (Result ())
 act h config = do
