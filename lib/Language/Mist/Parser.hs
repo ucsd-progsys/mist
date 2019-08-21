@@ -325,7 +325,13 @@ bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
 bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
 
 bind :: Parser (SSParsedBind, SSParsedExpr)
-bind = (,) <$> binder <* symbol "=" <*> expr
+bind = (,) <$> letBinder <* symbol "=" <*> expr
+
+letBinder :: Parser SSParsedBind
+letBinder = do
+    (x,a) <- identifier
+    t <- optional $ dcolon *> scheme
+    pure $ AnnBind x (ParsedCheck <$> t) a
 
 ifExpr :: Parser SSParsedExpr
 ifExpr = fmap ParsedExpr $ withSpan' $ do
@@ -407,9 +413,9 @@ rbase = braces $ do
   rbaseOrRrtype $ eraseBind b
 
   where
-    rbaseOrRrtype bind =
-      try (RRTy bind <$> (try rapp <|> rbase) <* suchthat <*> expr)
-      <|> (RBase bind <$> baseTypeNoCtor <* suchthat <*> expr)
+    rbaseOrRrtype b =
+      try (RRTy b <$> (try rapp <|> rbase) <* suchthat <*> expr)
+      <|> (RBase b <$> baseTypeNoCtor <* suchthat <*> expr)
 
 baseTypeNoCtor :: Parser Type
 baseTypeNoCtor
