@@ -97,7 +97,7 @@ safeTypeToSort (t1 :=> t2) = F.FFunc <$> safeTypeToSort t1 <*> safeTypeToSort t2
 -- with the liquid-fixpoint --adt setting, but I'm not sure how it iteracts
 -- with FTyCon right now.
 -- safeTypeToSort (TPair t1 t2) = F.FApp (F.FApp (F.FTC F.mapFTyCon) (safeTypeToSort t1)) (safeTypeToSort t2)
-safeTypeToSort (TCtor _ t2) = foldr F.FApp (F.FTC F.mapFTyCon) <$> (mapM (safeTypeToSort . snd) t2)
+safeTypeToSort (TCtor (CT con) t2) = foldr F.FApp (F.FTC (F.symbolFTycon $ fromString con)) <$> (mapM (safeTypeToSort . snd) t2)
 safeTypeToSort (TForall{}) = Nothing
 
 
