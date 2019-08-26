@@ -180,7 +180,7 @@ withSpan p = do
   p2 <- getPosition
   return (x, SS p1 p2)
 
-exprAddParsedInfers :: Expr t a -> ParsedExpr a
+exprAddParsedInfers :: RefinedExpr (ParsedExpr a) a -> ParsedExpr a
 exprAddParsedInfers = goE
   where
     goE (AnnNumber n _ l)    = ParsedExpr $ Number n l
@@ -197,7 +197,8 @@ exprAddParsedInfers = goE
 
     goUn = unParsedExpr . goE
 
-    goB (AnnBind x _ l) = AnnBind x (Just ParsedInfer) l
+    goB (AnnBind x Nothing l) = AnnBind x (Just ParsedInfer) l
+    goB (AnnBind x t l) = AnnBind x t l
 
 
 --------------------------------------------------------------------------------
@@ -318,7 +319,7 @@ letExpr = fmap ParsedExpr $ withSpan' $ do
   rWord "let"
   bs <- fmap (fmap unParsedExpr) <$> sepBy1 bind comma
   rWord "in"
-  ParsedExpr e  <- expr
+  ParsedExpr e <- expr
   return (bindsExpr bs e $ Just ParsedInfer)
 
 bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
@@ -329,7 +330,7 @@ bind = (,) <$> letBinder <* symbol "=" <*> expr
 
 letBinder :: Parser SSParsedBind
 letBinder = do
-    (x,a) <- identifier
+    (x, a) <- identifier
     t <- optional $ dcolon *> scheme
     pure $ AnnBind x (ParsedCheck <$> t) a
 

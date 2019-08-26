@@ -234,7 +234,7 @@ data ParsedAnnotation r a
 
 type RefinedExpr r a = Expr (Maybe (ParsedAnnotation r a)) a
 type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
-newtype ParsedExpr a = ParsedExpr { unParsedExpr :: RefinedExpr (ParsedExpr a) a } deriving Read
+newtype ParsedExpr a = ParsedExpr { unParsedExpr :: RefinedExpr (ParsedExpr a) a } deriving (Show, Read)
 
 -- | The type of Mist type annotations after elaboration
 -- r is the type of refinements
