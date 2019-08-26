@@ -6,81 +6,81 @@
 -- Caps: lst, lookup (do we need this?), contents, read, create, write
 -- Monad interface: pure, bind, thenn
 
-write as lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+write as lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   f:{v:Int | v ∈ writeSet} -> (String) ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | v == lstSet} >{v:Set | v == lookupSet} >{v:Set | v == contentsSet} >{v:Set | v == readSet} >{v:Set | v == createSet} >{v:Set | v == writeSet}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | v == lstSet} >{v:Set >Int | v == lookupSet} >{v:Set >Int | v == contentsSet} >{v:Set >Int | v == readSet} >{v:Set >Int | v == createSet} >{v:Set >Int | v == writeSet}
     >Unit
 write = 0
 
-read as lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+read as lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   f:{v:Int | v ∈ readSet} ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | v == lstSet} >{v:Set | v == lookupSet} >{v:Set | v == contentsSet} >{v:Set | v == readSet} >{v:Set | v == createSet} >{v:Set | v == writeSet}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | v == lstSet} >{v:Set >Int | v == lookupSet} >{v:Set >Int | v == contentsSet} >{v:Set >Int | v == readSet} >{v:Set >Int | v == createSet} >{v:Set >Int | v == writeSet}
     >String
 read = 0
 
 -- Does this rforall correctly capture the fact that we inherit permissions?
-lst as rforall a. lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+lst as rforall a. lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   d:{v:a | v ∈ lstSet} ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | v == lstSet} >{v:Set | v == lookupSet} >{v:Set | v == contentsSet} >{v:Set | v == readSet} >{v:Set | v == createSet} >{v:Set | v == writeSet}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | v == lstSet} >{v:Set >Int | v == lookupSet} >{v:Set >Int | v == contentsSet} >{v:Set >Int | v == readSet} >{v:Set >Int | v == createSet} >{v:Set >Int | v == writeSet}
     >(List >a)
 lst = 0
 
 -- this is what is called createWO
-create as rforall a. lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+create as rforall a. lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   d:{v:a | v ∈ createSet} ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | v == lstSet} >{v:Set | v == lookupSet} >{v:Set | v == contentsSet} >{v:Set | v == readSet} >{v:Set | v == createSet} >{v:Set | v == setPlus writeSet d}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | v == lstSet} >{v:Set >Int | v == lookupSet} >{v:Set >Int | v == contentsSet} >{v:Set >Int | v == readSet} >{v:Set >Int | v == createSet} >{v:Set >Int | v == setPlus writeSet d}
     >a
 create = 0
 
-pure as rforall a. lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+pure as rforall a. lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   x:a ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | v == lstSet} >{v:Set | v == lookupSet} >{v:Set | v == contentsSet} >{v:Set | v == readSet} >{v:Set | v == createSet} >{v:Set | v == writeSet}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | v == lstSet} >{v:Set >Int | v == lookupSet} >{v:Set >Int | v == contentsSet} >{v:Set >Int | v == readSet} >{v:Set >Int | v == createSet} >{v:Set >Int | v == writeSet}
     >a
 pure = 0
 
 bind as rforall a, b .
-  lstSet1:Set ~>  lookupSet1:Set ~>  contentsSet1:Set ~>  readSet1:Set ~>  createSet1:Set ~>  writeSet1:Set ~>
-  lstSet2:Set ~>  lookupSet2:Set ~>  contentsSet2:Set ~>  readSet2:Set ~>  createSet2:Set ~>  writeSet2:Set ~>
-  lstSet3:Set ~>  lookupSet3:Set ~>  contentsSet3:Set ~>  readSet3:Set ~>  createSet3:Set ~>  writeSet3:Set ~>
+  lstSet1:(Set >Int) ~>  lookupSet1:(Set >Int) ~>  contentsSet1:(Set >Int) ~>  readSet1:(Set >Int) ~>  createSet1:(Set >Int) ~>  writeSet1:(Set >Int) ~>
+  lstSet2:(Set >Int) ~>  lookupSet2:(Set >Int) ~>  contentsSet2:(Set >Int) ~>  readSet2:(Set >Int) ~>  createSet2:(Set >Int) ~>  writeSet2:(Set >Int) ~>
+  lstSet3:(Set >Int) ~>  lookupSet3:(Set >Int) ~>  contentsSet3:(Set >Int) ~>  readSet3:(Set >Int) ~>  createSet3:(Set >Int) ~>  writeSet3:(Set >Int) ~>
   (Shill
-    <{v:Set | v == lstSet1} <{v:Set | v == lookupSet1} <{v:Set | v == contentsSet1} <{v:Set | v == readSet1} <{v:Set | v == createSet1} <{v:Set | v == writeSet1}
-    >{v:Set | v == lstSet2} >{v:Set | v == lookupSet2} >{v:Set | v == contentsSet2} >{v:Set | v == readSet2} >{v:Set | v == createSet2} >{v:Set | v == writeSet2}
+    <{v:Set >Int | v == lstSet1} <{v:Set >Int | v == lookupSet1} <{v:Set >Int | v == contentsSet1} <{v:Set >Int | v == readSet1} <{v:Set >Int | v == createSet1} <{v:Set >Int | v == writeSet1}
+    >{v:Set >Int | v == lstSet2} >{v:Set >Int | v == lookupSet2} >{v:Set >Int | v == contentsSet2} >{v:Set >Int | v == readSet2} >{v:Set >Int | v == createSet2} >{v:Set >Int | v == writeSet2}
     >a) ->
   (x:a -> Shill
-    <{v:Set | v == lstSet2} <{v:Set | v == lookupSet2} <{v:Set | v == contentsSet2} <{v:Set | v == readSet2} <{v:Set | v == createSet2} <{v:Set | v == writeSet2}
-    >{v:Set | v == lstSet3} >{v:Set | v == lookupSet3} >{v:Set | v == contentsSet3} >{v:Set | v == readSet3} >{v:Set | v == createSet3} >{v:Set | v == writeSet3}
+    <{v:Set >Int | v == lstSet2} <{v:Set >Int | v == lookupSet2} <{v:Set >Int | v == contentsSet2} <{v:Set >Int | v == readSet2} <{v:Set >Int | v == createSet2} <{v:Set >Int | v == writeSet2}
+    >{v:Set >Int | v == lstSet3} >{v:Set >Int | v == lookupSet3} >{v:Set >Int | v == contentsSet3} >{v:Set >Int | v == readSet3} >{v:Set >Int | v == createSet3} >{v:Set >Int | v == writeSet3}
     >b) ->
   Shill
-    <{v:Set | v == lstSet1} <{v:Set | v == lookupSet1} <{v:Set | v == contentsSet1} <{v:Set | v == readSet1} <{v:Set | v == createSet1} <{v:Set | v == writeSet1}
-    >{v:Set | v == lstSet3} >{v:Set | v == lookupSet3} >{v:Set | v == contentsSet3} >{v:Set | v == readSet3} >{v:Set | v == createSet3} >{v:Set | v == writeSet3}
+    <{v:Set >Int | v == lstSet1} <{v:Set >Int | v == lookupSet1} <{v:Set >Int | v == contentsSet1} <{v:Set >Int | v == readSet1} <{v:Set >Int | v == createSet1} <{v:Set >Int | v == writeSet1}
+    >{v:Set >Int | v == lstSet3} >{v:Set >Int | v == lookupSet3} >{v:Set >Int | v == contentsSet3} >{v:Set >Int | v == readSet3} >{v:Set >Int | v == createSet3} >{v:Set >Int | v == writeSet3}
     >b
 bind = 0
 
 thenn as rforall a, b .
-  lstSet1:Set ~>  lookupSet1:Set ~>  contentsSet1:Set ~>  readSet1:Set ~>  createSet1:Set ~>  writeSet1:Set ~>
-  lstSet2:Set ~>  lookupSet2:Set ~>  contentsSet2:Set ~>  readSet2:Set ~>  createSet2:Set ~>  writeSet2:Set ~>
-  lstSet3:Set ~>  lookupSet3:Set ~>  contentsSet3:Set ~>  readSet3:Set ~>  createSet3:Set ~>  writeSet3:Set ~>
+  lstSet1:(Set >Int) ~>  lookupSet1:(Set >Int) ~>  contentsSet1:(Set >Int) ~>  readSet1:(Set >Int) ~>  createSet1:(Set >Int) ~>  writeSet1:(Set >Int) ~>
+  lstSet2:(Set >Int) ~>  lookupSet2:(Set >Int) ~>  contentsSet2:(Set >Int) ~>  readSet2:(Set >Int) ~>  createSet2:(Set >Int) ~>  writeSet2:(Set >Int) ~>
+  lstSet3:(Set >Int) ~>  lookupSet3:(Set >Int) ~>  contentsSet3:(Set >Int) ~>  readSet3:(Set >Int) ~>  createSet3:(Set >Int) ~>  writeSet3:(Set >Int) ~>
   (Shill
-    <{v:Set | v == lstSet1} <{v:Set | v == lookupSet1} <{v:Set | v == contentsSet1} <{v:Set | v == readSet1} <{v:Set | v == createSet1} <{v:Set | v == writeSet1}
-    >{v:Set | v == lstSet2} >{v:Set | v == lookupSet2} >{v:Set | v == contentsSet2} >{v:Set | v == readSet2} >{v:Set | v == createSet2} >{v:Set | v == writeSet2}
+    <{v:Set >Int | v == lstSet1} <{v:Set >Int | v == lookupSet1} <{v:Set >Int | v == contentsSet1} <{v:Set >Int | v == readSet1} <{v:Set >Int | v == createSet1} <{v:Set >Int | v == writeSet1}
+    >{v:Set >Int | v == lstSet2} >{v:Set >Int | v == lookupSet2} >{v:Set >Int | v == contentsSet2} >{v:Set >Int | v == readSet2} >{v:Set >Int | v == createSet2} >{v:Set >Int | v == writeSet2}
     >a) ->
   (Shill
-    <{v:Set | v == lstSet2} <{v:Set | v == lookupSet2} <{v:Set | v == contentsSet2} <{v:Set | v == readSet2} <{v:Set | v == createSet2} <{v:Set | v == writeSet2}
-    >{v:Set | v == lstSet3} >{v:Set | v == lookupSet3} >{v:Set | v == contentsSet3} >{v:Set | v == readSet3} >{v:Set | v == createSet3} >{v:Set | v == writeSet3}
+    <{v:Set >Int | v == lstSet2} <{v:Set >Int | v == lookupSet2} <{v:Set >Int | v == contentsSet2} <{v:Set >Int | v == readSet2} <{v:Set >Int | v == createSet2} <{v:Set >Int | v == writeSet2}
+    >{v:Set >Int | v == lstSet3} >{v:Set >Int | v == lookupSet3} >{v:Set >Int | v == contentsSet3} >{v:Set >Int | v == readSet3} >{v:Set >Int | v == createSet3} >{v:Set >Int | v == writeSet3}
     >b) ->
   Shill
-    <{v:Set | v == lstSet1} <{v:Set | v == lookupSet1} <{v:Set | v == contentsSet1} <{v:Set | v == readSet1} <{v:Set | v == createSet1} <{v:Set | v == writeSet1}
-    >{v:Set | v == lstSet3} >{v:Set | v == lookupSet3} >{v:Set | v == contentsSet3} >{v:Set | v == readSet3} >{v:Set | v == createSet3} >{v:Set | v == writeSet3}
+    <{v:Set >Int | v == lstSet1} <{v:Set >Int | v == lookupSet1} <{v:Set >Int | v == contentsSet1} <{v:Set >Int | v == readSet1} <{v:Set >Int | v == createSet1} <{v:Set >Int | v == writeSet1}
+    >{v:Set >Int | v == lstSet3} >{v:Set >Int | v == lookupSet3} >{v:Set >Int | v == contentsSet3} >{v:Set >Int | v == readSet3} >{v:Set >Int | v == createSet3} >{v:Set >Int | v == writeSet3}
     >b
 thenn = 0
 
@@ -102,16 +102,16 @@ isDir  = 0
 -- let's do the inside of that loop first
 
 forShill as rforall a, b, c, d, e, f, g, h.
-  lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+  lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   (x:a ->
   Shill
-    <{v:Set | setSubset lstSet v} <{v:Set | setSubset lookupSet v} <{v:Set | setSubset contentsSet v} <{v:Set | setSubset readSet v} <{v:Set | setSubset createSet v} <{v:Set | setSubset writeSet v}
-    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+    <{v:Set >Int | setSubset lstSet v} <{v:Set >Int | setSubset lookupSet v} <{v:Set >Int | setSubset contentsSet v} <{v:Set >Int | setSubset readSet v} <{v:Set >Int | setSubset createSet v} <{v:Set >Int | setSubset writeSet v}
+    >{v:Set >Int | setSubset lstSet v} >{v:Set >Int | setSubset lookupSet v} >{v:Set >Int | setSubset contentsSet v} >{v:Set >Int | setSubset readSet v} >{v:Set >Int | setSubset createSet v} >{v:Set >Int | setSubset writeSet v}
     >h) ->
   List >a ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | setSubset lstSet v} >{v:Set >Int | setSubset lookupSet v} >{v:Set >Int | setSubset contentsSet v} >{v:Set >Int | setSubset readSet v} >{v:Set >Int | setSubset createSet v} >{v:Set >Int | setSubset writeSet v}
     >h
 -- We can implement forShill using Lists (see append.hs)
 forShill = 0
@@ -126,12 +126,12 @@ and = \a -> \b -> if a == True then (if b == True then True else False) else Fal
 
 -- The "Client"
 
--- copyRec :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+-- copyRec :: lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
 --   f:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
 --   t:{v:Int | v ∈ createSet /\ v ∈ writeSet} ->
 --   Shill
---     <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
---     >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+--     <{v:(Set >Int) | v == lstSet} <{v:(Set >Int) | v == lookupSet} <{v:(Set >Int) | v == contentsSet} <{v:(Set >Int) | v == readSet} <{v:(Set >Int) | v == createSet} <{v:(Set >Int) | v == writeSet}
+--     >{v:(Set >Int) | setSubset lstSet v} >{v:(Set >Int) | setSubset lookupSet v} >{v:(Set >Int) | setSubset contentsSet v} >{v:(Set >Int) | setSubset readSet v} >{v:(Set >Int) | setSubset createSet v} >{v:(Set >Int) | setSubset writeSet v}
 --     >Unit -- This should return a Unit, but we don't have a value-level unit terms
 -- copyRec = \f -> \t -> bind (read f) (write t)
 
@@ -142,13 +142,13 @@ and = \a -> \b -> if a == True then (if b == True then True else False) else Fal
 
 -- oops, copyRec is a BRTs invention. Let's do `find` from the shill papers
 
-find :: lstSet:Set ~>  lookupSet:Set ~>  contentsSet:Set ~>  readSet:Set ~>  createSet:Set ~>  writeSet:Set ~>
+find :: lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
   ({v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} -> Bool) ->
   cur:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
   Shill
-    <{v:Set | v == lstSet} <{v:Set | v == lookupSet} <{v:Set | v == contentsSet} <{v:Set | v == readSet} <{v:Set | v == createSet} <{v:Set | v == writeSet}
-    >{v:Set | setSubset lstSet v} >{v:Set | setSubset lookupSet v} >{v:Set | setSubset contentsSet v} >{v:Set | setSubset readSet v} >{v:Set | setSubset createSet v} >{v:Set | setSubset writeSet v}
+    <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
+    >{v:Set >Int | setSubset lstSet v} >{v:Set >Int | setSubset lookupSet v} >{v:Set >Int | setSubset contentsSet v} >{v:Set >Int | setSubset readSet v} >{v:Set >Int | setSubset createSet v} >{v:Set >Int | setSubset writeSet v}
     >Int -- This should return a Unit, but we don't have a value-level unit terms
 find = \filter -> \f -> if and (isFile f) (filter f)
                then pure f
-             else (if (isDir f) then (bind (lst f) (forShill (find filter))) else (pure 0))
+             else (if (isDir f) then (bind (lst f) (let finder :: lstSetAnn:(Set >Int) ~> lookupSetAnn:(Set >Int) ~> contentsSetAnn:(Set >Int) ~>  readSetAnn:(Set >Int) ~> createSetAnn:(Set >Int) ~> writeSetAnn:(Set >Int) ~> cur:{v:Int | v ∈ lstSetAnn /\ v ∈ lookupSetAnn /\ v ∈ readSetAnn} -> Shill <{v:Set >Int | v == lstSetAnn} <{v:Set >Int | v == lookupSetAnn} <{v:Set >Int | v == contentsSetAnn} <{v:Set >Int | v == readSetAnn} <{v:Set >Int | v == createSetAnn} <{v:Set >Int | v == writeSetAnn} >{v:Set >Int | setSubset lstSetAnn v} >{v:Set >Int | setSubset lookupSetAnn v} >{v:Set >Int | setSubset contentsSetAnn v} >{v:Set >Int | setSubset readSetAnn v} >{v:Set >Int | setSubset createSetAnn v} >{v:Set >Int | setSubset writeSetAnn v} >Int = (find filter) in forShill finder)) else (pure 0))
