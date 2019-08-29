@@ -2,7 +2,6 @@ module Language.Mist.Utils where
 
 import qualified Data.Map  as M
 import qualified Data.List as L
--- import           Data.Monoid
 import           Data.Maybe (fromMaybe)
 import           Data.Char (isSpace)
 import           Data.Monoid

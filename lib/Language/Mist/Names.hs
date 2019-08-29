@@ -42,6 +42,7 @@ import Data.Foldable (traverse_)
 import Control.Applicative (Alternative)
 
 import Language.Mist.Types
+import Language.Mist.Utils
 
 import Control.Arrow (second)
 import Control.Monad.State
@@ -248,7 +249,7 @@ popNewName x env = M.adjust tail x env
 
 -- | looks up the innermost bound new name for an identifier
 lookupNewName :: Id -> NameEnv -> Maybe Id
-lookupNewName x env = fmap head $ M.lookup x env
+lookupNewName x env = fmap (safeHead $ error ("unknown name: " ++ x)) $ M.lookup x env
 
 class Uniqable a where
   unique :: a -> UniqableContext a

@@ -9,6 +9,7 @@
 {-# LANGUAGE MultiParamTypeClasses      #-}
 {-# LANGUAGE PatternSynonyms            #-}
 {-# LANGUAGE ConstraintKinds            #-}
+{-# LANGUAGE BangPatterns               #-}
 
 --------------------------------------------------------------------------------
 -- | This module contains the code for type check an `Expr`
@@ -152,15 +153,13 @@ newtype TypingResult a = TypingResult {unTypingResult :: Result a}
 
 type Context = StateT Ctxt (FreshT (StateT String TypingResult))
 
-__debug = False
+-- DEBUGGING
+_tell :: String -> Context ()
+_tell str = lift . lift . modify $ (\stuff -> stuff ++ str ++ "\n")
 
 -- DEBUGGING
-tell :: String -> Context ()
-tell str = lift . lift . modify $ (\stuff -> stuff ++ str ++ "\n")
-
--- DEBUGGING
--- untell :: Context String
--- untell = lift get
+_untell :: Context String
+_untell = lift get
 
 initialCtxt :: Ctxt
 initialCtxt = Ctxt { typeEnv = TypeEnv [], existentials = S.empty, solutions = TypeEnv [] }
@@ -267,7 +266,7 @@ type ElaborateConstraints r a = (Located a, PPrint r)
 -- - assumes every name is unique
 elaborate :: ElaborateConstraints r a => RefinedExpr r a -> Result (ElaboratedExpr r a)
 elaborate e =
-  if __debug
+  if _DBG
   then do
     (result, log) <- runContext (elaborateAndSubst e) emptyFreshState
     pure $ trace log result
@@ -284,23 +283,23 @@ elaborate e =
 synthesize :: ElaborateConstraints r a => RefinedExpr r a -> Context (ElaboratedExpr r a, Type)
 synthesize e = do
   env <- getEnv
-  tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
-  _synthesize e
+  _tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
+  synthesize_ e
 
 -- TODO: add judgments for documentation
 -- | Γ ⊢ e ~> c => A ⊣ Θ
-_synthesize (Number i l) = pure (Number i l, TInt)
-_synthesize (Boolean b l) = pure (Boolean b l, TBool)
-_synthesize (Unit l) = pure (Unit l, TUnit)
-_synthesize (Id id l) = do
+synthesize_ (Number i l) = pure (Number i l, TInt)
+synthesize_ (Boolean b l) = pure (Boolean b l, TBool)
+synthesize_ (Unit l) = pure (Unit l, TUnit)
+synthesize_ (Id id l) = do
   boundType <- getsEnv $ getBoundType id
   case boundType of
     Just typ -> pure (Id id l, typ)
     Nothing -> throwError $ [errUnboundVar (sourceSpan l) id]
-_synthesize (Prim prim l) = do
+synthesize_ (Prim prim l) = do
    typ <- primType prim
    pure (Prim prim l, typ)
-_synthesize (If condition e1 e2 l) = do -- TODO: how to properly handle synthesis of branching
+synthesize_ (If condition e1 e2 l) = do -- TODO: how to properly handle synthesis of branching
   cCondition <- check condition TBool
   alpha <- generateExistential
   extendEnv [Unsolved alpha]
@@ -310,16 +309,16 @@ _synthesize (If condition e1 e2 l) = do -- TODO: how to properly handle synthesi
   c2 <- check e2 firstBranchType
   env' <- getEnv
   pure (If cCondition c1 c2 l, applyEnv env' firstBranchType)
-_synthesize (Let binding e1 e2 l) =
+synthesize_ (Let binding e1 e2 l) =
   typeCheckLet binding e1 e2 l
   (\annBind c1 e2 l -> do
-      (c2, inferredType) <- _synthesize e2
+      (c2, inferredType) <- synthesize_ e2
       pure (Let annBind c1 c2 l, inferredType))
-_synthesize (App e1 e2 l) = do
+synthesize_ (App e1 e2 l) = do
   (c1, funType) <- synthesize e1
   env <- getEnv
   synthesizeApp (applyEnv env funType) c1 e2 l
-_synthesize (Lam bind e l) = do
+synthesize_ (Lam bind e l) = do
   alpha <- generateExistential
   beta <- generateExistential
   let newBinding = VarBind (bindId bind) (EVar alpha)
@@ -328,23 +327,23 @@ _synthesize (Lam bind e l) = do
   modifyEnv $ dropEnvAfter newBinding
   let annBind = bind{bindAnn = Just $ ElabUnrefined (EVar alpha)}
   pure (Lam annBind c l, EVar alpha :=> EVar beta)
-_synthesize (TApp _e _typ _l) = error "TODO"
-_synthesize (TAbs _alpha _e _l) = error "TODO"
+synthesize_ (TApp _e _typ _l) = error "TODO"
+synthesize_ (TAbs _alpha _e _l) = error "TODO"
 
 -- DEBUGGING
 check :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
 check e t = do
   env <- getEnv
-  tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
-  _check e t
+  _tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
+  check_ e t
 
 -- | Γ ⊢ e ~> c <= A ⊣ Θ
-_check expr (TForall tvar typ) = do
+check_ expr (TForall tvar typ) = do
   extendEnv [BoundTVar tvar]
   c <- check expr typ
   modifyEnv $ dropEnvAfter (BoundTVar tvar)
   pure c
-_check expr typ = do
+check_ expr typ = do
   maybeEVar <- toEVar typ
   case maybeEVar of
     Just _  -> checkSub expr typ
@@ -387,12 +386,12 @@ synthesizeApp tFun cFun eArg l = do
 synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 synthesizeSpine funType cFun eArg = do
   env <- getEnv
-  tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
-  _synthesizeSpine funType cFun eArg
+  _tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
+  synthesizeSpine_ funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
-_synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
-_synthesizeSpine funType cFun eArg = do
+synthesizeSpine_ :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
+synthesizeSpine_ funType cFun eArg = do
   maybeEVar <- toEVar funType
   case maybeEVar of
     Just tvar -> synthesizeSpineExistential tvar
@@ -448,7 +447,7 @@ instSub c a b = do
 (<:) :: Type -> Type -> Context ()
 a <: b = do
   env <- getEnv
-  tell $ show env ++ " ⊢ " ++ pprint a ++ " <: " ++ pprint b
+  _tell $ show env ++ " ⊢ " ++ pprint a ++ " <: " ++ pprint b
   a <<: b
 
 -- | Γ ⊢ A <: B ⊣ Θ
@@ -466,10 +465,16 @@ a@(TVar _) <<: b@(TVar _) | a == b = pure ()
   | otherwise =
     if length as /= length bs
       then error "TODO: constructor application length mismatch"
-      else mapM_ (\(a, b) -> do
+      else mapM_ (\((variance, a), (_, b)) -> do
                     env <- getEnv
-                    (applyEnv env a) <: (applyEnv env b))
-                  (zip (snd <$> as) (snd <$> bs))
+                    let a' = applyEnv env a
+                    let b' = applyEnv env b
+                    case variance of
+                         Invariant -> error "what to do about invariance"
+                         Bivariant -> error "what to do about bivariance"
+                         Covariant -> a' <: b'
+                         Contravariant -> b' <: a')
+                  (zip as bs)
 (TForall alpha a) <<: b = do
   evar <- generateExistential
   extendEnv [Scope evar, Unsolved evar]
@@ -500,17 +505,19 @@ a <<: b = do
 instantiateL :: EVar -> Type -> Context ()
 instantiateL a b = do
   env <- getEnv
-  tell $ show env ++ " ⊢ " ++ pprint a ++ " <=: " ++ pprint b
-  _instantiateL a b
+  _tell $ show env ++ " ⊢ " ++ pprint a ++ " <=: " ++ pprint b
+  instantiateL_ a b
 
 -- TODO: figure out why we reverse the newly created existentials
-_instantiateL :: EVar -> Type -> Context ()
-_instantiateL alpha typ = do
+instantiateL_ :: EVar -> Type -> Context ()
+instantiateL_ alpha typ = do
   maybeExists <- toEVar typ
   case maybeExists of
     Just beta -> do
-      alpha `assertLeftOf` beta
-      solveExistential beta (EVar alpha) []
+      alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
+      if alphaToLeft
+        then solveExistential beta (EVar alpha) []
+        else solveExistential alpha (EVar beta) []
     Nothing -> go typ
 
   where
@@ -522,13 +529,17 @@ _instantiateL alpha typ = do
       env <- getEnv
       instantiateL alpha2 (applyEnv env b)
     go (TCtor ctor vts) = do
-      let (vs, as) = unzip vts
-      betas <- mapM (const generateExistential) as
-      solveExistential alpha (TCtor ctor (zip vs $ fmap EVar betas)) (reverse betas)
-      mapM_ (\(beta, a) -> do
+      betas <- mapM (const generateExistential) vts
+      solveExistential alpha (TCtor ctor (zip (fst <$> vts) $ fmap EVar betas)) (reverse betas)
+      mapM_ (\(beta, (variance, a)) -> do
                 env <- getEnv
-                instantiateL beta (applyEnv env a))
-            (zip betas as)
+                let a' = applyEnv env a
+                case variance of
+                  Invariant -> error "what to do about invariance"
+                  Bivariant -> error "what to do about bivariance"
+                  Covariant -> instantiateL beta a'
+                  Contravariant -> instantiateR a' beta)
+            (zip betas vts)
     go (TForall tvar a) = do
       extendEnv [BoundTVar tvar]
       instantiateL alpha a
@@ -539,16 +550,18 @@ _instantiateL alpha typ = do
 instantiateR :: Type -> EVar -> Context ()
 instantiateR a b = do
   env <- getEnv
-  tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
-  _instantiateR a b
+  _tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
+  instantiateR_ a b
 
-_instantiateR :: Type -> EVar -> Context ()
-_instantiateR typ alpha = do
+instantiateR_ :: Type -> EVar -> Context ()
+instantiateR_ typ alpha = do
   maybeExists <- toEVar typ
   case maybeExists of
     Just beta -> do
-      alpha `assertLeftOf` beta
-      solveExistential beta (EVar alpha) []
+      alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
+      if alphaToLeft
+      then solveExistential beta (EVar alpha) []
+      else solveExistential alpha (EVar beta) []
     Nothing -> go typ
 
   where
@@ -560,26 +573,24 @@ _instantiateR typ alpha = do
       env <- getEnv
       instantiateR (applyEnv env b) alpha2
     go (TCtor ctor vts) = do
-      let (vs, as) = unzip vts
-      betas <- mapM (const generateExistential) as
-      solveExistential alpha (TCtor ctor (zip vs $ fmap EVar betas)) (reverse betas)
-      mapM_ (\(a, beta) -> do
+      betas <- mapM (const generateExistential) vts
+      solveExistential alpha (TCtor ctor (zip (fst <$> vts) $ fmap EVar betas)) (reverse betas)
+
+      mapM_ (\((variance, a), beta) -> do
                 env <- getEnv
-                instantiateR (applyEnv env a) beta)
-            (zip as betas)
+                let a' = applyEnv env a
+                case variance of
+                  Invariant -> error "what to do about invariance"
+                  Bivariant -> error "what to do about bivariance"
+                  Covariant -> instantiateR a' beta
+                  Contravariant -> instantiateL beta a')
+            (zip vts betas)
     go (TForall tvar a) = do
       beta <- generateExistential
       extendEnv [Scope beta, Unsolved beta]
       instantiateR (subst ((unTV tvar) |-> (EVar beta)) a) alpha
       modifyEnv $ dropEnvAfter (Scope beta)
     go typ = solveExistential alpha typ []
-
-assertLeftOf :: EVar -> EVar -> Context ()
-alpha `assertLeftOf` beta = do
-  alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
-  if alphaToLeft
-    then pure ()
-    else error (printf "TODO: expected Γ[%s][%s] but got Γ[%s][%s]" (show alpha) (show beta) (show beta) (show alpha))
 
 occurrenceCheck :: EVar -> Type -> Context ()
 occurrenceCheck alpha typ = do
