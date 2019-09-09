@@ -1,6 +1,6 @@
 for as rforall a, b.
   s:(Set >Int) ~>
-  (set:(Set >Int) ~>
+  (set:{v:Set >Int | setSubset s v} ~>
    x:a ->
    SetST
    <{v:Set >Int | v == set}
@@ -19,3 +19,12 @@ f = 0
 
 foo :: foos:(Set >Int) ~> acts:(List >Int) -> SetST <{v:Set >Int | v == foos} >{v:Set >Int | setSubset foos v} >Int
 foo = \acts -> for f acts
+
+pure as rforall a. x:a -> List >a
+pure = 0
+
+baz :: s:(Set >Int) ~> Int -> SetST <{v:Set >Int | v == s} >{v:Set >Int | setSubset s v} >Int
+baz = \i -> for baz (pure i)
+
+bar :: se:(Set >Int) ~> cur:{v:Int | v ∈ se} -> SetST <{v:Set >Int | v == se} >{v:Set >Int | setSubset se v} >Int
+bar = \i -> for bar (pure i)
