@@ -143,12 +143,20 @@ and = \a -> \b -> if a == True then (if b == True then True else False) else Fal
 -- oops, copyRec is a BRTs invention. Let's do `find` from the shill papers
 
 find :: lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
-  ({v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} -> Bool) ->
+  ({v:Int | v ∈ lstSet /\ v ∈l lookupSet /\ v ∈ readSet} -> Bool) ->
   cur:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
   Shill
     <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}
     >{v:Set >Int | setSubset lstSet v} >{v:Set >Int | setSubset lookupSet v} >{v:Set >Int | setSubset contentsSet v} >{v:Set >Int | setSubset readSet v} >{v:Set >Int | setSubset createSet v} >{v:Set >Int | setSubset writeSet v}
     >Int -- This should return a Unit, but we don't have a value-level unit terms
 find = \filter -> \f -> if and (isFile f) (filter f)
-               then pure f
-             else (if (isDir f) then (bind (lst f) (let finder :: lstSetAnn:(Set >Int) ~> lookupSetAnn:(Set >Int) ~> contentsSetAnn:(Set >Int) ~>  readSetAnn:(Set >Int) ~> createSetAnn:(Set >Int) ~> writeSetAnn:(Set >Int) ~> cur:{v:Int | v ∈ lstSetAnn /\ v ∈ lookupSetAnn /\ v ∈ readSetAnn} -> Shill <{v:Set >Int | v == lstSetAnn} <{v:Set >Int | v == lookupSetAnn} <{v:Set >Int | v == contentsSetAnn} <{v:Set >Int | v == readSetAnn} <{v:Set >Int | v == createSetAnn} <{v:Set >Int | v == writeSetAnn} >{v:Set >Int | setSubset lstSetAnn v} >{v:Set >Int | setSubset lookupSetAnn v} >{v:Set >Int | setSubset contentsSetAnn v} >{v:Set >Int | setSubset readSetAnn v} >{v:Set >Int | setSubset createSetAnn v} >{v:Set >Int | setSubset writeSetAnn v} >Int = (find filter) in forShill finder)) else (pure 0))
+             then pure f
+             else (if (isDir f)
+                     then (bind (lst f)
+                          (let finder :: lstSetAnn:(Set >Int) ~> lookupSetAnn:(Set >Int) ~> contentsSetAnn:(Set >Int) ~>  readSetAnn:(Set >Int) ~> createSetAnn:(Set >Int) ~> writeSetAnn:(Set >Int) ~>
+                                         cur:{v:Int | v ∈ lstSetAnn /\ v ∈ lookupSetAnn /\ v ∈ readSetAnn} ->
+                                         Shill <{v:Set >Int | v == lstSetAnn} <{v:Set >Int | v == lookupSetAnn} <{v:Set >Int | v == contentsSetAnn} <{v:Set >Int | v == readSetAnn} <{v:Set >Int | v == createSetAnn} <{v:Set >Int | v == writeSetAnn}
+                                         >{v:Set >Int | setSubset lstSetAnn v} >{v:Set >Int | setSubset lookupSetAnn v} >{v:Set >Int | setSubset contentsSetAnn v} >{v:Set >Int | setSubset readSetAnn v} >{v:Set >Int | setSubset createSetAnn v} >{v:Set >Int | setSubset writeSetAnn v}
+                                         >Int
+                               = (find filter) in forShill finder))
+                     else (pure 0))
