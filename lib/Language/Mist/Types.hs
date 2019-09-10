@@ -79,7 +79,7 @@ import Data.List (intercalate)
 import qualified Data.Map as M
 
 import Control.Monad.State
-import Control.Monad.Writer
+import Control.Monad.Writer (WriterT)
 import Control.Monad.Identity
 import Control.Monad.Except
 import Control.Monad.Reader
@@ -476,7 +476,7 @@ type Subst e = M.Map Id e
 
 -- | NNF Constraints
 data NNF r
-  = Head r                             -- ^ p
+  = Head SourceSpan r           -- ^ p
   | CAnd [NNF r]                -- ^ c1 /\ c2
   | All Id Type r (NNF r)       -- ^ ∀x:τ.p => c
   | Any Id Type r (NNF r)       -- ^ :x:τ.p => c
@@ -507,6 +507,16 @@ instance Predicate () where
     strengthen _ _ = ()
     varSubst _ _ = ()
     buildKvar _ _ = ()
+
+instance Located (NNF r) where
+  sourceSpan cstr = case go cstr of
+    [] -> error "everything is true!!!"
+    loc:_ -> loc
+    where
+      go (Head l _) = [l]
+      go (CAnd cs) = mconcat $ go <$> cs
+      go (All _ _ _ c) = go c
+      go (Any _ _ _ c) = go c
 
 --------------------------------------------------------------------------------
 -- | A MonadFresh encompasses the operations for generating fresh, scoped names

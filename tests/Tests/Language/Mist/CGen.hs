@@ -25,7 +25,7 @@ cgenTests = testGroup "cgen"
   [
     testCase "()" $
     let cstrs = generateConstraints (Unit)
-    in cstrs @?= Head (true @P)
+    in cstrs @?= Head (T.sourceSpan ()) (true @P)
   ]
 
 -- $

@@ -26,7 +26,7 @@ import Data.Bifunctor (second)
 -------------------------------------------------------------------------------
 type Env r a = [(Id, RType r a)]
 
-type CGenConstraints r a = (Predicate r, Show r, Show a, PPrint r, Eq r)
+type CGenConstraints r a = (Located a, Predicate r, Show r, Show a, PPrint r, Eq r)
 
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
@@ -83,11 +83,11 @@ synth env e = do
 
 _synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-_synth _ e@Unit{}    = (Head true,) <$> prim e
-_synth _ e@Number{}  = (Head true,) <$> prim e
-_synth _ e@Boolean{} = (Head true,) <$> prim e
-_synth _ e@Prim{}    = (Head true,) <$> prim e
-_synth env (Id x _)  = (Head true,) <$> single env x
+_synth _ e@Unit{}    = (Head (sourceSpan e) true,) <$> prim e
+_synth _ e@Number{}  = (Head (sourceSpan e) true,) <$> prim e
+_synth _ e@Boolean{} = (Head (sourceSpan e) true,) <$> prim e
+_synth _ e@Prim{}    = (Head (sourceSpan e) true,) <$> prim e
+_synth env e@(Id x _)  = (Head (sourceSpan e) true,) <$> single env x
 
 _synth env (App e (Id y loc) _) = do
   (c, t) <- synth env e
@@ -148,7 +148,7 @@ _appSynth env (RIFun (Bind x _) tx t) y loc = do
   z <- refreshId x
   (c, t') <- appSynth ((z, tx):env) (substReftPred (x |-> z) t) y loc
   tHat <- fresh loc env (eraseRType t')
-  c' <- t' <: tHat
+  c' <- (t' <: tHat) loc
   pure (mkExists z tx (CAnd [c, c']), tHat)
 
 _appSynth _ _ _ _ = error "Applying non function"
@@ -228,7 +228,7 @@ _check env (App e (Id y loc) _) t = do
 
 _check env e t = do
   (c, t') <- strengthening env (eraseRType t) e
-  cSub <- t' <: t
+  cSub <- (t' <: t) (sourceSpan e)
   pure $ CAnd [c, cSub]
 
 appCheck :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> RType r a -> Fresh (NNF r)
@@ -241,7 +241,7 @@ appCheck env t y loc t' = do
 _appCheck :: CGenConstraints r a => Env r a -> RType r a -> Id -> a -> RType r a -> Fresh (NNF r)
 _appCheck env (RFun (Bind x _) tx t) y loc t' = do
   c <- check env (Id y loc) tx
-  cSub <- substReftPred (x |-> y) t <: t'
+  cSub <- (substReftPred (x |-> y) t <: t') loc
   pure $ CAnd [c, cSub]
 
 _appCheck env (RIFun (Bind x _) tx t) y loc t' = do
@@ -294,57 +294,57 @@ foTypes [] = []
 eraseRTypes :: Env r a -> [(Id, Type)]
 eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 
-(<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
-rtype1 <: rtype2 = do
-  c <- rtype1 <<: rtype2
+(<:) :: (CGenConstraints r a, Located b) => RType r a -> RType r a -> b -> Fresh (NNF r)
+(<:) rtype1 rtype2 locable = do
+  c <- (rtype1 <<: rtype2) locable
   -- !_ <- traceM $ "subtyping: " <> "⊢ " <> pprint rtype1 <> "\n\t<: " <> pprint rtype2 <> "\n\t⊣  " <> show c <> "\n\n"
   pure c
 
-(<<:) :: CGenConstraints r a => RType r a -> RType r a -> Fresh (NNF r)
-rtype1 <<: rtype2 = go (flattenRType rtype1) (flattenRType rtype2)
+(<<:) :: (CGenConstraints r a, Located b) => RType r a -> RType r a -> b -> Fresh (NNF r)
+(<<:) rtype1 rtype2 locable = go (flattenRType rtype1) (flattenRType rtype2)
   where
     go (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
-      | b1 == b2 = pure $ All x1 b1 p1 (Head $ varSubst (x2 |-> x1) p2)
+      | b1 == b2 = pure $ All x1 b1 p1 (Head (sourceSpan locable) $ varSubst (x2 |-> x1) p2)
       | otherwise = error $ "error?" ++ show b1 ++ show b2
     go (RFun (Bind x1 _) t1 t1') (RFun (Bind x2 _) t2 t2') = do
-      c <- t2 <: t1
-      c' <- substReftPred (x1 |-> x2) t1' <: t2'
+      c <- (t2 <: t1) locable
+      c' <- (substReftPred (x1 |-> x2) t1' <: t2') locable
       pure $ CAnd [c, mkAll x2 t2 c']
     go (RForall alpha t1) (RForall beta t2)
-      | alpha == beta = t1 <: t2
+      | alpha == beta = (t1 <: t2) locable
       | otherwise = error "Constraint generation subtyping error"
     go (RForallP alpha t1) (RForallP beta t2)
-      | alpha == beta = t1 <: t2
+      | alpha == beta = (t1 <: t2) locable
       | otherwise = error "Constraint generation subtyping error"
     go (RApp c1 vts1) (RApp c2 vts2)
-      | c1 == c2  = CAnd <$> sequence (concat $ zipWith constructorSub vts1 vts2)
+      | c1 == c2  = CAnd <$> sequence (concat $ zipWith (constructorSub locable) vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
     go t2 (RIFun (Bind x _) t1 t1') = do
       z <- refreshId x
-      cSub <- t2 <: substReftPred (x |-> z) t1'
+      cSub <- (t2 <: substReftPred (x |-> z) t1') locable
       pure $ mkAll z t1 cSub
     go (RIFun (Bind x _) t1 t1') t2 = do
       z <- refreshId x
-      cSub <- substReftPred (x |-> z) t1' <: t2
+      cSub <- (substReftPred (x |-> z) t1' <: t2) locable
       pure $ mkExists z t1 cSub
     go (RRTy (Bind x1 _) rt1 p1) (RRTy (Bind x2 _) rt2 p2) = do
-      let outer = All x1 (eraseRType rt1) p1 (Head $ varSubst (x2 |-> x1) p2)
-      inner <- rt1 <: rt2
+      let outer = All x1 (eraseRType rt1) p1 (Head (sourceSpan locable) $ varSubst (x2 |-> x1) p2)
+      inner <- (rt1 <: rt2) locable
       pure $ CAnd [outer, inner]
     go rt1 (RRTy (Bind x _) rt2 reft) = do
       let (y,r) = rtsymreft rt1
-      let subreft = All y (eraseRType rt1) r (Head $ varSubst (x |-> y) reft)
-      inner <- rt1 <: rt2
+      let subreft = All y (eraseRType rt1) r (Head (sourceSpan locable) $ varSubst (x |-> y) reft)
+      inner <- (rt1 <: rt2) locable
       pure $ CAnd [inner, subreft]
-    go (RRTy (Bind x _) rt1 reft) rt2 = All x (eraseRType rt1) reft <$> (rt1 <: rt2)
+    go (RRTy (Bind x _) rt1 reft) rt2 = All x (eraseRType rt1) reft <$> (rt1 <: rt2) locable
     go _ _ = error $ "CGen subtyping error. Got:\n\n" ++ pprint rtype1 ++ "\n\nbut expected:\n\n" ++ pprint rtype2 ++ "\n" ++ "i.e. Got:\n\n" ++ pprint (eraseRType rtype1) ++ "\n\nbut expected:\n\n" ++ pprint (eraseRType rtype2) ++ "\n"
 
-(v, rt1) `constructorSub` (_,rt2) = case v of
-                         -- TODO: write tests that over these two cases...
-                         Invariant -> []
-                         Bivariant -> [rt1 <: rt2, rt2 <: rt1]
-                         Covariant -> [rt1 <: rt2]
-                         Contravariant -> [rt2 <: rt1]
+constructorSub locable (v, rt1) (_,rt2) = case v of
+  -- TODO: write tests that over these two cases...
+  Invariant -> []
+  Bivariant -> [(rt1 <: rt2) locable, (rt2 <: rt1) locable]
+  Covariant -> [(rt1 <: rt2) locable]
+  Contravariant -> [(rt2 <: rt1) locable]
 
 rtsymreft :: Predicate r => RType r a -> (Id, r)
 rtsymreft (RBase (Bind x _) _ r) = (x,r)

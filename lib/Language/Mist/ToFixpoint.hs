@@ -21,6 +21,7 @@ import Data.Maybe (fromMaybe, fromJust)
 import Data.List (intercalate)
 import Text.Printf
 
+import Language.Mist.UX ()
 import Language.Mist.Types as M
 import qualified Language.Mist.Names as MN
 
@@ -43,11 +44,11 @@ solve measures constraints = do
     measureHashMap measures = HM.fromList $ (\(name, typ) -> (fromString name, typeToSort typ)) <$> MAP.toList measures
 
 -- TODO: HC.solve requires () but should take any type
-toHornClause :: NNF HC.Pred -> HC.Cstr ()
+toHornClause :: NNF HC.Pred -> HC.Cstr SourceSpan
 toHornClause c = c'
   where c' = toHornClause' c
 
-toHornClause' (Head r) = HC.Head r ()
+toHornClause' (Head loc r) = HC.Head r loc
 toHornClause' (CAnd cs) =
   HC.CAnd (fmap toHornClause' cs)
 toHornClause' (All x typ r c) =
@@ -55,7 +56,7 @@ toHornClause' (All x typ r c) =
 toHornClause' (Any x typ r c) =
   HC.Any (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
 
-collectKVars :: HC.Cstr a -> [HC.Var ()]
+collectKVars :: (Located a) => HC.Cstr a -> [HC.Var SourceSpan]
 collectKVars cstr = go MAP.empty cstr
   where
     go env (HC.Head pred _) = goPred env pred
@@ -71,7 +72,7 @@ collectKVars cstr = go MAP.empty cstr
         bindKVars = goPred env' (HC.bPred bind)
         constraintKVars = go env' constraint
 
-    goPred env var@(HC.Var k args) = [HC.HVar k argSorts ()]
+    goPred env var@(HC.Var k args) = [HC.HVar k argSorts (sourceSpan cstr)]
       where
         argSorts = map (\arg -> fromMaybe (error (show (arg, var))) $ MAP.lookup arg env) args
     goPred env (HC.PAnd preds) = concatMap (goPred env) preds
