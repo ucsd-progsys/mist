@@ -41,7 +41,7 @@ runMist h config = (act h config >>= \case
                    esHandle h (return . Left)
 
 act :: Handle -> Config -> IO (Result ())
-act h config = do
+act _h config = do
   let f = (srcFile config)
   s <- readFile f
   (measures, e) <-
@@ -54,10 +54,10 @@ act h config = do
       -- !_ <- traceM $ pprint (anormal (annotate t TUnit))
       let c = generateConstraints (anormal (annotate t TUnit))
       solverResult <- solve measures' c
-      hPrint h solverResult
       case F.resStatus solverResult of
         F.Safe -> return (Right ())
-        _ -> return $ Left [mkError ("solver failed: " ++ (renderFixResult . F.resStatus) solverResult) (SS {ssBegin = initialPos f, ssEnd = initialPos f})] -- TODO: proper error
+        F.Crash _ _ -> return $ Left [mkError ("solver crashed: " ++ (renderFixResult . F.resStatus) solverResult) (SS {ssBegin = initialPos f, ssEnd = initialPos f})] -- TODO: proper error
+        F.Unsafe ss -> return $ Left $ (\(_,(ty,s)) -> mkError ("Expected " ++ ty ++ " : ") s) <$> ss
     Left l -> return (Left l)
 
 esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a

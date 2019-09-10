@@ -33,21 +33,21 @@ import System.Console.CmdArgs.Verbosity
 
 -- | Solves the subtyping constraints we got from CGen.
 
-solve :: Measures -> NNF HC.Pred -> IO (F.Result Integer)
+solve :: Measures -> NNF HC.Pred -> IO (F.Result (Integer, (String, SourceSpan)))
 solve measures constraints = do
   setVerbosity Quiet
-  (fmap fst) <$> S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint (measureHashMap measures) mempty)
+  S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint (measureHashMap measures) mempty)
   where
     fixpointConstraint = toHornClause constraints
     cfg = C.defConfig { C.eliminate = C.Existentials } -- , C.save = True }
     measureHashMap measures = HM.fromList $ (\(name, typ) -> (fromString name, typeToSort typ)) <$> MAP.toList measures
 
 -- TODO: HC.solve requires () but should take any type
-toHornClause :: NNF HC.Pred -> HC.Cstr ()
+toHornClause :: NNF HC.Pred -> HC.Cstr (String, SourceSpan)
 toHornClause c = c'
   where c' = toHornClause' c
 
-toHornClause' (Head r) = HC.Head r ()
+toHornClause' (Head loc r) = HC.Head r (pprint r, loc)
 toHornClause' (CAnd cs) =
   HC.CAnd (fmap toHornClause' cs)
 toHornClause' (All x typ r c) =
@@ -55,7 +55,7 @@ toHornClause' (All x typ r c) =
 toHornClause' (Any x typ r c) =
   HC.Any (HC.Bind (fromString x) (typeToSort typ) r) (toHornClause' c)
 
-collectKVars :: HC.Cstr a -> [HC.Var ()]
+collectKVars :: (Located a) => HC.Cstr a -> [HC.Var (String, SourceSpan)]
 collectKVars cstr = go MAP.empty cstr
   where
     go env (HC.Head pred _) = goPred env pred
@@ -71,7 +71,7 @@ collectKVars cstr = go MAP.empty cstr
         bindKVars = goPred env' (HC.bPred bind)
         constraintKVars = go env' constraint
 
-    goPred env var@(HC.Var k args) = [HC.HVar k argSorts ()]
+    goPred env var@(HC.Var k args) = [HC.HVar k argSorts ("", sourceSpan cstr)]
       where
         argSorts = map (\arg -> fromMaybe (error (show (arg, var))) $ MAP.lookup arg env) args
     goPred env (HC.PAnd preds) = concatMap (goPred env) preds

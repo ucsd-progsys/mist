@@ -36,7 +36,7 @@ module Language.Mist.Names
   ) where
 
 import qualified Data.Map.Strict as M
-import Data.Maybe (fromMaybe, fromJust)
+import Data.Maybe (fromMaybe)
 import Data.List.Split (splitOn)
 import Data.Foldable (traverse_)
 import Control.Applicative (Alternative)
@@ -65,6 +65,8 @@ createInternalName name number = head (splitOn cSEPARATOR name) ++ cSEPARATOR ++
 
 (|->) :: Id -> e -> Subst e
 x |-> e = M.singleton x e
+
+fromJustOrErr e = fromMaybe $ error $ "Unbound identifer: " ++ show e
 
 --------------------------------------------------------------------------------
 -- | Substitutions
@@ -286,7 +288,7 @@ instance (Uniqable t) => Uniqable (Expr t a) where
     e2' <- unique e2
     modify $ popNewName (bindId bind)
     pure $ AnnLet bind' e1' e2' tag' l
-  unique (AnnId id tag l) = AnnId . fromJust <$> gets (lookupNewName id) <*> unique tag <*> pure l
+  unique (AnnId id tag l) = AnnId . fromJustOrErr id <$> gets (lookupNewName id) <*> unique tag <*> pure l
 
   unique (AnnNumber n tag l) = AnnNumber n <$> unique tag <*> pure l
   unique (AnnBoolean b tag l) = AnnBoolean b <$> unique tag <*> pure l
@@ -383,4 +385,4 @@ uniquifyBindingTVar (TV name) = do
   pure $ TV name'
 
 uniquifyTVar :: TVar -> UniqableContext TVar
-uniquifyTVar (TV name) = TV . fromJust <$> gets (lookupNewName name)
+uniquifyTVar (TV name) = TV . fromJustOrErr name <$> gets (lookupNewName name)

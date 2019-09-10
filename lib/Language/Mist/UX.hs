@@ -3,12 +3,17 @@
 
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances    #-}
+{-# LANGUAGE DeriveFunctor        #-}
+{-# LANGUAGE DeriveAnyClass       #-}
+{-# LANGUAGE DeriveGeneric        #-}
+{-# LANGUAGE OverloadedStrings  #-}
 
 module Language.Mist.UX
   (
   -- * Representation
     SourceSpan (..)
   , Located (..)
+  , Locate (..)
 
   -- * Extraction from Source file
   , readFileSpan
@@ -43,6 +48,10 @@ import           Text.Megaparsec
 import           Text.Printf (printf)
 import           Language.Mist.Utils
 import qualified Language.Fixpoint.Types as F
+import qualified Language.Fixpoint.Horn.Types as HC
+import           Text.PrettyPrint.HughesPJ
+import           Control.DeepSeq
+import           GHC.Generics
 
 
 type Text = String
@@ -59,6 +68,15 @@ class Located a where
 instance Located SourceSpan where
   sourceSpan x = x
 
+data Locate a = Locate a SourceSpan
+  deriving (Eq, Show, Read, Functor)
+
+instance Located (Locate a) where
+  sourceSpan (Locate _ s) = s
+
+instance (Located a) => Located (HC.Cstr a) where
+  sourceSpan = sourceSpan . HC.cLabel
+
 --------------------------------------------------------------------------------
 -- | Source Span Representation
 --------------------------------------------------------------------------------
@@ -66,7 +84,7 @@ data SourceSpan = SS
   { ssBegin :: !SourcePos
   , ssEnd   :: !SourcePos
   }
-  deriving (Eq, Show, Read)
+  deriving (Eq, Show, Read, Generic, NFData)
 
 instance Semigroup SourceSpan where
   s1 <> s2 = mappendSpan s1 s2
@@ -81,8 +99,32 @@ mappendSpan s1 s2
   | s2 == junkSpan = s1
   | otherwise      = SS (ssBegin s1) (ssEnd s2)
 
+instance F.Loc SourceSpan where
+    srcSpan _ = F.srcSpan ()
+
+instance F.Fixpoint SourceSpan where
+    toFix _ = ""
+
+instance F.PPrint SourceSpan where
+  pprintTidy _ = text . pprint
+
 instance PPrint SourceSpan where
   pprint = ppSourceSpan
+
+instance F.Loc Char where
+    srcSpan _ = F.srcSpan ()
+
+instance F.Fixpoint Char where
+    toFix _ = ""
+
+instance F.PPrint Char where
+    pprintTidy _ = text . pure
+
+instance Located a => Located (b,a) where
+    sourceSpan = sourceSpan . snd
+
+instance F.Loc a => F.Loc (b,a) where
+    srcSpan = F.srcSpan . snd
 
 ppSourceSpan :: SourceSpan -> String
 ppSourceSpan s

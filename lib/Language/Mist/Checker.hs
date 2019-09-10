@@ -461,10 +461,10 @@ a@(TVar _) <<: b@(TVar _) | a == b = pure ()
   env <- getEnv
   (applyEnv env a2) <: (applyEnv env b2)
 (TCtor ctor1 as) <<: (TCtor ctor2 bs)
-  | ctor1 /= ctor2 = error $ "TODO: constructor mismatch" ++ show ctor1 ++ show ctor2
+  | ctor1 /= ctor2 = throwError $ [errConstructorMismatch ctor1 ctor2]
   | otherwise =
     if length as /= length bs
-      then error "TODO: constructor application length mismatch"
+      then throwError $ [errConstructorLengthMismatch]
       else mapM_ (\((variance, a), (_, b)) -> do
                     env <- getEnv
                     let a' = applyEnv env a
@@ -785,7 +785,8 @@ errSolvingSolvedExistential = error "TODO: solving solved existential"
 errApplyNonFunction l typ = mkError (printf "Applying non-function of type %s" (show typ)) l
 errInfiniteTypeConstraint _ _ = error "TODO: infinite type constraint"
 errCheckingError l typ = mkError (printf "Checking expression has type %s failed" (show typ)) l
-
+errConstructorMismatch ctor1 ctor2 = error $ "TODO: constructor mismatch" ++ show ctor1 ++ show ctor2
+errConstructorLengthMismatch = error "TODO: constructor application length mismatch"
 --------------------------------------------------------------------------------
 -- | Annotate
 --------------------------------------------------------------------------------

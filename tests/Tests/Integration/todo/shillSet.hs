@@ -143,7 +143,7 @@ and = \a -> \b -> if a == True then (if b == True then True else False) else Fal
 -- oops, copyRec is a BRTs invention. Let's do `find` from the shill papers
 
 find :: lstSet:(Set >Int) ~>  lookupSet:(Set >Int) ~>  contentsSet:(Set >Int) ~>  readSet:(Set >Int) ~>  createSet:(Set >Int) ~>  writeSet:(Set >Int) ~>
-  ({v:Int | v ∈ lstSet /\ v ∈l lookupSet /\ v ∈ readSet} -> Bool) ->
+  ({v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} -> Bool) ->
   cur:{v:Int | v ∈ lstSet /\ v ∈ lookupSet /\ v ∈ readSet} ->
   Shill
     <{v:Set >Int | v == lstSet} <{v:Set >Int | v == lookupSet} <{v:Set >Int | v == contentsSet} <{v:Set >Int | v == readSet} <{v:Set >Int | v == createSet} <{v:Set >Int | v == writeSet}

@@ -40,7 +40,8 @@ Library
                        text,
                        transformers, mtl,
                        split,
-                       liquid-fixpoint
+                       liquid-fixpoint,
+                       deepseq
 
   hs-source-dirs:      lib
   default-language:    Haskell2010
