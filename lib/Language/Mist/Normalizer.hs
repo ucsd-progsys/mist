@@ -38,6 +38,7 @@ anf (AnnIf c e1 e2 tag l) = do
   pure $ stitch bs (AnnIf c' e1' e2' tag l)
 anf e@AnnApp{} = uncurry stitch <$> anfApp e
 anf (AnnLam x e tag l) = AnnLam x <$> anf e <*> pure tag <*> pure l
+anf (AnnILam x e tag l) = AnnILam x <$> anf e <*> pure tag <*> pure l
 anf e@AnnTApp{}  = uncurry stitch <$> anfApp e
 anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
 
@@ -81,6 +82,7 @@ imm (AnnApp e1 e2 tag l) = do
 imm e@AnnIf{} = immExp e
 imm e@AnnLet{} = immExp e
 imm e@AnnLam{} = immExp e
+imm e@AnnILam{} = immExp e
 imm e@AnnTApp{} = immExp e
 imm e@AnnTAbs{} = immExp e
 

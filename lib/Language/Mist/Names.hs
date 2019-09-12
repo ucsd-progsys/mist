@@ -158,6 +158,7 @@ instance Subable Type t => Subable Type (Expr t a) where
   _subst su (AnnLet x e1 e2 tag l) = AnnLet (_subst su x) (_subst su e1) (_subst su e2) (_subst su tag) l
   _subst su (AnnApp e1 e2 tag l) = AnnApp (_subst su e1) (_subst su e2) (_subst su tag) l
   _subst su (AnnLam x e tag l) = AnnLam (_subst su x) (_subst su e) (_subst su tag) l
+  _subst su (AnnILam x e tag l) = AnnILam (_subst su x) (_subst su e) (_subst su tag) l
   _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) (_subst su typ) (_subst su tag) l
   _subst su (AnnTAbs tvar e tag l) = AnnTAbs tvar (_subst su' e) (_subst su tag) l
     where su' = M.delete (unTV tvar) su
@@ -187,6 +188,8 @@ instance Subable (Expr t a) (Expr t a) where
     where su' = M.delete (bindId b) su
   _subst su (AnnApp e1 e2 tag l) = AnnApp (_subst su e1) (_subst su e2) tag l
   _subst su (AnnLam b e tag l) = AnnLam b (_subst su' e) tag l
+    where su' = M.delete (bindId b) su
+  _subst su (AnnILam b e tag l) = AnnILam b (_subst su' e) tag l
     where su' = M.delete (bindId b) su
   _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) typ tag l
   _subst su (AnnTAbs alpha e tag l) = AnnTAbs alpha (_subst su e) tag l
@@ -281,6 +284,12 @@ instance (Uniqable t) => Uniqable (Expr t a) where
     body' <- unique body
     modify $ popNewName (bindId b)
     pure $ AnnLam b' body' tag' l
+  unique (AnnILam b body tag l) = do
+    tag' <- unique tag
+    b' <- unique b
+    body' <- unique body
+    modify $ popNewName (bindId b)
+    pure $ AnnILam b' body' tag' l
   unique (AnnLet bind e1 e2 tag l) = do
     tag' <- unique tag
     bind' <- unique bind

@@ -159,6 +159,9 @@ freshBinder = uncurry Bind <$> (lexeme $ ("fresh" ++) . show <$> lift get)
 freshBareBinder :: Parser (Bind () SourceSpan)
 freshBareBinder = eraseBind <$> freshBinder
 
+iLamBinder :: Parser (Bind (Maybe Type) SourceSpan)
+iLamBinder = uncurry Bind <$> identifier
+
 --------------------------------------------------------------------------------
 -- | Locations
 --------------------------------------------------------------------------------
@@ -192,6 +195,7 @@ exprAddParsedInfers = goE
     goE (AnnLet x e1 e2 _ l) = ParsedExpr $ Let (goB x) (goUn e1) (goUn e2) l
     goE (AnnApp e1 e2 _ l)   = ParsedExpr $ App (goUn e1) (goUn e2) l
     goE (AnnLam x e _ l)     = ParsedExpr $ Lam (goB x) (goUn e) l
+    goE (AnnILam x e _ l)    = ParsedExpr $ ILam x (goUn e) l
     goE (AnnTApp e typ _ l)  = ParsedExpr $ TApp (goUn e) typ l
     goE (AnnTAbs tvar e _ l) = ParsedExpr $ TAbs tvar (goUn e) l
 
@@ -255,15 +259,16 @@ expr = makeExprParser expr0 binops
 
 expr0 :: Parser SSParsedExpr
 expr0 = mkApps <$> sepBy1 simpleExpr sc
-            <|> lamExpr  -- starts with \\
+            <|> try lamExpr  -- starts with \\
+            <|> try iLamExpr -- starts with \\
             <|> letExpr  -- starts with let
             <|> ifExpr   -- starts with if
 
 -- A simpleExpr is one that has an end deliminator
 simpleExpr :: Parser SSParsedExpr
-simpleExpr  = try constExpr
-            <|> try idExpr
-            <|> parens expr
+simpleExpr = try constExpr
+         <|> try idExpr
+         <|> parens expr
 
 mkApps :: [SSParsedExpr] -> SSParsedExpr
 mkApps = L.foldl1' mkApp
@@ -345,9 +350,16 @@ ifExpr = fmap ParsedExpr $ withSpan' $ do
 lamExpr :: Parser SSParsedExpr
 lamExpr = fmap ParsedExpr $ withSpan' $ do
   char '\\' <* sc
-  xs    <- sepBy binder sc <* symbol "->"
-  ParsedExpr e     <- expr
+  xs <- sepBy binder sc <* symbol "->"
+  ParsedExpr e <- expr
   return (\span -> (foldr (\x e -> Lam x e span) e xs))
+
+iLamExpr :: Parser SSParsedExpr
+iLamExpr = fmap ParsedExpr $ withSpan' $ do
+  char '\\' <* sc
+  xs <- sepBy iLamBinder sc <* symbol "~>"
+  ParsedExpr e <- expr
+  return (\span -> (foldr (\x e -> ILam x e span) e xs))
 
 --------------------------------------------------------------------------------
 -- | Types

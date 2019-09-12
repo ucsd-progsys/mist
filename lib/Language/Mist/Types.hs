@@ -20,7 +20,7 @@ module Language.Mist.Types
   , Variance (..)
 
   , Measures
-  
+
   -- * Built-in Types
   , setType
   , mapType
@@ -37,6 +37,7 @@ module Language.Mist.Types
   , pattern If
   , pattern Let
   , pattern Lam
+  , pattern ILam
   , pattern App
   , pattern TApp
   , pattern TAbs
@@ -123,6 +124,7 @@ data Expr t a
   | AnnLet !(Bind t a) !(Expr t a) !(Expr t a) !t !a
   | AnnApp !(Expr t a) !(Expr t a) !t !a
   | AnnLam !(Bind t a) !(Expr t a) !t !a
+  | AnnILam !(Bind (Maybe Type) a) !(Expr t a) !t !a
   | AnnTApp !(Expr t a) !Type !t !a
   | AnnTAbs TVar !(Expr t a) !t !a
   deriving (Show, Functor, Eq, Read)
@@ -134,7 +136,7 @@ data Bind t a = AnnBind
   }
   deriving (Show, Functor, Eq, Read)
 
-{-# COMPLETE Number, Boolean, Unit, Id, Prim, If, Let, Lam, App, TApp, TAbs #-}
+{-# COMPLETE Number, Boolean, Unit, Id, Prim, If, Let, Lam, ILam, App, TApp, TAbs #-}
 
 pattern Number :: (Default t) => Integer -> a -> Expr t a
 pattern Number n l <- AnnNumber n _ l
@@ -160,6 +162,9 @@ pattern Let x e1 e2 l <- AnnLet x e1 e2 _ l
 pattern Lam :: (Default t) => Bind t a -> Expr t a -> a -> Expr t a
 pattern Lam x e l <- AnnLam x e _ l
   where Lam x e l = AnnLam x e defaultVal l
+pattern ILam :: (Default t) => Bind (Maybe Type) a -> Expr t a -> a -> Expr t a
+pattern ILam x e l <- AnnILam x e _ l
+  where ILam x e l = AnnILam x e defaultVal l
 pattern App :: (Default t) => Expr t a -> Expr t a -> a -> Expr t a
 pattern App e1 e2 l <- AnnApp e1 e2 _ l
   where App e1 e2 l = AnnApp e1 e2 defaultVal l
@@ -234,7 +239,7 @@ data ParsedAnnotation r a
 
 type RefinedExpr r a = Expr (Maybe (ParsedAnnotation r a)) a
 type ParsedBind r a = Bind (Maybe (ParsedAnnotation r a)) a
-newtype ParsedExpr a = ParsedExpr { unParsedExpr :: RefinedExpr (ParsedExpr a) a } deriving (Show, Read)
+newtype ParsedExpr a = ParsedExpr { unParsedExpr :: RefinedExpr (ParsedExpr a) a } deriving (Show, Read, PPrint)
 
 -- | The type of Mist type annotations after elaboration
 -- r is the type of refinements
@@ -280,6 +285,7 @@ extractLoc (AnnIf _ _ _ _ l)    = l
 extractLoc (AnnLet _ _ _ _ l)   = l
 extractLoc (AnnApp _ _ _ l)     = l
 extractLoc (AnnLam _ _ _ l)     = l
+extractLoc (AnnILam _ _ _ l)    = l
 extractLoc (AnnUnit _ l)        = l
 extractLoc (AnnTApp _ _ _ l)    = l
 extractLoc (AnnTAbs _ _ _ l)    = l
@@ -293,6 +299,7 @@ extractAnn (AnnIf _ _ _ t _)    = t
 extractAnn (AnnLet _ _ _ t _)   = t
 extractAnn (AnnApp _ _ t _)     = t
 extractAnn (AnnLam _ _ t _)     = t
+extractAnn (AnnILam _ _ t _)    = t
 extractAnn (AnnUnit t _)        = t
 extractAnn (AnnTApp _ _ t _)    = t
 extractAnn (AnnTAbs _ _ t _)    = t
@@ -306,6 +313,7 @@ putAnn t (AnnIf e1 e2 e3 _ l) = AnnIf e1 e2 e3 t l
 putAnn t (AnnLet x e1 e2 _ l) = AnnLet x e1 e2 t l
 putAnn t (AnnApp e1 e2 _ l) = AnnApp e1 e2 t l
 putAnn t (AnnLam x e _ l) = AnnLam x e t l
+putAnn t (AnnILam x e _ l) = AnnILam x e t l
 putAnn t (AnnUnit _ l) = AnnUnit t l
 putAnn t (AnnTApp e typ _ l) = AnnTApp e typ t l
 putAnn t (AnnTAbs tvar e _ l) = AnnTAbs tvar e t l
@@ -328,7 +336,7 @@ instance PPrint Prim where
   pprint SetDel  = "setMinus"
   pprint SetAdd  = "setAdd"
   pprint SetSub  = "setSubset"
-  pprint Store  = "store"
+  pprint Store   = "store"
   pprint Select  = "select"
 
 instance PPrint Bool where
@@ -369,6 +377,7 @@ instance (PPrint t) => PPrint (Expr t a) where
   pprint (AnnLet bind e1 e2 _ _) = printf "(let %s = %s in %s)" (ppDef bind) (pprint e1) (pprint e2)-- TODO: make better
   pprint (AnnApp e1 e2 _ _) = printf "(%s %s)" (pprint e1) (pprint e2)
   pprint (AnnLam x e _ _) = printf "(\\ %s -> %s)" (ppDef x) (pprint e)
+  pprint (AnnILam x e _ _) = printf "(\\ %s ~> %s)" (ppDef x) (pprint e)
   pprint (AnnTApp e t _ _) = printf "(%s @ %s)" (pprint e) (pprint t)
   pprint (AnnTAbs alpha e _ _) = printf "(/\\%s . %s)" (pprint alpha) (pprint e)
 
@@ -563,6 +572,7 @@ instance Bifunctor Expr where
   first f (AnnLet bind e1 e2 ann l) = AnnLet (first f bind) (first f e1) (first f e2) (f ann) l
   first f (AnnApp e1 e2 ann l) = AnnApp (first f e1) (first f e2) (f ann) l
   first f (AnnLam bind e ann l) = AnnLam (first f bind) (first f e) (f ann) l
+  first f (AnnILam bind e ann l) = AnnILam bind (first f e) (f ann) l
   first f (AnnTApp e t ann l) = AnnTApp (first f e) t (f ann) l
   first f (AnnTAbs alpha e ann l) = AnnTAbs alpha (first f e) (f ann) l
 

@@ -174,6 +174,8 @@ check env e t = do
   pure c
 
 _check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
+_check env (ILam (Bind x _) e _) (RIFun y ty t) =
+  mkAll x ty <$> check ((x, ty):env) e (substReftPred (bindId y |-> x) t)
 _check env e rt@RIFun{} = do
     let (ns, tx) = splitImplicits rt
     c1 <- check (ns ++ env) e tx

@@ -88,6 +88,7 @@ wellFormed = go emptyWEnv
     go env (App e1 e2 _)          = go env e1
                                     ++ go env e2
     go env (Lam bind e _)         = go (addBinder bind env) e
+    go env (ILam bind e _)        = go (addBinder bind env) e
     go env (TApp e _ _)           = go env e
     go env (TAbs _ e _)           = go env e
 
@@ -329,6 +330,9 @@ synthesize_ (Lam bind e l) = do
   pure (Lam annBind c l, EVar alpha :=> EVar beta)
 synthesize_ (TApp _e _typ _l) = error "TODO"
 synthesize_ (TAbs _alpha _e _l) = error "TODO"
+synthesize_ (ILam bind e l) = do
+  (c, t) <- synthesize_ e
+  pure (ILam bind c l, t)
 
 -- DEBUGGING
 check :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
@@ -375,6 +379,9 @@ check_ expr typ = do
     go (Unit l) TUnit = pure $ Unit l
     go (TApp _e _typ _l) _ = error "TODO"
     go (TAbs _alpha _e _l) _ = error "TODO"
+    go (ILam bind e l) t = do
+      c <- go e t
+      pure $ ILam bind c l
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
 synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
@@ -560,8 +567,8 @@ instantiateR_ typ alpha = do
     Just beta -> do
       alphaToLeft <- getsEnv $ alpha `isLeftOf` beta
       if alphaToLeft
-      then solveExistential beta (EVar alpha) []
-      else solveExistential alpha (EVar beta) []
+        then solveExistential beta (EVar alpha) []
+        else solveExistential alpha (EVar beta) []
     Nothing -> go typ
 
   where
@@ -818,6 +825,8 @@ annotate e typ = runFresh $ go M.empty e typ
     go ctxt (Lam bind e l) typ@(t1 :=> t2) =
       let ctxt' = M.insert (bindId bind) t1 ctxt in
       AnnLam bind <$> go ctxt' e t2 <*> pure (ann typ) <*> pure l
+    go ctxt (ILam bind e l) typ =
+      AnnILam bind <$> go ctxt e typ <*> pure (ann typ) <*> pure l
     go ctxt (TApp e t l) typ =
       let tAbs = eraseElaboratedAnn $ extractAnn e in
       AnnTApp <$> go ctxt e tAbs <*> pure t <*> pure (ann typ) <*> pure l
