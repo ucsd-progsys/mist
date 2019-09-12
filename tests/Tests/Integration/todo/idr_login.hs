@@ -23,23 +23,27 @@ thenn = undefined
 pure :: rforall a, p, q.  x:a -> ST <p >q >a
 pure = undefined
 
+getStr :: rforall p, q. ST <p >q >Int
+getStr = undefined
+
 -- | Some opaque implementation of pointers to `Int` ------------------------
 
 -- | Allocating a fresh `Int` with value `0`
-new :: rforall a. ST <a >a >Var
+new :: rforall a. ST <a >a >Int
 new = undefined
 
-read :: hg:(Map <Var >Access) ~> p:Var -> ST <{h:Map <Var >Access | h == hg} >{h:Map <Var >Access | h == hg} >{v:Access| v == select hg p}
+read :: hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
 read = undefined
 
-write :: h:(Map <Var >Access) ~> p:Var -> v:Access -> ST <{hg:Map <Var >Access | h == hg} >{hg:Map <Var >Access | store h p v == hg} >Unit
+write :: h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
 write = undefined
 
 -----------------------------------------------------------------------------
--- data Access = LoggedOut | LoggedIn
-loggedOut as Access
+-- Interface to the server
+-- data Int = LoggedOut | LoggedIn
+loggedOut as Int
 loggedOut = 0
-loggedIn as Access
+loggedIn as Int
 loggedIn = 1
 
 -- data LoginResult = OK | BadPassword
@@ -48,36 +52,46 @@ oK = 0
 badPassword as LoginResult
 badPassword = 1
 
--- data Store :: Access -> Type
--- Store x = State String -- represents secret data
-
-withConnection :: rforall p, q, a. init:(Map <Var >Access) ~> (server:Var ~> (ST <{v:Map <Var >Access | v = init } >{v:Map <Var >Access | select server v = loggedOut} >{v:Var | v = server}) -> ST <p >q >a) -> ST <p >q >a
-withConnection = \f -> (bind new (\v -> f (thenn (write v loggedOut) (pure v))))
-
-{-
-disconnect :: (store : Var) -> ST m () [remove store (Store LoggedOut)]
-disconnect store = delete store
--}
-
-readSecret :: stor : Var -> ST <{v:Map <Var >Access | select v stor = loggedIn } >{v:Map <Var >Access | select v stor = loggedIn } >Int
-readSecret = \ stor -> read stor
-
 {-
 login :: (store : Var) ->
         ST m LoginResult [store ::: Store LoggedOut :->
                            (\res => Store (case res of
-                                                OK => LoggedIkkn
+                                                OK => LoggedIn
                                                 BadPassword => LoggedOut))]
 login store = do putStr "Enter password: "
                  p <- getStr
                  if p == "Mornington Crescent"
                     then pure OK
                     else pure BadPassword
+                    -}
 
+login as st:Int ~> server:Int -> ST <{v:Map <Int >Int | select server v = loggedOut} >{v:Map <Int >Int | select server v = st} >{v:Int | v == st}
+login = \store -> bind getStr (\pw -> if pw == 42 then pure oK else pure badPassword)
+
+{-
 logout :: (store : Var) ->
          ST m () [store ::: Store LoggedIn :-> Store LoggedOut]
 logout store = pure ()
+-}
 
+logout as server:Int -> ST <(Map <Int >Int) >{v:Map <Int >Int | select server v = loggedOut} >Unit
+logout = Unit
+-----------------------------------------------------------------------------
+
+
+{-
+disconnect :: (store : Int) -> ST m () [remove store (Store LoggedOut)]
+disconnect store = delete store
+-}
+
+withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init } >{v:Map <Int >Int | select server v = loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
+withConnection = \f -> (bind new (\v -> f (thenn (write v loggedOut) (pure v))))
+
+{- readSecret : (store : Var) -> ST m String [store ::: Store LoggedIn] -}
+readSecret :: m:(Map <Int >Int) ~> stor : {v : Int | select m v = loggedIn} -> ST <{v:Map <Int >Int | v = m} >{v:Map <Int >Int | v = m } >Int
+readSecret = \ stor -> read stor
+
+{-
 getData :: (ConsoleIO m, DataStore m) => ST m () []
 getData = do st <- connect
              OK <- login st
@@ -88,7 +102,13 @@ getData = do st <- connect
              logout st
              disconnect st
 
-
-main :: IO ()
-main = run getData
 -}
+
+getData :: rforall p, q. ST <p >q >Unit
+getData = withConnection (\conn -> thenn conn (pure Unit))
+-- getData = withConnection (\stserver ->
+--           bind stserver (\server ->
+--           bind (login server) (\status ->
+--           if status == loggedIn
+--              then thenn (readSecret server) (logout server)
+--              else pure Unit)))
