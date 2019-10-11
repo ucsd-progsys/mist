@@ -67,15 +67,16 @@ login store = do putStr "Enter password: "
 
 -- TODO make this spec return oK/badPassword, not loggedIn/loggedOut
 login as rforall p, q, r.
-         server:Int
+          chan:(Map <Int >Int) ~>
+          server:Int
          -> (st:Int ~>
               (ST
-              <{v:Map <Int >Int | select v server = loggedOut}
-              >{v:Map <Int >Int | select v server = st}
+              <{v:Map <Int >Int | (v == chan) /\ (select v server = loggedOut)}
+              >{v:Map <Int >Int | v == store chan server st}
               >{v:Int | v == st})
            -> ST <p >q >r)
         -> ST <p >q >r
-login = \store -> bind getStr (\pw -> if pw == 42 then pure oK else pure badPassword)
+login = \store -> bind getStr (\pw -> if pw == 42 then pure loggedIn else pure loggedOut)
 
 {-
 logout :: (store : Var) ->
@@ -93,12 +94,15 @@ disconnect :: (store : Int) -> ST m () [remove store (Store LoggedOut)]
 disconnect store = delete store
 -}
 
-withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init } >{v:Map <Int >Int | select v server = loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
+withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init } >{v:Map <Int >Int | v == store init server loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
 withConnection = \f -> (bind new (\v -> f (thenn (write v loggedOut) (pure v))))
 
 {- readSecret : (store : Var) -> ST m String [store ::: Store LoggedIn] -}
-readSecret :: rforall p,q,a. mm:(Map <Int >Int) ~> stor : {v: Int | select mm v = loggedIn} -> (m:{v:Map <Int >Int | v = mm} ~> (ST <{v:Map <Int >Int | v = m} >{v:Map <Int >Int | v = m} >Int) -> ST <p >q >a) -> ST <p >q >a
-readSecret = \stor -> \f -> f (read stor)
+readSecret :: -- rforall p,q,a.
+  m : (Map <Int >Int) ~>
+  stor : {v: Int | select m v = loggedIn} ->
+  ST <{v:Map <Int >Int | v = m} >{v:Map <Int >Int | v = m} >Int
+readSecret = \stor -> (read stor)
 
 {-
 getData :: (ConsoleIO m, DataStore m) => ST m () []
@@ -113,16 +117,10 @@ getData = do st <- connect
 
 -}
 
--- mm gets m, but somehow neither get st. the constraint under mm relating
--- to st involves kvar \<kvar##283\> (hmm, how did I find that kvar again?)
-rs :: st:(Map <Int >Int) ~> server : Int ->  ST <{v:Map <Int >Int | (v = st) {- /\ (select v server = loggedIn)-} } >(Map >Int >Int) >Unit
-rs = \server -> readSecret server (\secret -> logout server)
--- getData :: it:(Map <Int >Int) ~> ST <{v:Map <Int >Int | v = it} >(Map <Int >Int) >Unit
--- -- getData =  withConnection (\conn -> thenn conn (pure 0))
--- getData = withConnection (\conn ->
---           bind conn (\server ->
---           login server (\session ->
---           bind session (\status ->
---           if status == loggedIn
---               then readSecret server (\secret -> logout server)
---               else pure Unit))))
+getData :: it:(Map <Int >Int) ~> ST <{v:Map <Int >Int | v = it} >(Map <Int >Int) >Int
+-- getData =  withConnection (\conn -> thenn conn (pure 0))
+getData = withConnection (\conn ->
+          bind conn (\server ->
+          login server (\status ->
+          bind status (\st ->
+                      if st == loggedIn then readSecret server else pure 0))))
