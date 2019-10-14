@@ -102,6 +102,8 @@ data Prim
   | Lte
   | Equal
   | And
+  | Or
+  | Implies
   | Elem
   | Union
   | SetAdd
@@ -331,6 +333,8 @@ instance PPrint Prim where
   pprint Lte     = ">="
   pprint Equal   = "=="
   pprint And     = "&&"
+  pprint Or      = "||"
+  pprint Implies = "=>"
   pprint Elem    = "∈"
   pprint Union   = "∪"
   pprint SetDel  = "setMinus"

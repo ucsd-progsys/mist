@@ -290,6 +290,8 @@ binops =
     , InfixL (pure op <*> primitive Lte "<=")
     , InfixL (pure op <*> primitive Less "<")
     , InfixL (pure op <*> primitive And "/\\")
+    , InfixL (pure op <*> primitive Or "\\/")
+    ,  InfixL (pure op <*> primitive Implies "=>")
     ]
   ]
   where

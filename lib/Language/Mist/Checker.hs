@@ -651,6 +651,8 @@ primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
 primType And     = pure $ TBool :=> (TBool :=> TBool)
+primType Or      = pure $ TBool :=> (TBool :=> TBool)
+primType Implies = pure $ TBool :=> (TBool :=> TBool)
 
 checkSub :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
 checkSub e t1 = do

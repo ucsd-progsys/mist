@@ -134,6 +134,8 @@ appToFixpoint e
 
   where
     binopToFixpoint And e1 e2 = F.PAnd [exprToFixpoint e1, exprToFixpoint e2]
+    binopToFixpoint Or e1 e2 = F.POr [exprToFixpoint e1, exprToFixpoint e2]
+    binopToFixpoint Implies e1 e2 = F.PImp (exprToFixpoint e1) (exprToFixpoint e2)
     binopToFixpoint op e1 e2 =
       case prim2ToFixpoint op of
         FBrel brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
