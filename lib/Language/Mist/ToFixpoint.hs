@@ -154,6 +154,7 @@ prim2ToFixpoint Less    = FBrel F.Lt
 prim2ToFixpoint Lte     = FBrel F.Le
 prim2ToFixpoint Greater = FBrel F.Gt
 prim2ToFixpoint Equal   = FBrel F.Eq
+prim2ToFixpoint NEqual  = FBrel F.Ne
 prim2ToFixpoint Elem    = FPrim (F.EVar T.setMem)
 prim2ToFixpoint SetAdd  = FPrim (F.EVar T.setAdd)
 prim2ToFixpoint SetDel  = FPrim (F.EVar "internal_setDel")

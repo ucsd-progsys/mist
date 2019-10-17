@@ -650,6 +650,9 @@ primType Select = do
 primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
+primType NEqual  = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  pure $ TForall (TV a) ((TVar $ TV a) :=> ((TVar $ TV a) :=> TBool))
 primType And     = pure $ TBool :=> (TBool :=> TBool)
 primType Or      = pure $ TBool :=> (TBool :=> TBool)
 primType Implies = pure $ TBool :=> (TBool :=> TBool)

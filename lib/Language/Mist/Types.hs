@@ -101,6 +101,7 @@ data Prim
   | Greater
   | Lte
   | Equal
+  | NEqual
   | And
   | Or
   | Implies
@@ -332,6 +333,7 @@ instance PPrint Prim where
   pprint Greater = ">"
   pprint Lte     = ">="
   pprint Equal   = "=="
+  pprint NEqual  = "/="
   pprint And     = "&&"
   pprint Or      = "||"
   pprint Implies = "=>"
