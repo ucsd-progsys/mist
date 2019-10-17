@@ -35,7 +35,6 @@ import System.Console.CmdArgs.Verbosity
 
 solve :: Measures -> NNF HC.Pred -> IO (F.Result (Integer, (String, SourceSpan)))
 solve measures constraints = do
-  setVerbosity Quiet
   S.solve cfg (HC.Query [] (collectKVars fixpointConstraint) fixpointConstraint (measureHashMap measures) mempty)
   where
     fixpointConstraint = toHornClause constraints
