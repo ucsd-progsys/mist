@@ -6,8 +6,8 @@ measure update :: Int -> Int -> Int
 undefined as rforall a. a
 undefined = 0
 
-assert :: {v:Bool | v} -> Unit
-assert = \tru -> Unit
+assert :: {v:Bool | v} -> Int
+assert = \tru -> 0
 
 -----------------------------------------------------------------------------
 -- | The ST Monad -----------------------------------------------------------
@@ -35,6 +35,13 @@ fmap :: rforall a, b, p, q, s, t.
   ST <s >t <p >q >b
 fmap = \f x -> bind x (\xx -> pure (f xx))
 
+-- blocking
+par :: rforall p, q, r, s, t, u, a, b.
+  ST <s >t <p >q >a ->
+  ST <t >u <p >q >b ->
+  ST <s >u <p >q >(Pair >a >b)
+par = undefined
+
 -----------------------------------------------------------------------------
 -- | State Space --- This is where we write the spec
 -----------------------------------------------------------------------------
@@ -47,6 +54,8 @@ tocked :: {v : Int | v == 2}
 tocked = 2
 initial :: {v : Int | v == 3}
 initial = 3
+stale :: {v : Int | v == 4}
+stale = 4
 
 tick :: Int
 tick = 0
@@ -57,7 +66,7 @@ tock = 1
 -- those yet
 statemachine as {v: Int |
                           (update tick initial = ticked)
-                      /\  (update tock initial = tocked)
+                      /\  (update tock initial = error)
                       /\  (update tick tocked = ticked)
                       /\  (update tock ticked = tocked)
                       /\  (update tock tocked = error)
@@ -78,23 +87,72 @@ chan :: rforall a.
      >{v:Int | v == n}
 chan = undefined
 
-send :: rforall p,q,a,r,s,t,u.
+fail :: rforall a, r, s.
+  m : (Map <Int >Int) ~>
+  c : Int ->
+  ST <r
+     >s
+     <{v:Map <Int >Int | v == m}
+     >{v:Map <Int >Int | v == store m c error}
+     >{v:Int | v == c}
+fail = undefined
+
+send as rforall p,q,a,s,t,u.
   m : (Map <Int >Int) ~>
   channel : Int ->
   message : {v : Int | (update v (select m channel) /= error)} ->
-    ((ST <t >u
+  -- should be a fresh channel, not just a different channel.
+  -- technically this is a conservative approximation, so we're fine
+    ( newchan : {v : Int  | v /= channel } ~>
+      (ST <t >u
        <{v:Map <Int >Int | v == m}
-       >{v:Map <Int >Int | v == store m channel (update message (select m channel))}
-       >{v:Int | v == channel}) ->
-    ST <r >s <p >q >a)
-   -> ST <r >s <p >q >a
+       >{v:Map <Int >Int | v == store (store m newchan (update message (select m channel))) channel stale}
+       >{v:Int | v == newchan}) ->
+    ST <t >s <p >q >a)
+   -> ST <t >s <p >q >a
 send = undefined
 
+recv as rforall p,q,a,s,t,u.
+  m : (Map <Int >Int) ~>
+  channel : Int ->
+    ( newchan : {v : Int  | v /= channel } ~>
+      message : { v: Int  | (update v (select m channel) /= error) 
+                          -- again, poor man's enums
+                          /\( (v == tock) \/ (v == tick) )}->
+      (ST <t >u
+       <{v:Map <Int >Int | v == m}
+       >{v:Map <Int >Int | v == store (store m newchan (update message (select m channel))) channel stale}
+       >{v:Int | v == newchan}) ->
+    ST <t >s <p >q >a)
+   -> ST <t >s <p >q >a
+recv = undefined
+
 -----------------------------------------------------------------------------
--- | The Client
-main ::
-  empty:(Map <Int >Int) ~>
-  ST <{v:Int| v == 0} >Int <{v:Map <Int >Int| v == empty} >(Map <Int >Int) >Int
-main = bind chan (\c -> send c tick (\c -> bind c (\c -> send c tock (\c -> c))))
+-- | The Clients
 
+ticker ::
+  start:(Map <Int >Int) ~>
+  ch : {v : Int | select start v == initial } ->
+  ST <Int >Int <{v:Map <Int >Int| v == start} >(Map <Int >Int) >Int
+ticker = (\c ->
+         send c tick (\c ->
+         bind c (\c ->
+         recv c (\msg c ->
+                if msg == tock then c else pure (assert False)))))
+tocker ::
+  start:(Map <Int >Int) ~>
+  ch : {v : Int | select start v == initial } ->
+  ST <Int >Int <{v:Map <Int >Int| v == start} >(Map <Int >Int) >Int
+tocker = (\c ->
+         recv c (\msg c ->
+                if msg == tick then
+         bind c (\c ->
+         send c tock (\c -> c))
+         -- proves that this state is unreachable as long as all
+         -- connections to the channel obey the state machine
+                else pure (assert False)))
 
+-- proves that these are consistent with a shared channel, but not that
+-- they fully determine it
+main :: m:(Map <Int >Int) ~> ST <{v:Int | v == 0} >Int <{v: Map <Int >Int | v == m} >(Map <Int >Int) >(Pair >Int >Int)
+main = bind chan (\c -> par (ticker c) (tocker c))
