@@ -20,6 +20,7 @@ import Tests.Utils
 import Language.Mist.Runner
 import Language.Mist.Config
 import Language.Mist.UX (Result, SourceSpan, UserError)
+import System.Console.CmdArgs.Verbosity
 
 integrationTests = testGroupM "Integration"
   [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" (mkTest mistSuccess)
@@ -44,6 +45,7 @@ mkTest :: (Result () -> IO ()) -> FilePath -> TestName -> TestTree
 mkTest testPred dir file = testCase file $ do
   createDirectoryIfMissing True $ takeDirectory log
   withFile log WriteMode $ \h -> do
+    setVerbosity Quiet
     ec <- runMist h (defConfig {srcFile = test})
     testPred ec
   where

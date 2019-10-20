@@ -68,6 +68,7 @@ test-suite test
   ghc-options:      -threaded
   main-is:          Main.hs
   build-depends:    base,
+                    cmdargs,
                     directory,
                     filepath,
                     tasty,
