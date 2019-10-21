@@ -19,6 +19,9 @@ import qualified Control.Exception as Ex
 
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
+
+import Debug.Trace (traceM)
+
 type R = HC.Pred
 
 {-
@@ -64,13 +67,15 @@ esHandle :: Handle -> ([UserError] -> IO a) -> [UserError] -> IO a
 esHandle h exitF es = renderErrors es >>= hPutStrLn h >> exitF es
 
 -----------------------------------------------------------------------------------
-mist :: Located a => Measures -> ParsedExpr a -> Result (Measures, ElaboratedExpr R a)
+mist :: (PPrint a, Located a) => Measures -> ParsedExpr a -> Result (Measures, ElaboratedExpr R a)
 -----------------------------------------------------------------------------------
 mist measures expr =
   case wellFormed (unParsedExpr expr) of
     [] -> do
       let (measures', uniqueExpr) = uniquify (measures, expr)
+      -- !_ <- traceM $ pprint uniqueExpr
       let predExpr = parsedExprPredToFixpoint uniqueExpr
       result <- elaborate predExpr
+      -- !_ <- traceM $ pprint result
       pure (measures', result)
     errors -> Left errors

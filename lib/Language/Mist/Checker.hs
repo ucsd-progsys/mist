@@ -794,9 +794,9 @@ errUnboundVar l x = mkError (printf "Unbound variable '%s'" x) l
 errUnboundFun l f = mkError (printf "Function '%s' is not defined" f) l
 errUnannRecursiveBinder l x = mkError (printf "Recursive function %s must be annotated" (show x)) l
 errSolvingSolvedExistential = error "TODO: solving solved existential"
-errApplyNonFunction l typ = mkError (printf "Applying non-function of type %s" (show typ)) l
+errApplyNonFunction l typ = mkError (printf "Applying non-function of type %s" (pprint typ)) l
 errInfiniteTypeConstraint _ _ = error "TODO: infinite type constraint"
-errCheckingError l typ = mkError (printf "Checking expression has type %s failed" (show typ)) l
+errCheckingError l typ = mkError (printf "Checking expression has type %s failed" (pprint typ)) l
 errConstructorMismatch ctor1 ctor2 = error $ "TODO: constructor mismatch" ++ show ctor1 ++ show ctor2
 errConstructorLengthMismatch = error "TODO: constructor application length mismatch"
 --------------------------------------------------------------------------------

@@ -7,9 +7,9 @@ bind as rforall a, b. forall s. w1:s ~> w2:s ~> w3:s ~> (ST <{v:s|v==w1} >{v:s|v
   -> ST <{v:s|v==w1} >{v:s|v==w3} >b
 bind = (0)
 
-thenn as rforall a, b. forall s. w1:s ~> w2:s ~> w3:s ~> (ST <{v:s|v==w1} >{v:s|v==w2} >a)
+thenn as rforall a, b. forall s. ww1:s ~> w2:s ~> w3:s ~> (ST <{v:s|v==ww1} >{v:s|v==w2} >a)
   -> (ST <{v:s|v==w2} >{v:s|v==w3} >b)
-  -> ST <{v:s|v==w1} >{v:s|v==w3} >b
+  -> ST <{v:s|v==ww1} >{v:s|v==w3} >b
 thenn = (0)
 
 get as rforall s. wg:s ~> Bool -> ST <{v:s|v==wg} >{v:s|v==wg} >{v:s|v==wg}

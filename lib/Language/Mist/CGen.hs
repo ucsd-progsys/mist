@@ -21,6 +21,8 @@ import Language.Mist.Types
 import Language.Mist.Names
 import Data.Bifunctor (second)
 
+import Debug.Trace (traceM)
+
 -------------------------------------------------------------------------------
 -- Data Structures
 -------------------------------------------------------------------------------
