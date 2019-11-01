@@ -20,7 +20,7 @@ thenn :: rforall a, b, p, q, r.
   -> ST <p >r >b
 thenn = undefined
 
-pure :: rforall a, p, q.  x:a -> ST <p >q >a
+pure :: rforall a, p.  x:a -> ST <p >p >a
 pure = undefined
 
 getStr :: rforall p, q. ST <p >q >Int
@@ -29,6 +29,7 @@ getStr = undefined
 -- | Some opaque implementation of pointers to `Int` ------------------------
 
 -- | Allocating a fresh `Int` with value `0`
+-- new as rforall a, q. (xnew:Int ~> (ST <a >a >{v:Int | v = xnew}) -> q) -> q
 new :: rforall a. ST <a >a >Int
 new = undefined
 
@@ -94,8 +95,13 @@ disconnect :: (store : Int) -> ST m () [remove store (Store LoggedOut)]
 disconnect store = delete store
 -}
 
-withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init } >{v:Map <Int >Int | v == store init server loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
-withConnection = \f -> (bind new (\v -> f (thenn (write v loggedOut) (pure v))))
+-- connect :: init:(Map <Int >Int) ~> server:Int <~ (ST <{v:Map <Int >Int | v = init} >{v:Map <Int >Int | v == store init server loggedOut} >{v:Int | v = server})
+-- connect = bind new (\v -> thenn (write v loggedOut) (pure v))
+
+withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init} >{v:Map <Int >Int | v == store init server loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
+withConnection = \k -> (bind new (\v -> k (thenn (write v loggedOut) (pure v))))
+-- withConnection = \k -> k (bind new (\v -> (thenn (write v loggedOut) (pure v))))
+-- withConnection = \k -> new (\cv -> k (bind cv (\v -> (thenn (write v loggedOut) (pure v)))))
 
 {- readSecret : (store : Var) -> ST m String [store ::: Store LoggedIn] -}
 readSecret :: -- rforall p,q,a.

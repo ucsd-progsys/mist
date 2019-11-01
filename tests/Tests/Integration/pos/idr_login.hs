@@ -20,7 +20,7 @@ thenn :: rforall a, b, p, q, r.
   -> ST <p >r >b
 thenn = undefined
 
-pure :: rforall a, p, q.  x:a -> ST <p >q >a
+pure :: rforall a, p.  x:a -> ST <p >p >a
 pure = undefined
 
 getStr :: rforall p, q. ST <p >q >Int
