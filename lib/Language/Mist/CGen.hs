@@ -34,47 +34,7 @@ type CGenConstraints r a = (Located a, Predicate r, Show r, Show a, PPrint r, Eq
 -- | generateConstraints is our main entrypoint to this module
 -------------------------------------------------------------------------------
 generateConstraints :: CGenConstraints r a => ElaboratedExpr r a -> NNF r
-generateConstraints = fst . runFresh . strengthening [] TUnit
-
-isApplicationForm :: ElaboratedExpr r a -> Bool
-isApplicationForm App{} = True
-isApplicationForm TApp{} = True
-isApplicationForm Id{} = True
-isApplicationForm Prim{} = True
-isApplicationForm Number{} = True
-isApplicationForm Boolean{} = True
-isApplicationForm Unit{} = True
-isApplicationForm _ = False
-
-strengthening :: CGenConstraints r a =>
-        Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-strengthening env t e = do
-  (c, outT) <- _strengthening env t e
-  -- !_ <- traceM $ "strengthening: " <> "⊢ " <> pprint e <> "\n\t<= " <> pprint t <> "\n\t ↑ " <> pprint outT <> "\n\t ⊣ " <> show c <> "\n\n"
-  pure (c, outT)
-
-_strengthening :: CGenConstraints r a =>
-        Env r a -> Type -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-_strengthening env _ e
-  | isApplicationForm e = synth env e
-_strengthening _ _ (Lam (AnnBind _ (Just (ElabAssume tx)) _) _ _)
-  = pure (CAnd [], tx)
-_strengthening env (_ :=> te) (Lam (AnnBind x (Just (ElabUnrefined tx)) l) e _) = do
-  tHat <- fresh l env tx
-  (c, t) <- strengthening ((x, tHat):env) te e
-  pure (mkAll x tHat c, RFun (Bind x l) tHat t)
-_strengthening env (_ :=> te) (Lam (AnnBind x (Just (ElabRefined tx)) loc) e _) = do
-  (c, t) <- strengthening ((x, tx):env) te e
-  pure (mkAll x tx c, RFun (Bind x loc) tx t)
-_strengthening _ _ (Lam _ _ _)
-  = error "should not occur"
-_strengthening env (TForall _ typ) (TAbs tvar e _) = do
-  (c, t) <- strengthening env typ e
-  pure (c, RForallP tvar t)
-_strengthening env typ e = do
-  tHat <- fresh (extractLoc e) env typ
-  c <- check env e tHat
-  pure (c,tHat)
+generateConstraints = fst . runFresh . synth []
 
 synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
@@ -85,11 +45,55 @@ synth env e = do
 
 _synth :: CGenConstraints r a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-_synth _ e@Unit{}    = (Head (sourceSpan e) true,) <$> prim e
-_synth _ e@Number{}  = (Head (sourceSpan e) true,) <$> prim e
+_synth _ e@Unit{} = (Head (sourceSpan e) true,) <$> prim e
+_synth _ e@Number{} = (Head (sourceSpan e) true,) <$> prim e
 _synth _ e@Boolean{} = (Head (sourceSpan e) true,) <$> prim e
-_synth _ e@Prim{}    = (Head (sourceSpan e) true,) <$> prim e
-_synth env e@(Id x _)  = (Head (sourceSpan e) true,) <$> single env x
+_synth _ e@Prim{} = (Head (sourceSpan e) true,) <$> prim e
+_synth env e@(Id x _) = (Head (sourceSpan e) true,) <$> single env x
+
+_synth env (If (Id y _) e1 e2 l) = do
+  idT <- refreshId ("then:"<>y)
+  idF <- refreshId ("else:"<>y)
+  -- TODO make these check, after pulling the right thing out of l
+  (c1, t1) <- synth env e1
+  (c2, t2) <- synth env e2
+  tHat <- fresh l env (eraseRType t1) -- could just as well be t2
+  cSub1 <- (t1 <: tHat) l
+  cSub2 <- (t2 <: tHat) l
+  let c = CAnd [All idT TBool (var y) (CAnd [c1, cSub1]),
+                All idF TBool (varNot y) (CAnd [c2, cSub2])]
+  pure (c, tHat)
+_synth _ If{} = error "INTERNAL ERROR: if not in ANF"
+
+_synth env (Let b e1 e2 loc) = do
+  (tx, c, rtype) <- go b
+  tHat <- fresh loc env (eraseRType rtype)
+  cSub <- (rtype <: tHat) loc
+  pure (mkAll (bindId b) tx (CAnd [c, cSub]), tHat)
+
+  where
+  -- go returns tx, c, rtype where
+  -- tx is the bound type
+  -- c is the constraints that should go under the generalized implication
+  -- rtype is the synthesized type which will need to be guarded by fresh
+  go (AnnBind x (Just (ElabAssume tx)) _) = do
+    (c, t) <- synth ((x, tx): env) e2
+    pure (tx, c, t)
+
+  go (AnnBind x (Just (ElabRefined tx)) _) = do
+    c1 <- check ((x, tx):env) e1 tx
+    (c2, t2) <- synth ((x, tx):env) e2
+    pure (tx, CAnd [c1, c2], t2)
+
+  -- Unrefined
+  -- Not allowed to be recursive
+  go (AnnBind x (Just (ElabUnrefined typ)) l) = do
+    t1 <- fresh l env typ
+    c1 <- check env e1 t1
+    (c2, t2) <- synth ((x, t1):env) e2
+    pure (t1, CAnd [c1, c2], t2)
+
+  go (AnnBind _ Nothing _) = error "INTERNAL ERROR: annotation missing on let"
 
 _synth env (App e (Id y loc) _) = do
   (c, t) <- synth env e
@@ -97,6 +101,20 @@ _synth env (App e (Id y loc) _) = do
   pure (CAnd [c, c'], t')
 
 _synth _ App{} = error "argument is non-variable"
+
+_synth _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
+_synth _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) = error "should not occur"
+
+_synth env (Lam (AnnBind x (Just (ElabRefined tx)) loc) e _) = do
+  (c, t) <- synth ((x, tx):env) e
+  pure (mkAll x tx c, RFun (Bind x loc) tx t)
+
+_synth env (Lam (AnnBind x (Just (ElabUnrefined typ)) loc) e _) = do
+  tHat <- fresh loc env typ
+  (c, t) <- synth ((x, tHat):env) e
+  pure (mkAll x tHat c, RFun (Bind x loc) tHat t)
+
+-- TODO: ILam?
 
 _synth env (TApp e typ loc) = do
   (c, scheme ) <- synth env e
@@ -109,7 +127,9 @@ _synth env (TApp e typ loc) = do
         pure (c, substReftReft (alpha |-> tHat) t)
      _ -> error "TApp on not-a-scheme"
 
-_synth _ _ = error "Internal Error: Synth called on non-application form"
+_synth env (TAbs tvar e _) = do
+  (c, t) <- synth env e
+  pure (c, RForall tvar t)
 
 stale :: CGenConstraints r a => a -> Type -> Fresh (RType r a)
 stale loc (TVar alpha) = do
@@ -179,9 +199,9 @@ _check :: CGenConstraints r a => Env r a -> ElaboratedExpr r a -> RType r a -> F
 _check env (ILam (Bind x _) e _) (RIFun y ty t) =
   mkAll x ty <$> check ((x, ty):env) e (substReftPred (bindId y |-> x) t)
 _check env e rt@RIFun{} = do
-    let (ns, tx) = splitImplicits rt
-    c1 <- check (ns ++ env) e tx
-    pure $ foldr (\(z, tz) c -> mkAll z tz c) c1 ns
+  let (ns, tx) = splitImplicits rt
+  c1 <- check (ns ++ env) e tx
+  pure $ foldr (\(z, tz) c -> mkAll z tz c) c1 ns
 
 _check env (Let b e1 e2 _) t2
   -- Annotated with an assume
@@ -197,11 +217,11 @@ _check env (Let b e1 e2 _) t2
 
   -- Unrefined
   -- Not allowed to be recursive
-  | (AnnBind x (Just (ElabUnrefined typ)) _loc) <- b = do
-    (c1, t1) <- strengthening env typ e1
-    c2 <- check ((x, t1):env) e2 t2
-    let c' = mkAll x t1 c2
-    pure $ CAnd [c1, c']
+  | (AnnBind x (Just (ElabUnrefined typ)) loc) <- b = do
+    tHat <- fresh loc env typ
+    c1 <- check env e1 tHat
+    c2 <- check ((x, tHat):env) e2 t2
+    pure $ CAnd [c1, mkAll x tHat c2]
 
   | (AnnBind _ Nothing _) <- b = error "INTERNAL ERROR: annotation missing on let"
 
@@ -231,7 +251,7 @@ _check env (App e (Id y loc) _) t = do
   pure $ CAnd [c, c']
 
 _check env e t = do
-  (c, t') <- strengthening env (eraseRType t) e
+  (c, t') <- synth env e
   cSub <- (t' <: t) (sourceSpan e)
   pure $ CAnd [c, cSub]
 
@@ -314,12 +334,10 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
       c <- (t2 <: t1) locable
       c' <- (substReftPred (x1 |-> x2) t1' <: t2') locable
       pure $ CAnd [c, mkAll x2 t2 c']
-    go (RForall alpha t1) (RForall beta t2)
-      | alpha == beta = (t1 <: t2) locable
-      | otherwise = error "Constraint generation subtyping error"
-    go (RForallP alpha t1) (RForallP beta t2)
-      | alpha == beta = (t1 <: t2) locable
-      | otherwise = error "Constraint generation subtyping error"
+    go (RForall alpha t1) (RForall beta t2) =
+      (t1 <: (substReftType ((unTV beta) |-> (TVar alpha)) t2)) locable
+    go (RForallP alpha t1) (RForallP beta t2) =
+      (t1 <: (substReftType ((unTV beta) |-> (TVar alpha)) t2)) locable
     go (RApp c1 vts1) (RApp c2 vts2)
       | c1 == c2  = CAnd <$> sequence (concat $ zipWith (constructorSub locable) vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
