@@ -5,6 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses, FunctionalDependencies #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Language.Mist.Types
   (
@@ -497,30 +498,36 @@ data NNF r
   | Any Id Type r (NNF r)       -- ^ :x:τ.p => c
   deriving (Show, Functor, Eq)
 
--- | Type class to represent predicates
-class Predicate r where
-  true :: r
-  false :: r
-  var ::  Id -> r
-  varNot ::  Id -> r
-  varsEqual :: Id -> Id -> r -- ^ builds a refinement that the two variables are equivalent
-  prim :: (MonadFresh m) => Expr t a -> m (RType r a) -- ^ Gives a specification to primitives
+-- | Type class to represent predicates and their underlying expressions
+class Predicate p e | p -> e, e -> p where
+  true :: p
+  false :: p
+  makePred :: e -> p
+  var :: Id -> e
+  exprNot :: e -> e
+  varsEqual :: Id -> Id -> e -- ^ builds a refinement that the two variables are equivalent
+  interp :: Expr t a -> Maybe e
+  prim :: (MonadFresh m, PPrint t) => Expr t a -> m (RType p a) -- ^ Gives a specification to primitives
                                                       -- TODO: this is a partial function
-  strengthen :: r -> r -> r
-  varSubst :: Subst Id -> r -> r -- ^ [x/y]r
-  buildKvar :: Id -> [Id] -> r -- ^ k(x1, ..., xn)
+  strengthen :: p -> p -> p
+  varSubstP :: Subst Id -> p -> p
+  substE :: Subst e -> p -> p
+  buildKvar :: Id -> [Id] -> p -- ^ k(x1, ..., xn)
 
 
-instance Predicate () where
+instance Predicate () () where
     true = ()
     false = ()
     var _ = ()
-    varNot _ = ()
+    exprNot _ = ()
     varsEqual _ _ = ()
     prim _ = undefined
+    interp _ = Nothing
+    makePred _ = ()
 
     strengthen _ _ = ()
-    varSubst _ _ = ()
+    varSubstP _ _ = ()
+    substE _ _ = ()
     buildKvar _ _ = ()
 
 instance Located (NNF r) where

@@ -27,6 +27,7 @@ module Language.Mist.Names
   , subst
 
   , substReftPred
+  , substReftPredWith
   , substReftType
   , substReftReft
 
@@ -73,20 +74,23 @@ fromJustOrErr e = fromMaybe $ error $ "Unbound identifer: " ++ show e
 --------------------------------------------------------------------------------
 -- | Substitutes in the predicates of an RType
 substReftPred :: (Subable e r) => Subst e -> RType r a -> RType r a
-substReftPred su (RApp c ts) =
-  RApp c $ second (substReftPred su) <$> ts
-substReftPred su (RBase bind typ expr) =
-  RBase bind typ (subst (M.delete (bindId bind) su) expr)
-substReftPred su (RIFun bind rtype1 rtype2) =
-  RIFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
-substReftPred su (RFun bind rtype1 rtype2) =
-  RFun bind (substReftPred su rtype1) (substReftPred (M.delete (bindId bind) su) rtype2)
-substReftPred su (RRTy bind rtype expr) =
-  RRTy bind (substReftPred su rtype) (subst (M.delete (bindId bind) su) expr)
-substReftPred su (RForall tvars r) =
-  RForall tvars (substReftPred su r)
-substReftPred su (RForallP tvars r) =
-  RForallP tvars (substReftPred su r)
+substReftPred = substReftPredWith subst
+
+substReftPredWith :: (Subst e -> r -> r) -> Subst e -> RType r a -> RType r a
+substReftPredWith f su (RApp c ts) =
+  RApp c $ second (substReftPredWith f su) <$> ts
+substReftPredWith f su (RBase bind typ expr) =
+  RBase bind typ (f (M.delete (bindId bind) su) expr)
+substReftPredWith f su (RIFun bind rtype1 rtype2) =
+  RIFun bind (substReftPredWith f su rtype1) (substReftPredWith f (M.delete (bindId bind) su) rtype2)
+substReftPredWith f su (RFun bind rtype1 rtype2) =
+  RFun bind (substReftPredWith f su rtype1) (substReftPredWith f (M.delete (bindId bind) su) rtype2)
+substReftPredWith f su (RRTy bind rtype expr) =
+  RRTy bind (substReftPredWith f su rtype) (f (M.delete (bindId bind) su) expr)
+substReftPredWith f su (RForall tvars r) =
+  RForall tvars (substReftPredWith f su r)
+substReftPredWith f su (RForallP tvars r) =
+  RForallP tvars (substReftPredWith f su r)
 
 -- | Substitutes in the Types of an RType
 substReftType :: (Subable t Type) => Subst t -> RType r a -> RType r a
@@ -197,8 +201,8 @@ instance Subable (Expr t a) (Expr t a) where
 instance Subable Type a => Subable Type (Maybe a) where
   _subst su = fmap (_subst su)
 
-instance (Eq r, Show r, Predicate r) => Subable Id r where
-  _subst su r = varSubst su r
+instance (Eq p, Show p, Predicate p e) => Subable Id p where
+  _subst su p = varSubstP su p
 
 --------------------------------------------------------------------------------
 data FreshState = FreshState { freshInt :: Integer }

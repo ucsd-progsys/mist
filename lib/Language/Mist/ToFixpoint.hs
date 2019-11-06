@@ -102,46 +102,46 @@ safeTypeToSort (TForall{}) = Nothing
 --------------------------------------------------------------------
 -- Expressions
 --------------------------------------------------------------------
-exprToFixpoint :: M.Expr t a -> F.Expr
-exprToFixpoint (AnnNumber n _ _)       = F.ECon (F.I n)
-exprToFixpoint (AnnBoolean True _ _)   = F.PTrue
-exprToFixpoint (AnnBoolean False _ _)  = F.PFalse
-exprToFixpoint (AnnId x _ _)           = idToFix x
-exprToFixpoint (AnnPrim _ _ _)         = error "primitives should be handled by appToFixpoint"
-exprToFixpoint (AnnIf e1 e2 e3 _ _)    =
-  F.EIte (exprToFixpoint e1) (exprToFixpoint e2) (exprToFixpoint e3)
+exprToFixpoint :: M.Expr t a -> Maybe F.Expr
+exprToFixpoint (AnnNumber n _ _) = pure $ F.ECon (F.I n)
+exprToFixpoint (AnnBoolean True _ _) = pure $ F.PTrue
+exprToFixpoint (AnnBoolean False _ _) = pure $ F.PFalse
+exprToFixpoint (AnnId x _ _) = pure $ idToFix x
+exprToFixpoint (AnnPrim _ _ _) = error "primitives should be handled by appToFixpoint"
+exprToFixpoint (AnnIf e1 e2 e3 _ _) =
+  F.EIte <$> exprToFixpoint e1 <*> exprToFixpoint e2 <*> exprToFixpoint e3
 exprToFixpoint e@AnnApp{} = appToFixpoint e
-exprToFixpoint AnnLet{} = error "lets are currently unsupported inside refinements"
-exprToFixpoint (AnnUnit _ _)           = F.EVar (fromString "()")
-exprToFixpoint (AnnLam _bs _e2 _ _)      = error "TODO exprToFixpoint"
-exprToFixpoint (AnnTApp _e _typ _ _)      = error "TODO exprToFixpoint"
-exprToFixpoint (AnnTAbs _tvar _e _ _)      = error "TODO exprToFixpoint"
+exprToFixpoint AnnLet{} = Nothing -- lets are currently unsupported inside refinements
+exprToFixpoint (AnnUnit _ _) = pure $ F.EVar (fromString "()")
+exprToFixpoint (AnnLam _bs _e2 _ _) = Nothing -- error "TODO exprToFixpoint"
+exprToFixpoint (AnnTApp _e _typ _ _) = Nothing -- error "TODO exprToFixpoint"
+exprToFixpoint (AnnTAbs _tvar _e _ _) = Nothing -- error "TODO exprToFixpoint"
 
-appToFixpoint :: M.Expr t a -> F.Expr
+appToFixpoint :: M.Expr t a -> Maybe F.Expr
 appToFixpoint e
     | (AnnApp (AnnId n _ _ ) e1 _ _) <- e
     , "not" == MN.varHead n =
-      F.PNot (exprToFixpoint e1)
+      F.PNot <$> exprToFixpoint e1
     | AnnApp (AnnApp (AnnPrim op _ _) e1 _ _) e2 _ _ <- e =
       binopToFixpoint op e1 e2
     | AnnApp (AnnApp (AnnTApp (AnnPrim op _ _) _ _ _) e1 _ _) e2 _ _ <- e =
       binopToFixpoint op e1 e2
     | AnnApp f x _ _ <- e =
-      F.EApp (exprToFixpoint f) (exprToFixpoint x)
+      F.EApp <$> exprToFixpoint f <*> exprToFixpoint x
     | otherwise = error "non-application"
 
   where
-    binopToFixpoint And e1 e2 = F.PAnd [exprToFixpoint e1, exprToFixpoint e2]
-    binopToFixpoint Or e1 e2 = F.POr [exprToFixpoint e1, exprToFixpoint e2]
-    binopToFixpoint Implies e1 e2 = F.PImp (exprToFixpoint e1) (exprToFixpoint e2)
+    binopToFixpoint And e1 e2 = F.PAnd <$> sequence [exprToFixpoint e1, exprToFixpoint e2]
+    binopToFixpoint Or e1 e2 = F.POr <$> sequence [exprToFixpoint e1, exprToFixpoint e2]
+    binopToFixpoint Implies e1 e2 = F.PImp <$> exprToFixpoint e1 <*> exprToFixpoint e2
     binopToFixpoint op e1 e2 =
       case prim2ToFixpoint op of
-        FBrel brel -> F.PAtom brel (exprToFixpoint e1) (exprToFixpoint e2)
-        FBop bop -> F.EBin bop (exprToFixpoint e1) (exprToFixpoint e2)
+        FBrel brel -> F.PAtom brel <$> exprToFixpoint e1 <*> exprToFixpoint e2
+        FBop bop -> F.EBin bop <$> exprToFixpoint e1 <*> exprToFixpoint e2
         FPrim (F.EVar "internal_setDel") -> -- fixpoint's set_sng doesn't really work?
-          F.EApp (F.EApp (F.EVar T.setDif) $ exprToFixpoint e1)
-                 (F.EApp (F.EApp (F.EVar T.setAdd) (F.EApp (F.EVar T.setEmpty) (F.ECon $ F.I 0))) $ exprToFixpoint e2)
-        FPrim e -> F.EApp (F.EApp e (exprToFixpoint e1)) (exprToFixpoint e2)
+          F.EApp <$> (F.EApp (F.EVar T.setDif) <$> exprToFixpoint e1)
+                 <*> (F.EApp (F.EApp (F.EVar T.setAdd) (F.EApp (F.EVar T.setEmpty) (F.ECon $ F.I 0))) <$> exprToFixpoint e2)
+        FPrim e -> F.EApp <$> (F.EApp e <$> exprToFixpoint e1) <*> (exprToFixpoint e2)
 
 data FPrim = FBop F.Bop | FBrel F.Brel | FPrim F.Expr
 
@@ -162,12 +162,14 @@ prim2ToFixpoint Store  = FPrim (F.EVar T.mapSto)
 prim2ToFixpoint Select  = FPrim (F.EVar T.mapSel)
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
 
-instance Predicate HC.Pred where
+instance Predicate HC.Pred F.Expr where
   true = HC.Reft F.PTrue
   false = HC.Reft F.PFalse
-  var x = HC.Reft $ F.EVar $ fromString x
-  varNot x  = HC.Reft $ F.PNot $ F.EVar $ fromString x
-  varsEqual x y = HC.Reft $ F.PAtom F.Eq (F.EVar $ fromString x) (F.EVar $ fromString y)
+  var x = F.EVar $ fromString x
+  exprNot e = F.PNot $ e
+  varsEqual x y = F.PAtom F.Eq (F.EVar $ fromString x) (F.EVar $ fromString y)
+  interp e = exprToFixpoint e
+  makePred e = HC.Reft e
 
   strengthen (HC.PAnd p1s) (HC.PAnd p2s) = HC.PAnd (p1s ++ p2s)
   strengthen (HC.PAnd p1s) p2 = HC.PAnd (p2:p1s)
@@ -176,15 +178,18 @@ instance Predicate HC.Pred where
 
   buildKvar x params = HC.Var (fromString x) (fmap fromString params)
 
-  varSubst su (HC.Reft fexpr) = HC.Reft $ MAP.foldrWithKey substNameInFexpr fexpr su
+  varSubstP su (HC.Reft fexpr) = HC.Reft $ MAP.foldrWithKey substNameInFexpr fexpr su
     where
       substNameInFexpr oldName newName fexpr = F.subst1 fexpr (fromString oldName, F.EVar $ fromString newName)
-  varSubst su (HC.Var k params) =
+  varSubstP su (HC.Var k params) =
     let su' = MAP.map fromString $ MAP.mapKeys fromString su in
     HC.Var k $ fmap (\param -> MAP.findWithDefault param param su') params
-  varSubst su (HC.PAnd ps) =
-    HC.PAnd $ fmap (varSubst su) ps
+  varSubstP su (HC.PAnd ps) =
+    HC.PAnd $ fmap (varSubstP su) ps
 
+  substE su fexpr = MAP.foldrWithKey substFexpr fexpr su
+    where
+      substFexpr oldName newExpr fexpr = F.subst1 fexpr (fromString oldName, newExpr)
 
   prim e@AnnUnit{} = equalityPrim e TUnit
   prim e@AnnNumber{} = equalityPrim e TInt
@@ -192,11 +197,12 @@ instance Predicate HC.Pred where
   prim (AnnPrim op _ l) = primOp op l
   prim _ = error "prim on non primitive"
 
-equalityPrim :: (MonadFresh m) => M.Expr t a -> Type -> m (RType HC.Pred a)
+
+equalityPrim :: (MonadFresh m, PPrint t) => M.Expr t a -> Type -> m (RType HC.Pred a)
 equalityPrim e typ = do
   let l = extractLoc e
   vv <- refreshId $ "VV" ++ MN.cSEPARATOR
-  let reft = HC.Reft $ F.PAtom F.Eq (idToFix vv) (exprToFixpoint e)
+  let reft = HC.Reft $ F.PAtom F.Eq (idToFix vv) (fromMaybe (error $ "could not interperet " <> pprint e <> " as a fixpoint expression") (exprToFixpoint e))
   pure $ RBase (M.Bind vv l) typ reft
 
 primOp :: (MonadFresh m) => Prim -> a -> m (RType HC.Pred a)
@@ -237,7 +243,7 @@ primOp op l =
 
 -- | Converts a ParsedExpr's predicates from Exprs to Fixpoint Exprs
 parsedExprPredToFixpoint :: ParsedExpr a -> RefinedExpr HC.Pred a
-parsedExprPredToFixpoint = (first $ fmap (first (HC.Reft . exprToFixpoint . unParsedExpr))) . unParsedExpr
+parsedExprPredToFixpoint = (first $ fmap (first (HC.Reft . (fromMaybe (error "failed to convert predicate")) . exprToFixpoint . unParsedExpr))) . unParsedExpr
 
 idToFix :: Id -> F.Expr
 idToFix x = F.EVar (fromString x)
