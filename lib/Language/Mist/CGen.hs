@@ -28,7 +28,7 @@ import Debug.Trace (traceM)
 -------------------------------------------------------------------------------
 type Env r a = [(Id, RType r a)]
 
-type CGenConstraints r e a = (Located a, Predicate r e, Show r, Show a, PPrint r, Eq r)
+type CGenConstraints r e a = (Located a, Predicate r e, Show r, Show a, PPrint r, Eq r, Show e)
 
 -------------------------------------------------------------------------------
 -- | generateConstraints is our main entrypoint to this module
@@ -51,8 +51,26 @@ _synth _ e@Boolean{} = (Head (sourceSpan e) true,) <$> prim e
 _synth _ e@Prim{} = (Head (sourceSpan e) true,) <$> prim e
 _synth env e@(Id x _) = (Head (sourceSpan e) true,) <$> single env x
 
-_synth env (If e1 e2 e3 l)
-  | Just cond <- interp e1 = do
+-- _synth env (If e1 e2 e3 l) -- TODO: put this back
+--   | Just cond <- interp e1 = do
+--     idT <- refreshId "then:"
+--     idF <- refreshId "else:"
+--     (c1, t1) <- synth env e1
+--     case t1 of
+--       (RBase _ TBool _) -> pure ()
+--       _ -> error "non bool condition"
+--     (c2, t2) <- synth ((idT, t1):env) e2
+--     (c3, t3) <- synth ((idF, t1):env) e3
+--     -- TODO make these check, after pulling the right thing out of l
+--     tHat <- fresh l env (eraseRType t2) -- could just as well be t2
+--     cSub2 <- (t2 <: tHat) l
+--     cSub3 <- (t3 <: tHat) l
+--     let c = CAnd [ c1
+--                  , All idT TBool (makePred cond) (CAnd [c2, cSub2])
+--                  , All idF TBool (makePred $ exprNot cond) (CAnd [c3, cSub3]) ]
+--     pure (c, tHat)
+
+_synth env (If e1@(Id y _) e2 e3 l) = do -- TODO: put this back
     idT <- refreshId "then:"
     idF <- refreshId "else:"
     (c1, t1) <- synth env e1
@@ -66,8 +84,8 @@ _synth env (If e1 e2 e3 l)
     cSub2 <- (t2 <: tHat) l
     cSub3 <- (t3 <: tHat) l
     let c = CAnd [ c1
-                 , All idT TBool (makePred cond) (CAnd [c2, cSub2])
-                 , All idF TBool (makePred $ exprNot cond) (CAnd [c3, cSub3]) ]
+                 , All idT TBool (makePred (var y)) (CAnd [c2, cSub2])
+                 , All idF TBool (makePred $ exprNot (var y)) (CAnd [c3, cSub3]) ]
     pure (c, tHat)
 
 _synth env (If e1 e2 e3 l) = do
@@ -80,7 +98,7 @@ _synth env (If e1 e2 e3 l) = do
   (c2, t2) <- synth ((condVar, t1):env) e2
   (c3, t3) <- synth ((condVar, t1):env) e3
   -- TODO make these check, after pulling the right thing out of l
-  tHat <- fresh l ((condVar, t1):env) (eraseRType t2) -- could just as well be t2
+  tHat <- fresh l env (eraseRType t2) -- could just as well be t2
   cSub2 <- (t2 <: tHat) l
   cSub3 <- (t3 <: tHat) l
   let cond' = varSubstP (y |-> condVar) cond
@@ -181,15 +199,19 @@ staleBaseType l baseType = do
 appSynth :: CGenConstraints r e a => Env r a -> RType r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 appSynth env t e = do
   (c, outT) <- _appSynth env t e
-  -- !_ <- traceM $ "appSynth: " <> pprint t <> " ⊢ " <> y <> " >> " <> pprint outT
+  -- !_ <- traceM $ "appSynth: " <> pprint t <> "\n\t ⊢ " <> pprint e <> "\n\t >> " <> pprint outT
   pure (c, outT)
 
 -- | env | tfun ⊢ y >>
 _appSynth :: (CGenConstraints r e a) => Env r a -> RType r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
-_appSynth env (RFun x tx t) e
-  | Just reft <- interp e = do
+-- _appSynth env (RFun x tx t) e -- TODO fix substE and this
+--   | Just reft <- interp e = do
+--   c <- check env e tx
+--   pure (c, substReftPredWith substE (bindId x |-> reft) t)
+
+_appSynth env (RFun x tx t) e@(Id y _) = do
   c <- check env e tx
-  pure (c, substReftPredWith substE (bindId x |-> reft) t)
+  pure (c, substReftPred (bindId x |-> y) t)
 
 _appSynth env (RFun x tx t) e = do
   (c1, te) <- synth env e
@@ -214,10 +236,10 @@ single env x = case flattenRType <$> lookup x env of
   -- `x` is already bound, so instead of "re-binding" x we should selfify
   -- (al la Ou et al. IFIP TCS '04)
     v <- refreshId $ "singleVV" ++ cSEPARATOR
-    pure $ RBase (Bind v l) baseType (strengthen (subst (y |-> v) reft) (makePred $ varsEqual v x))
+    pure $ RBase (Bind v l) baseType (strengthen (subst (y |-> v) reft) (makePred $ exprsEqual (var v) (var x)))
   Just (RRTy (Bind y l) rt reft) -> do
     v <- refreshId $ "singleRR" ++ cSEPARATOR
-    pure $ RRTy (Bind v l) rt (strengthen (subst (y |-> v) reft) (makePred $ varsEqual v x))
+    pure $ RRTy (Bind v l) rt (strengthen (subst (y |-> v) reft) (makePred $ exprsEqual (var v) (var x)))
   Just rt -> pure rt
   Nothing -> error $ "Unbound Variable " ++ show x ++ show env
 
@@ -258,18 +280,32 @@ _check env (Let b e1 e2 _) t2
 
   | (AnnBind _ Nothing _) <- b = error "INTERNAL ERROR: annotation missing on let"
 
-_check env (If e1 e2 e3 _) t2
-  | Just cond <- interp e1 = do
+-- _check env (If e1 e2 e3 _) t2 -- TODO: put this back. It doesn't work due to higher order applications being "interp-able" without being reflected or bound.
+--   | Just cond <- interp e1 = do
+--     idT <- refreshId "then:"
+--     idF <- refreshId "else:"
+--     (c1, t1) <- synth env e1
+--     case t1 of
+--       (RBase _ TBool _) -> pure ()
+--       _ -> error "non bool condition"
+--     c2 <- check ((idT, t1):env) e2 t2
+--     c3 <- check ((idF, t1):env) e3 t2
+--     pure $ CAnd [ c1
+--                 , All idT TBool (makePred cond) c2
+--                 , All idF TBool (makePred $ exprNot cond) c3 ]
+
+_check env (If e1@(Id y _) e2 e3 _) t2 = do
     idT <- refreshId "then:"
     idF <- refreshId "else:"
     (c1, t1) <- synth env e1
     case t1 of
       (RBase _ TBool _) -> pure ()
       _ -> error "non bool condition"
-    c2 <- check env e2 t2
-    c3 <- check env e3 t2
-    pure $ CAnd [ All idT TBool (makePred cond) c2
-                , All idF TBool (makePred $ exprNot cond) c3 ]
+    c2 <- check ((idT, t1):env) e2 t2
+    c3 <- check ((idF, t1):env) e3 t2
+    pure $ CAnd [ c1
+                , All idT TBool (makePred $ var y) c2
+                , All idF TBool (makePred $ exprNot (var y)) c3 ]
 
 _check env (If e1 e2 e3 _) t2 = do
   condVar <- refreshId "cond"
@@ -309,15 +345,19 @@ _check env e t = do
 appCheck :: CGenConstraints r e a => Env r a -> RType r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 appCheck env t e t' = do
   c <- _appCheck env t e t'
-  -- !_ <- traceM $ "appCheck: " <> pprint t <> "⊢ " <> y <> "\n\t << " <> pprint t' <> "\n\t ⊣ " <> show c <> "\n\n"
+  -- !_ <- traceM $ "appCheck: " <> pprint t <> "\n\t ⊢ " <> pprint e <> "\n\t << " <> pprint t' <> "\n\t ⊣ " <> show c <> "\n\n"
   pure c
 
 -- | env | t ⊢ y << t'
 _appCheck :: CGenConstraints r e a => Env r a -> RType r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
-_appCheck env (RFun (Bind x _) tx t) e t'
-  | Just reft <- interp e = do
+-- _appCheck env (RFun (Bind x _) tx t) e t' -- TODO: get this and substE working properly
+--   | Just reft <- interp e = do
+--   c <- check env e tx
+--   cSub <- (substReftPredWith substE (x |-> reft) t <: t') (sourceSpan e)
+--   pure $ CAnd [c, cSub]
+_appCheck env (RFun (Bind x _) tx t) e@(Id y _) t' = do -- TODO: get this and substE working properly
   c <- check env e tx
-  cSub <- (substReftPredWith substE (x |-> reft) t <: t') (sourceSpan e)
+  cSub <- (substReftPred (x |-> y) t <: t') (sourceSpan e)
   pure $ CAnd [c, cSub]
 _appCheck env (RFun (Bind x _) tx t) e t' = do
   (c1, te) <- synth env e
@@ -385,6 +425,7 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 (<<:) :: (CGenConstraints r e a, Located b) => RType r a -> RType r a -> b -> Fresh (NNF r)
 (<<:) rtype1 rtype2 locable = go (flattenRType rtype1) (flattenRType rtype2)
   where
+    go :: (CGenConstraints r e a) => RType r a -> RType r a -> Fresh (NNF r)
     go (RBase (Bind x1 _) b1 p1) (RBase (Bind x2 _) b2 p2)
       | b1 == b2 = pure $ All x1 b1 p1 (Head (sourceSpan locable) $ varSubstP (x2 |-> x1) p2)
       | otherwise = error $ "error?" ++ show b1 ++ show b2

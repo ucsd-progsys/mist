@@ -505,7 +505,7 @@ class Predicate p e | p -> e, e -> p where
   makePred :: e -> p
   var :: Id -> e
   exprNot :: e -> e
-  varsEqual :: Id -> Id -> e -- ^ builds a refinement that the two variables are equivalent
+  exprsEqual :: e -> e -> e -- ^ builds a refinement that the two expressions are equivalent
   interp :: Expr t a -> Maybe e
   prim :: (MonadFresh m, PPrint t) => Expr t a -> m (RType p a) -- ^ Gives a specification to primitives
                                                       -- TODO: this is a partial function
@@ -520,7 +520,7 @@ instance Predicate () () where
     false = ()
     var _ = ()
     exprNot _ = ()
-    varsEqual _ _ = ()
+    exprsEqual _ _ = ()
     prim _ = undefined
     interp _ = Nothing
     makePred _ = ()

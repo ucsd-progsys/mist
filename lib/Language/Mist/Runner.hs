@@ -11,7 +11,6 @@ import Language.Mist.Checker
 import Language.Mist.CGen
 import Language.Mist.Config
 import Language.Mist.ToFixpoint
-import Language.Mist.Normalizer
 import Language.Mist.Names
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Types as F
@@ -20,7 +19,7 @@ import qualified Control.Exception as Ex
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
 
-import Debug.Trace (traceM)
+-- import Debug.Trace (traceM)
 
 type R = HC.Pred
 
@@ -29,9 +28,7 @@ type R = HC.Pred
   1) unique
   2) convert refinements from mist `Expr`s to fixpoint `Expr`s
   3) elaborate
-  4) annotate each node with its type
-  5) anf
-  6) constraint generation
+  4) constraint generation
 -}
 
 ---------------------------------------------------------------------------
@@ -54,8 +51,8 @@ act _h config = do
   let r = mist measures e
   case r of
     Right (measures', t) -> do
-      -- !_ <- traceM $ pprint (anormal (annotate t TUnit))
-      let c = generateConstraints (anormal (annotate t TUnit))
+      -- !_ <- traceM $ pprint t
+      let c = generateConstraints t
       solverResult <- solve measures' c
       case F.resStatus solverResult of
         F.Safe -> return (Right ())
