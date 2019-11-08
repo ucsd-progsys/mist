@@ -65,7 +65,7 @@ cons = (0)
 first as {v: List >Int | mCons v} -> Int
 first = (0)
 
-rest as rs:{v: List >Int | mCons v} -> {v: List >Int | mLength v + 1 == mLength rs }
+rest as rs:{v: List >Int | mCons v} -> {v: List >Int | mLength v == mLength rs - 1 }
 rest = (0)
 
 pure as rforall a. x:a -> Tick >{v:Int | v == 0} >a

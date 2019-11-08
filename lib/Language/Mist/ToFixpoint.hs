@@ -18,7 +18,7 @@ import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe, fromJust)
-import Data.List (intercalate)
+import Data.List (intercalate, intersect)
 import Text.Printf
 
 import Language.Mist.Types as M
@@ -167,7 +167,7 @@ instance Predicate HC.Pred F.Expr where
   false = HC.Reft F.PFalse
   var x = F.EVar $ fromString x
   exprNot e = F.PNot $ e
-  varsEqual x y = F.PAtom F.Eq (F.EVar $ fromString x) (F.EVar $ fromString y)
+  exprsEqual e1 e2 = F.PAtom F.Eq e1 e2
   interp e = exprToFixpoint e
   makePred e = HC.Reft e
 
@@ -178,18 +178,29 @@ instance Predicate HC.Pred F.Expr where
 
   buildKvar x params = HC.Var (fromString x) (fmap fromString params)
 
-  varSubstP su (HC.Reft fexpr) = HC.Reft $ MAP.foldrWithKey substNameInFexpr fexpr su
+  varSubstP su (HC.Reft fexpr) = HC.Reft $ F.subst fsu fexpr
     where
-      substNameInFexpr oldName newName fexpr = F.subst1 fexpr (fromString oldName, F.EVar $ fromString newName)
+      fsu = F.Su $ HM.fromList $ bimap fromString (F.EVar . fromString) <$> MAP.toList su
   varSubstP su (HC.Var k params) =
     let su' = MAP.map fromString $ MAP.mapKeys fromString su in
     HC.Var k $ fmap (\param -> MAP.findWithDefault param param su') params
   varSubstP su (HC.PAnd ps) =
     HC.PAnd $ fmap (varSubstP su) ps
 
-  substE su fexpr = MAP.foldrWithKey substFexpr fexpr su
+  substE su (HC.Reft fexpr) = HC.Reft $ F.subst fsu fexpr
     where
-      substFexpr oldName newExpr fexpr = F.subst1 fexpr (fromString oldName, newExpr)
+      fsu = F.Su $ HM.fromList $ first fromString <$> MAP.toList su
+  substE _su _var@(HC.Var _ _params) =
+    error "TODO: this doesn't work due to kvars"
+    -- if null substitutedParams
+    -- then var
+    -- else HC.PAnd (var:equalities)
+    -- where
+    --   substitutedParams = params `intersect` (fromString <$> MAP.keys su)
+    --   equalities = (\param -> makePred $ exprsEqual (F.EVar param) (su' MAP.! param)) <$> substitutedParams
+    --   su' = MAP.mapKeys fromString su
+  substE su (HC.PAnd ps) =
+    HC.PAnd $ fmap (substE su) ps
 
   prim e@AnnUnit{} = equalityPrim e TUnit
   prim e@AnnNumber{} = equalityPrim e TInt
