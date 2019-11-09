@@ -32,9 +32,9 @@ fmap = \f x -> bind x (\xx -> pure (f xx))
 for2 :: rforall a, b.
   ((rforall c, d.
      s:(Set >Int) ~>
-     (s2:{v: Set >Int | setSubset s s2} ~> (ST <{v: Set >Int | v = s} >{v: Set >Int | v = s2} >Int) -> ST <c >d >Int)
+     (s2:{v: Set >Int | setSubset s v} ~> (ST <{v: Set >Int | v = s} >{v: Set >Int | v = s2} >Int) -> ST <c >d >Int)
      -> ST <c >d >Int)) ->
     (z:(Set >Int) ~>
-      (z2:{v: Set >Int | setSubset z z2} ~> (ST <{v: Set >Int | v = z} >{v: Set >Int | v = z2} >Int) -> ST <a >b >Int)
+      (z2:{v: Set >Int | setSubset z v} ~> (ST <{v: Set >Int | v = z} >{v: Set >Int | v = z2} >Int) -> ST <a >b >Int)
       -> ST <a >b >Int)
 for2 = \f -> \k -> f (\s1 -> f (\s2 -> k (thenn s1 s2)))
