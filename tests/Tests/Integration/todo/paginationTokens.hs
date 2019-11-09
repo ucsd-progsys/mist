@@ -24,14 +24,12 @@ pure :: rforall a, p, q, s, t. x:a -> ST <p >q >a
 pure = undefined
 
 thenn :: rforall a, b, p, q, r, s, t, u.
-  n:Int ~> m:Int ~>
   ST <p >q >a ->
   ST <q >r >b ->
   ST <p >r >b
 thenn = \f g -> bind f (\underscore -> g)
 
 fmap :: rforall a, b, p, q, s, t.
-  n:Int ~>
   (underscore:a -> b) ->
   ST <p >q >a ->
   ST <p >q >b
