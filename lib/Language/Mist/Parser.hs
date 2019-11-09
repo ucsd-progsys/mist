@@ -393,7 +393,7 @@ typeType = mkArrow <$> sepBy1 baseType (symbol "->")
         <?> "Unrefined Type"
 
 typeRType :: Parser SSParsedRType
-typeRType = try rfun <|> try rbase <|> try unrefined <|> parens typeRType <|> unrefinedRApp
+typeRType = try rfun <|> try rbase <|> try unrefined <|> parens scheme <|> unrefinedRApp
          <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
