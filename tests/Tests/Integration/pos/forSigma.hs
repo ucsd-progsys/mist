@@ -58,8 +58,15 @@ foo :: x:Int ~>
          (ST <{v: Int | v = x} >{v: Int | v = x2} >Int))
 foo = \under -> bind (get 6) (\y -> put (y + 4))
 
+bar :: x:Int ~>
+       under:Int ->
+       ST <{v: Int | v = x} >{v: Int | v = x + 1} >Int
+bar = \under -> bind (get 8) (\y -> put (y + 1))
+
 main :: x:{v: Int | v > 3} ~> ST <{v: Int | v = x} >{v: Int | v > 3} >Int
-main = (for2 foo) 8
+main = unpack (s1, ms1) = ((for2 foo) 8) in
+       unpack (s2, ms2) = ((for2 bar) 9) in
+       (thenn ms1 ms2)
 
 -- for2 :: rforall a, b.
 --   ((rforall c, d.
