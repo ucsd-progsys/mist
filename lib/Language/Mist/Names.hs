@@ -83,6 +83,8 @@ substReftPredWith f su (RBase bind typ expr) =
   RBase bind typ (f (M.delete (bindId bind) su) expr)
 substReftPredWith f su (RIFun bind rtype1 rtype2) =
   RIFun bind (substReftPredWith f su rtype1) (substReftPredWith f (M.delete (bindId bind) su) rtype2)
+substReftPredWith f su (RIExists bind rtype1 rtype2) =
+  RIExists bind (substReftPredWith f su rtype1) (substReftPredWith f (M.delete (bindId bind) su) rtype2)
 substReftPredWith f su (RFun bind rtype1 rtype2) =
   RFun bind (substReftPredWith f su rtype1) (substReftPredWith f (M.delete (bindId bind) su) rtype2)
 substReftPredWith f su (RRTy bind rtype expr) =
@@ -100,6 +102,8 @@ substReftType su (RFun bind rtype1 rtype2) =
   RFun bind (substReftType su rtype1) (substReftType su rtype2)
 substReftType su (RIFun bind rtype1 rtype2) =
   RIFun bind (substReftType su rtype1) (substReftType su rtype2)
+substReftType su (RIExists bind rtype1 rtype2) =
+  RIExists bind (substReftType su rtype1) (substReftType su rtype2)
 substReftType su (RApp c ts) =
   RApp c $ second (substReftType su) <$> ts
 substReftType su (RRTy bind rtype expr) =
@@ -119,6 +123,8 @@ substReftReft su (RFun bind rtype1 rtype2) =
   RFun bind (substReftReft su rtype1) (substReftReft su rtype2)
 substReftReft su (RIFun bind rtype1 rtype2) =
   RIFun bind (substReftReft su rtype1) (substReftReft su rtype2)
+substReftReft su (RIExists bind rtype1 rtype2) =
+  RIExists bind (substReftReft su rtype1) (substReftReft su rtype2)
 substReftReft su (RApp c ts) =
   RApp c $ second (substReftReft su) <$> ts
 substReftReft su (RRTy bind rtype expr) =
@@ -166,6 +172,7 @@ instance Subable Type t => Subable Type (Expr t a) where
   _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) (_subst su typ) (_subst su tag) l
   _subst su (AnnTAbs tvar e tag l) = AnnTAbs tvar (_subst su' e) (_subst su tag) l
     where su' = M.delete (unTV tvar) su
+  _subst su (AnnUnpack b1 b2 e1 e2 tag l) = AnnUnpack (_subst su b1) (_subst su b2) (_subst su e1) (_subst su e2) (_subst su tag) l
 
 instance Subable Type Type where
   _subst su t@(TVar (TV a)) = fromMaybe t $ M.lookup a su
@@ -197,6 +204,8 @@ instance Subable (Expr t a) (Expr t a) where
     where su' = M.delete (bindId b) su
   _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) typ tag l
   _subst su (AnnTAbs alpha e tag l) = AnnTAbs alpha (_subst su e) tag l
+  _subst su (AnnUnpack b1 b2 e1 e2 tag l) = AnnUnpack b1 b2 (_subst su' e1) (_subst su' e2) tag l
+    where su' = M.delete (bindId b2) (M.delete (bindId b1) su)
 
 instance Subable Type a => Subable Type (Maybe a) where
   _subst su = fmap (_subst su)
@@ -319,6 +328,14 @@ instance (Uniqable t) => Uniqable (Expr t a) where
     e' <- unique e
     modify $ popNewName (unTV tvar)
     pure $ AnnTAbs tvar' e' tag' l
+  unique (AnnUnpack b1 b2 e1 body tag l) = do
+    tag' <- unique tag
+    e1' <- unique e1
+    b1' <- unique b1
+    b2' <- unique b2
+    body' <- unique body
+    modify $ popNewName (bindId b2) . popNewName (bindId b1)
+    pure $ AnnUnpack b1' b2' e1' body' tag' l
 
 instance Uniqable a => Uniqable (Maybe a) where
   unique (Just a) = Just <$> unique a
@@ -343,6 +360,12 @@ instance (Uniqable r) => Uniqable (RType r a) where
     rtype2' <- unique rtype2
     modify $ popNewName (bindId bind)
     pure $ RIFun bind' rtype1' rtype2'
+  unique (RIExists bind rtype1 rtype2) = do
+    bind' <- unique bind
+    rtype1' <- unique rtype1
+    rtype2' <- unique rtype2
+    modify $ popNewName (bindId bind)
+    pure $ RIExists bind' rtype1' rtype2'
   unique (RApp c rts) = RApp c <$> mapM (mapM unique) rts
   unique (RRTy bind rtype expr) = do
     bind' <- unique bind
