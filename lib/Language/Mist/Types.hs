@@ -42,6 +42,7 @@ module Language.Mist.Types
   , pattern App
   , pattern TApp
   , pattern TAbs
+  , pattern Unpack
   , pattern Bind
 
   , ParsedAnnotation (..)
@@ -131,6 +132,7 @@ data Expr t a
   | AnnILam !(Bind (Maybe Type) a) !(Expr t a) !t !a
   | AnnTApp !(Expr t a) !Type !t !a
   | AnnTAbs TVar !(Expr t a) !t !a
+  | AnnUnpack !(Bind (Maybe Type) a) !(Bind t a) !(Expr t a) !(Expr t a) !t !a -- unpack (x, y) = e1 in e2 (e1 : Σx:t.t')
   deriving (Show, Functor, Eq, Read)
 
 data Bind t a = AnnBind
@@ -178,6 +180,9 @@ pattern TApp e typ l <- AnnTApp e typ _ l
 pattern TAbs :: (Default t) => TVar -> Expr t a -> a -> Expr t a
 pattern TAbs tvar e l <- AnnTAbs tvar e _ l
   where TAbs tvar e l = AnnTAbs tvar e defaultVal l
+pattern Unpack :: (Default t) => (Bind (Maybe Type) a) -> (Bind t a) -> Expr t a -> Expr t a -> a -> Expr t a
+pattern Unpack b1 b2 e1 e2 l <- AnnUnpack b1 b2 e1 e2 _ l
+  where Unpack b1 b2 e1 e2 l = AnnUnpack b1 b2 e1 e2 defaultVal l
 
 {-# COMPLETE Bind #-}
 
@@ -204,6 +209,7 @@ data RType r a
   | RApp !Ctor ![(Variance, RType r a)]
   | RFun !(Bind () a) !(RType r a) !(RType r a)
   | RIFun !(Bind () a) !(RType r a) !(RType r a)
+  | RIExists !(Bind () a) !(RType r a) !(RType r a)
   | RRTy !(Bind () a) !(RType r a) r
   | RForall TVar !(RType r a)
   | RForallP TVar !(RType r a)
@@ -281,32 +287,34 @@ type ImmExpr t a = Expr t a
 --     go body = ([], body)
 
 extractLoc :: Expr t a -> a
-extractLoc (AnnNumber _ _ l)    = l
-extractLoc (AnnBoolean _ _ l)   = l
-extractLoc (AnnId _ _ l)        = l
-extractLoc (AnnPrim _ _ l)      = l
-extractLoc (AnnIf _ _ _ _ l)    = l
-extractLoc (AnnLet _ _ _ _ l)   = l
-extractLoc (AnnApp _ _ _ l)     = l
-extractLoc (AnnLam _ _ _ l)     = l
-extractLoc (AnnILam _ _ _ l)    = l
-extractLoc (AnnUnit _ l)        = l
-extractLoc (AnnTApp _ _ _ l)    = l
-extractLoc (AnnTAbs _ _ _ l)    = l
+extractLoc (AnnNumber _ _ l)       = l
+extractLoc (AnnBoolean _ _ l)      = l
+extractLoc (AnnId _ _ l)           = l
+extractLoc (AnnPrim _ _ l)         = l
+extractLoc (AnnIf _ _ _ _ l)       = l
+extractLoc (AnnLet _ _ _ _ l)      = l
+extractLoc (AnnApp _ _ _ l)        = l
+extractLoc (AnnLam _ _ _ l)        = l
+extractLoc (AnnILam _ _ _ l)       = l
+extractLoc (AnnUnit _ l)           = l
+extractLoc (AnnTApp _ _ _ l)       = l
+extractLoc (AnnTAbs _ _ _ l)       = l
+extractLoc (AnnUnpack _ _ _ _ _ l) = l
 
 extractAnn :: Expr t a -> t
-extractAnn (AnnNumber _ t _)    = t
-extractAnn (AnnBoolean _ t _)   = t
-extractAnn (AnnId _ t _)        = t
-extractAnn (AnnPrim _ t _)      = t
-extractAnn (AnnIf _ _ _ t _)    = t
-extractAnn (AnnLet _ _ _ t _)   = t
-extractAnn (AnnApp _ _ t _)     = t
-extractAnn (AnnLam _ _ t _)     = t
-extractAnn (AnnILam _ _ t _)    = t
-extractAnn (AnnUnit t _)        = t
-extractAnn (AnnTApp _ _ t _)    = t
-extractAnn (AnnTAbs _ _ t _)    = t
+extractAnn (AnnNumber _ t _)       = t
+extractAnn (AnnBoolean _ t _)      = t
+extractAnn (AnnId _ t _)           = t
+extractAnn (AnnPrim _ t _)         = t
+extractAnn (AnnIf _ _ _ t _)       = t
+extractAnn (AnnLet _ _ _ t _)      = t
+extractAnn (AnnApp _ _ t _)        = t
+extractAnn (AnnLam _ _ t _)        = t
+extractAnn (AnnILam _ _ t _)       = t
+extractAnn (AnnUnit t _)           = t
+extractAnn (AnnTApp _ _ t _)       = t
+extractAnn (AnnTAbs _ _ t _)       = t
+extractAnn (AnnUnpack _ _ _ _ t _) = t
 
 putAnn :: t -> Expr t a -> Expr t a
 putAnn t (AnnNumber n _ l) = AnnNumber n t l
@@ -321,6 +329,7 @@ putAnn t (AnnILam x e _ l) = AnnILam x e t l
 putAnn t (AnnUnit _ l) = AnnUnit t l
 putAnn t (AnnTApp e typ _ l) = AnnTApp e typ t l
 putAnn t (AnnTAbs tvar e _ l) = AnnTAbs tvar e t l
+putAnn t (AnnUnpack b1 b2 e1 e2 _ l) = AnnUnpack b1 b2 e1 e2 t l
 
 --------------------------------------------------------------------------------
 -- | Pretty Printer
@@ -387,6 +396,7 @@ instance (PPrint t) => PPrint (Expr t a) where
   pprint (AnnILam x e _ _) = printf "(\\ %s ~> %s)" (ppDef x) (pprint e)
   pprint (AnnTApp e t _ _) = printf "(%s @ %s)" (pprint e) (pprint t)
   pprint (AnnTAbs alpha e _ _) = printf "(/\\%s . %s)" (pprint alpha) (pprint e)
+  pprint (AnnUnpack b1 b2 e1 e2 _ _) = printf "(unpack (%s, %s) = %s in %s)" (ppDef b1) (ppDef b2) (pprint e1) (pprint e2)-- TODO: make better
 
 ppDef :: (PPrint t) => Bind t a -> Text
 ppDef annBind = printf "%s%s" (bindId annBind) (pprint $ bindAnn annBind)
@@ -414,6 +424,8 @@ instance (PPrint r) => PPrint (RType r a) where
     printf "{%s:%s || %s}" (pprint b) (pprint t) (pprint e)
   pprint (RForall tv t) = printf "forall %s. %s" (pprint tv) (pprint t)
   pprint (RForallP tv t) = printf "rforall %s. %s" (pprint tv) (pprint t)
+  pprint (RIExists b t1 t2) =
+    printf "Σ%s:%s. %s" (pprint b) (pprint t1) (pprint t2)
 
 --------------------------------------------------------------------------------
 -- | The `Parsed` types are for parsed ASTs.
@@ -441,6 +453,7 @@ eraseRType (RIFun _ _t1 t2) = eraseRType t2
 eraseRType (RRTy _ t _) = eraseRType t
 eraseRType (RForall alphas t) = TForall alphas (eraseRType t)
 eraseRType (RForallP alphas t) = TForall alphas (eraseRType t)
+eraseRType (RIExists _ _t1 t2) = eraseRType t2
 
 instance PPrint Ctor where
   pprint = PP.render . prCtor
@@ -588,6 +601,7 @@ instance Bifunctor Expr where
   first f (AnnILam bind e ann l) = AnnILam bind (first f e) (f ann) l
   first f (AnnTApp e t ann l) = AnnTApp (first f e) t (f ann) l
   first f (AnnTAbs alpha e ann l) = AnnTAbs alpha (first f e) (f ann) l
+  first f (AnnUnpack b1 b2 e1 e2 ann l) = AnnUnpack b1 (first f b2) (first f e1) (first f e2) (f ann) l
 
 instance Bifunctor Bind where
   second = fmap
@@ -611,6 +625,7 @@ instance Bifunctor RType where
   first f (RApp c ts) = RApp c $ (\(a, b) -> (a, first f b)) <$> ts
   first f (RFun b rt1 rt2) = RFun b (first f rt1) (first f rt2)
   first f (RIFun b rt1 rt2) = RIFun b (first f rt1) (first f rt2)
+  first f (RIExists b rt1 rt2) = RIExists b (first f rt1) (first f rt2)
   first f (RRTy b rt r) = RRTy b (first f rt) (f r)
   first f (RForall tvar rt) = RForall tvar (first f rt)
   first f (RForallP tvar rt) = RForallP tvar (first f rt)

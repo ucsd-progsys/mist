@@ -130,10 +130,12 @@ rWord w = snd <$> (withSpan (string w) <* notFollowedBy alphaNumChar <* sc)
 -- | list of reserved words
 keywords :: [Text]
 keywords =
-  [ "if"      , "else"  , "then"
-  , "true"    , "false"
-  , "let"     , "in"
-  , "Int"     , "Bool"  , "forall"  , "as", "rforall"
+  [ "if", "else", "then"
+  , "true", "false"
+  , "let", "in"
+  , "Int", "Bool"
+  , "forall", "as", "rforall", "exists"
+  , "unpack"
   ]
 
 -- | `identifier` parses identifiers: lower-case alphabets followed by alphas or digits
@@ -198,6 +200,7 @@ exprAddParsedInfers = goE
     goE (AnnILam x e _ l)    = ParsedExpr $ ILam x (goUn e) l
     goE (AnnTApp e typ _ l)  = ParsedExpr $ TApp (goUn e) typ l
     goE (AnnTAbs tvar e _ l) = ParsedExpr $ TAbs tvar (goUn e) l
+    goE (AnnUnpack b1 b2 e1 e2 _ l) = ParsedExpr $ Unpack b1 (goB b2) (goUn e1) (goUn e2) l
 
     goUn = unParsedExpr . goE
 
@@ -263,6 +266,7 @@ expr0 = mkApps <$> sepBy1 simpleExpr sc
             <|> try iLamExpr -- starts with \\
             <|> letExpr  -- starts with let
             <|> ifExpr   -- starts with if
+            <|> unpackExpr -- starts with unpack
 
 -- A simpleExpr is one that has an end deliminator
 simpleExpr :: Parser SSParsedExpr
@@ -330,6 +334,20 @@ letExpr = fmap ParsedExpr $ withSpan' $ do
   ParsedExpr e <- expr
   return (bindsExpr bs e $ Just ParsedInfer)
 
+unpackExpr :: Parser SSParsedExpr
+unpackExpr = fmap ParsedExpr $ withSpan' $ do
+  rWord "unpack"
+  symbol "("
+  bx <- uncurry Bind <$> identifier
+  symbol ","
+  be <- letBinder
+  symbol ")"
+  symbol "="
+  ParsedExpr e1 <- expr
+  rWord "in"
+  ParsedExpr e2 <- expr
+  pure $ AnnUnpack bx be e1 e2 (Just ParsedInfer)
+
 bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
 bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
 
@@ -388,12 +406,23 @@ scheme = do
   bodyType <- typeRType
   pure $ foldr RForallP (foldr RForall bodyType tvars) rvars
 
+-- exists x:t. e
+sigma :: Parser SSParsedRType
+sigma = do
+  rWord "exists"
+  id <- eraseBind <$> binder <* colon
+  tin <- (try unrefined <|> rbase <|> parens typeRType <|> unrefinedRApp)
+  symbol "."
+  bodyType <- typeRType
+  pure $ RIExists id tin bodyType
+
 typeType :: Parser Type
 typeType = mkArrow <$> sepBy1 baseType (symbol "->")
         <?> "Unrefined Type"
 
 typeRType :: Parser SSParsedRType
-typeRType = try rfun <|> try rbase <|> try unrefined <|> parens scheme <|> unrefinedRApp
+typeRType = try rfun <|> try rbase <|> try unrefined <|> try (parens sigma) <|> try (parens scheme) <|> unrefinedRApp
+
          <?> "Refinement Type"
 
 rapp :: Parser SSParsedRType
@@ -414,7 +443,7 @@ arrow = symbol "~>" *> pure (RIFun . eraseBind) <|> symbol "->" *> pure (RFun . 
 
 rfun :: Parser SSParsedRType
 rfun = do id <- (binder <* colon) <|> freshBinder
-          tin <- (try unrefined <|> rbase <|> parens typeRType <|> unrefinedRApp)
+          tin <- (try unrefined <|> rbase <|> try (parens sigma) <|> parens typeRType <|> unrefinedRApp)
           arrow <*> pure id <*> pure tin <*> typeRType
 
 unrefined :: Parser SSParsedRType

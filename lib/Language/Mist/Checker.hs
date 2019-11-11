@@ -91,6 +91,10 @@ wellFormed = go emptyWEnv
     go env (ILam bind e _)        = go (addBinder bind env) e
     go env (TApp e _ _)           = go env e
     go env (TAbs _ e _)           = go env e
+    go env (Unpack b1 b2 e1 e2 _) = duplicateBindErrors env b1
+                                    ++ duplicateBindErrors env b2
+                                    ++ go env e1
+                                    ++ go (addBinder b1 (addBinder b2 env)) e2
 
 --------------------------------------------------------------------------------
 -- | Error Checkers: In each case, return an empty list if no errors.
@@ -333,6 +337,12 @@ synthesize_ (TAbs _alpha _e _l) = error "TODO"
 synthesize_ (ILam bind e l) = do
   (c, t) <- synthesize_ e
   pure (ILam bind c l, t)
+synthesize_ (Unpack b1 b2 e1 e2 l) =
+  typeCheckLet b2 e1 e2 l
+  (\b2' c1 e2 l -> do
+      (c2, inferredType) <- synthesize_ e2
+      pure (Unpack b1 b2' c1 c2 l, inferredType))
+
 
 -- DEBUGGING
 check :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
@@ -382,6 +392,11 @@ check_ expr typ = do
     go (ILam bind e l) t = do
       c <- go e t
       pure $ ILam bind c l
+    go (Unpack b1 b2 e1 e2 l) t =
+      typeCheckLet b2 e1 e2 l
+      (\b2' c1 e2 l -> do
+          c2 <- check e2 t
+          pure $ Unpack b1 b2' c1 c2 l)
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
 synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
@@ -616,36 +631,36 @@ primType Lte     = pure $ TInt :=> (TInt :=> TBool)
 primType Union   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
-  pure $ TForall (TV a) (sa :=> sa :=> sa)
+  pure $ TForall (TV a) (sa :=> (sa :=> sa))
 primType Elem    = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
-  pure $ TForall (TV a) (sa :=> TVar (TV a) :=> TBool)
+  pure $ TForall (TV a) (sa :=> (TVar (TV a) :=> TBool))
 primType SetAdd  = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
-  pure $ TForall (TV a) (sa :=> TVar (TV a) :=> sa)
+  pure $ TForall (TV a) (sa :=> (TVar (TV a) :=> sa))
 primType SetDel  = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
-  pure $ TForall (TV a) (sa :=> TVar (TV a) :=> sa)
+  pure $ TForall (TV a) (sa :=> (TVar (TV a) :=> sa))
 primType SetSub  = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
-  pure $ TForall (TV a) (sa :=> sa :=> TBool)
+  pure $ TForall (TV a) (sa :=> (sa :=> TBool))
 
 primType Store = do
   k <- refreshId $ "k" ++ cSEPARATOR
   let tk = TVar $ TV k
   v <- refreshId $ "v" ++ cSEPARATOR
   let tv = TVar $ TV v
-  pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> tk :=> tv :=> mapType tk tv
+  pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> (tk :=> (tv :=> mapType tk tv))
 primType Select = do
   k <- refreshId $ "k" ++ cSEPARATOR
   let tk = TVar $ TV k
   v <- refreshId $ "v" ++ cSEPARATOR
   let tv = TVar $ TV v
-  pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> tk :=> tv
+  pure $ TForall (TV k) $ TForall (TV v) $ mapType tk tv :=> (tk :=> tv)
 
 primType Equal   = do
   a <- refreshId $ "a" ++ cSEPARATOR

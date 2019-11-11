@@ -80,7 +80,7 @@ _synth env (If e1@(Id y _) e2 e3 l) = do -- TODO: put this back
     (c2, t2) <- synth ((idT, t1):env) e2
     (c3, t3) <- synth ((idF, t1):env) e3
     -- TODO make these check, after pulling the right thing out of l
-    tHat <- fresh l env (eraseRType t2) -- could just as well be t2
+    tHat <- freshRType l env t2 -- could just as well be t2
     cSub2 <- (t2 <: tHat) l
     cSub3 <- (t3 <: tHat) l
     let c = CAnd [ c1
@@ -98,7 +98,7 @@ _synth env (If e1 e2 e3 l) = do
   (c2, t2) <- synth ((condVar, t1):env) e2
   (c3, t3) <- synth ((condVar, t1):env) e3
   -- TODO make these check, after pulling the right thing out of l
-  tHat <- fresh l env (eraseRType t2) -- could just as well be t2
+  tHat <- freshRType l env t2 -- could just as well be t2
   cSub2 <- (t2 <: tHat) l
   cSub3 <- (t3 <: tHat) l
   let cond' = varSubstP (y |-> condVar) cond
@@ -109,9 +109,19 @@ _synth env (If e1 e2 e3 l) = do
                   (CAnd [c3, cSub3]) ]
   pure (c, tHat)
 
+_synth env (Unpack (Bind x _) (Bind y _) e1 e2 loc) = do
+  (c1, tSigma) <- synth env e1
+  let (tx, ty) = case tSigma of
+        RIExists (Bind x' _) tx ty -> (tx, (substReftPred (x' |-> x) ty))
+        _ -> error "unpacking non-sigma type"
+  (c2, rtype) <- synth ((x, tx):(y, ty):env) e2
+  tHat <- freshRType loc env rtype
+  cSub <- (rtype <: tHat) loc
+  pure (CAnd [c1, mkAll x tx (mkAll y ty (CAnd [c2, cSub]))], tHat)
+
 _synth env (Let b e1 e2 loc) = do
   (tx, c, rtype) <- go b
-  tHat <- fresh loc env (eraseRType rtype)
+  tHat <- freshRType loc env rtype
   cSub <- (rtype <: tHat) loc
   pure (mkAll (bindId b) tx (CAnd [c, cSub]), tHat)
 
@@ -216,7 +226,7 @@ _appSynth env (RFun x tx t) e@(Id y _) = do
 _appSynth env (RFun x tx t) e = do
   (c1, te) <- synth env e
   c2 <- (te <: tx) (sourceSpan e)
-  tHat <- fresh (extractLoc e) env (eraseRType t)
+  tHat <- freshRType (extractLoc e) env t
   y <- refreshId "Y"
   c3 <- (substReftPred (bindId x |-> y) t <: tHat) (sourceSpan e)
   pure (CAnd [c1, c2, mkAll y te c3], tHat)
@@ -224,7 +234,7 @@ _appSynth env (RFun x tx t) e = do
 _appSynth env (RIFun (Bind x _) tx t) e = do
   z <- refreshId x
   (c, t') <- appSynth ((z, tx):env) (substReftPred (x |-> z) t) e
-  tHat <- fresh (extractLoc e) env (eraseRType t')
+  tHat <- freshRType (extractLoc e) env t'
   c' <- (t' <: tHat) (sourceSpan e)
   pure (mkExists z tx (CAnd [c, c']), tHat)
 
@@ -257,6 +267,14 @@ _check env e rt@RIFun{} = do
   let (ns, tx) = splitImplicits rt
   c1 <- check (ns ++ env) e tx
   pure $ foldr (\(z, tz) c -> mkAll z tz c) c1 ns
+
+_check env (Unpack (Bind x _) (Bind y _) e1 e2 _) t = do
+  (c1, tSigma) <- synth env e1
+  let (tx, ty) = case tSigma of
+        RIExists (Bind x' _) tx ty -> (tx, (substReftPred (x' |-> x) ty))
+        _ -> error "unpacking non-sigma type"
+  c2 <- check ((x, tx):(y, ty):env) e2 t
+  pure $ CAnd [c1, mkAll x tx (mkAll y ty c2)]
 
 _check env (Let b e1 e2 _) t2
   -- Annotated with an assume
@@ -400,6 +418,12 @@ freshBaseType l env baseType = do
   let k = buildKvar kappa $ v : map fst (foTypes (eraseRTypes env))
   pure $ RBase (Bind v l) baseType k
 
+freshRType :: CGenConstraints r e a => a -> Env r a -> RType r a -> Fresh (RType r a)
+freshRType l env (RIExists (Bind x _) tx ty) = do
+  x' <- refreshId x
+  RIExists (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+freshRType l env rtype = fresh l env (eraseRType rtype)
+
 -- filters out higher-order type binders in the environment
 -- TODO(Matt): check that this is the correct behavior
 foTypes :: [(Id, Type)] -> [(Id, Type)]
@@ -440,14 +464,26 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
     go (RApp c1 vts1) (RApp c2 vts2)
       | c1 == c2  = CAnd <$> sequence (concat $ zipWith (constructorSub locable) vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
-    go t2 (RIFun (Bind x _) t1 t1') = do
+    go t1 (RIFun (Bind x _) t2 t2') = do
       z <- refreshId x
-      cSub <- (t2 <: substReftPred (x |-> z) t1') locable
-      pure $ mkAll z t1 cSub
+      cSub <- (t1 <: substReftPred (x |-> z) t2') locable
+      pure $ mkAll z t2 cSub
     go (RIFun (Bind x _) t1 t1') t2 = do
       z <- refreshId x
       cSub <- (substReftPred (x |-> z) t1' <: t2) locable
       pure $ mkExists z t1 cSub
+    go (RIExists (Bind x1 _) t1 t1') (RIExists (Bind x2 _) t2 t2') = do
+      c1 <- (t1 <: t2) locable
+      c2 <- (t1' <: substReftPred (x2 |-> x1) t2') locable
+      pure $ CAnd [c1, mkAll x1 t2 c2]
+    go (RIExists (Bind x _) t1 t1') t2 = do
+      z <- refreshId x
+      cSub <- (substReftPred (x |-> z) t1' <: t2) locable
+      pure $ mkAll z t1 cSub
+    go t1 (RIExists (Bind x _) t2 t2') = do
+      z <- refreshId x
+      cSub <- (t1 <: substReftPred (x |-> z) t2') locable
+      pure $ mkExists z t2 cSub
     go (RRTy (Bind x1 _) rt1 p1) (RRTy (Bind x2 _) rt2 p2) = do
       let outer = All x1 (eraseRType rt1) p1 (Head (sourceSpan locable) $ varSubstP (x2 |-> x1) p2)
       inner <- (rt1 <: rt2) locable
