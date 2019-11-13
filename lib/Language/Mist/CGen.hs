@@ -422,6 +422,9 @@ freshRType :: CGenConstraints r e a => a -> Env r a -> RType r a -> Fresh (RType
 freshRType l env (RIExists (Bind x _) tx ty) = do
   x' <- refreshId x
   RIExists (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+freshRType l env (RIFun (Bind x _) tx ty) = do
+  x' <- refreshId x
+  RIFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
 freshRType l env rtype = fresh l env (eraseRType rtype)
 
 -- filters out higher-order type binders in the environment
