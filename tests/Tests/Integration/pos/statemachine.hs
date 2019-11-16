@@ -66,7 +66,7 @@ statemachine = 0
 -----------------------------------------------------------------------------
 -- | API for Channels, and sending things
 -----------------------------------------------------------------------------
-chan :: rforall a.
+chan ::
   n:Int ~>
   m : (Map <Int >Int) ~>
   ST <{v:Int | v == n}
@@ -76,19 +76,18 @@ chan :: rforall a.
      >{v:Int | v == n}
 chan = undefined
 
-send as rforall p,q,a,s,t,u.
+send as
   m : (Map <Int >Int) ~>
+  n: Int ~>
   channel : Int ->
   message : {v : Int | (update v (select m channel) /= error)} ->
   -- should be a fresh channel, not just a different channel.
   -- technically this is a conservative approximation, so we're fine
-    ( newchan : {v : Int  | v /= channel } ~>
-      (ST <t >u
-       <{v:Map <Int >Int | v == m}
-       >{v:Map <Int >Int | v == store (store m newchan (update message (select m channel))) channel error}
-       >{v:Int | v == newchan}) ->
-    ST <t >s <p >q >a)
-   -> ST <t >s <p >q >a
+  (exists newchan:{v: Int | v /= channel}.
+    ST <{v:Int | v = n} >{v:Int | v = n}
+       <{v:Map <Int >Int | v = m}
+       >{v:Map <Int >Int | v = store (store m newchan (update message (select m channel))) channel error}
+       >{v:Int | v == newchan})
 send = undefined
 
 -----------------------------------------------------------------------------
@@ -96,6 +95,12 @@ send = undefined
 main ::
   empty:(Map <Int >Int) ~>
   ST <{v:Int| v == 0} >Int <{v:Map <Int >Int| v == empty} >(Map <Int >Int) >Int
-main = bind chan (\c -> send c tick (\c -> bind c (\c -> send c tock (\c -> c))))
+main = bind chan (\c ->
+       unpack (gc1, mc1) = send c tick in
+       mc1)
+       -- unpack (gc1, mc1) = send c tick in
+       -- bind mc1 (\c ->
+       -- unpack (gc2, mc2) = send c tock in
+       -- mc2))
 
 

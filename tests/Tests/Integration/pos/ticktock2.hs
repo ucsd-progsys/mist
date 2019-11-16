@@ -33,13 +33,18 @@ fmap = \f x -> bind x (\xx -> pure (f xx))
 -----------------------------------------------------------------------------
 -- | Primitive Connection Interface
 -----------------------------------------------------------------------------
-new :: rforall a. ST <a >a >Int
+new as forall a. init:(Map <Int >Int) ~>
+  underscore:Int ->
+  (exists channel:Int.
+    ST <{v:Map <Int >Int | v = init}
+       >{v:Map <Int >Int | v = init}
+       >{v:Int | v = channel})
 new = undefined
 
-read :: hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
+read as hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
 read = undefined
 
-write :: h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
+write as h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
 write = undefined
 
 -----------------------------------------------------------------------------
@@ -56,43 +61,42 @@ tocked = 0
 channelStart :: {v:Int| v == tocked}
 channelStart = tocked
 
-withChannel :: rforall p, q, a.
-  init:(Map <Int >Int) ~>
-    (channel:Int ~>
-    (ST <{v:Map <Int >Int | v == init}
-        >{v:Map <Int >Int | v == store init channel channelStart}
-        >{v:Int | v == channel}) ->
-     ST <p >q >a) ->
-  ST <p >q >a
-withChannel = \f -> (bind new (\v -> f (thenn (write v channelStart) (pure v))))
+startChannel :: init:(Map <Int >Int) ~>
+  underscore:Int ->
+  (exists channel:Int.
+    ST <{v:Map <Int >Int | v == init}
+       >{v:Map <Int >Int | v == store init channel channelStart}
+       >{v:Int | v == channel})
+startChannel = \underscore ->
+  unpack (gc, mc) = new 0 in
+  bind mc (\v -> (thenn (write v channelStart) (pure v)))
 
 -----------------------------------------------------------------------------
 -- | Typed Session Wrappers
 -----------------------------------------------------------------------------
-tick :: rforall p,q,a.
+tick ::
   m : (Map <Int >Int) ~>
   channel : {v: Int | select m v == tocked} ->
-    ((ST <{v:Map <Int >Int | v == m}
+    (ST <{v:Map <Int >Int | v == m}
        >{v:Map <Int >Int | v = store m channel ticked}
-       >{v:Int | v = channel}) ->
-    ST <p >q >a)
-   -> ST <p >q >a
-tick = \ c f -> f (thenn (write c tocked) (pure c))
+       >{v:Int | v = channel})
+tick = \c -> thenn (write c tocked) (pure c)
 
-tock :: rforall p,q,a.
+tock ::
   m : (Map <Int >Int) ~>
   channel : {v: Int | select m v == ticked} ->
-    ((ST <{v:Map <Int >Int | v == m}
+    (ST <{v:Map <Int >Int | v == m}
        >{v:Map <Int >Int | v = store m channel tocked}
-       >{v:Int | v = channel}) ->
-    ST <p >q >a)
-   -> ST <p >q >a
-tock = \ c f -> f (thenn (write c ticked) (pure c))
+       >{v:Int | v = channel})
+tock = \c -> thenn (write c ticked) (pure c)
 
 -----------------------------------------------------------------------------
 -- pos
 main :: empty:(Map <Int >Int) ~> ST <{v:Map <Int >Int| v == empty} >(Map <Int >Int) >Int
-main = withChannel (\c -> bind c (\c -> tick c (\c -> bind c (\c -> tock c (\c -> c)))))
+main = unpack (gc1, mc1) = startChannel 0 in
+       bind mc1 (\c ->
+       bind (tick c) (\c ->
+       tock c))
 -- neg
 -- main = withChannel (\c -> bind c (\c -> tick c (\c -> bind c (\c -> tock c (\c -> c)))))
 

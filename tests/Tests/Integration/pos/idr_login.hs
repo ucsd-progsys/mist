@@ -67,15 +67,12 @@ login store = do putStr "Enter password: "
 
 -- TODO make this spec return oK/badPassword, not loggedIn/loggedOut
 login as rforall p, q, r.
-          chan:(Map <Int >Int) ~>
-          server:Int
-         -> (st:Int ~>
-              (ST
-              <{v:Map <Int >Int | (v == chan) /\ (select v server = loggedOut)}
-              >{v:Map <Int >Int | v == store chan server st}
-              >{v:Int | v == st})
-           -> ST <p >q >r)
-        -> ST <p >q >r
+  chan:(Map <Int >Int) ~>
+  server:Int ->
+  (exists st:Int.
+    ST <{v:Map <Int >Int | (v = chan) /\ (select v server = loggedOut)}
+       >{v:Map <Int >Int | v = store chan server st}
+       >{v:Int | v = st})
 login = \store -> bind getStr (\pw -> if pw == 42 then pure loggedIn else pure loggedOut)
 
 {-
@@ -84,7 +81,7 @@ logout :: (store : Var) ->
 logout store = pure ()
 -}
 
-logout as map:(Map <Int >Int) ~> server:Int -> ST <{v:Map <Int >Int | v == map} >{v:Map <Int >Int | v == store map server loggedOut} >Unit
+logout as map:(Map <Int >Int) ~> server:Int -> ST <{v:Map <Int >Int | v = map} >{v:Map <Int >Int | v = store map server loggedOut} >Unit
 logout = Unit
 -----------------------------------------------------------------------------
 
@@ -94,7 +91,7 @@ disconnect :: (store : Int) -> ST m () [remove store (Store LoggedOut)]
 disconnect store = delete store
 -}
 
-withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init } >{v:Map <Int >Int | v == store init server loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
+withConnection :: rforall p, q, a. init:(Map <Int >Int) ~> (server:Int ~> (ST <{v:Map <Int >Int | v = init } >{v:Map <Int >Int | v = store init server loggedOut} >{v:Int | v = server}) -> ST <p >q >a) -> ST <p >q >a
 withConnection = \f -> (bind new (\v -> f (thenn (write v loggedOut) (pure v))))
 
 {- readSecret : (store : Var) -> ST m String [store ::: Store LoggedIn] -}
@@ -120,7 +117,6 @@ getData = do st <- connect
 getData :: it:(Map <Int >Int) ~> ST <{v:Map <Int >Int | v = it} >(Map <Int >Int) >Int
 -- getData =  withConnection (\conn -> thenn conn (pure 0))
 getData = withConnection (\conn ->
-          bind conn (\server ->
-          login server (\status ->
-          bind status (\st ->
-                      if st == loggedIn then readSecret server else pure 0))))
+            bind conn (\server ->
+            unpack (gstatus, mstatus) = login server in
+              bind mstatus (\status -> if status == loggedIn then readSecret server else pure 0)))
