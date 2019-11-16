@@ -21,7 +21,7 @@ import Language.Mist.Types
 import Language.Mist.Names
 import Data.Bifunctor (second)
 
-import Debug.Trace (traceM)
+-- import Debug.Trace (traceM)
 
 -------------------------------------------------------------------------------
 -- Data Structures
@@ -40,7 +40,7 @@ synth :: CGenConstraints r e a =>
         Env r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 synth env e = do
   (c, outT) <- _synth env e
-  -- !_ <- traceM $ "synth: " <> "⊢  " <> pprint e <> "\n\t => " <> pprint outT <> "\n\t ⊣ " <> show c <> "\n\n"
+  -- !_ <- traceM $ "synth: " <> "|-  " <> pprint e <> "\n\t => " <> pprint outT <> "\n\t ⊣ " <> show c <> "\n\n"
   pure (c, outT)
 
 _synth :: CGenConstraints r e a =>
@@ -209,7 +209,7 @@ staleBaseType l baseType = do
 appSynth :: CGenConstraints r e a => Env r a -> RType r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
 appSynth env t e = do
   (c, outT) <- _appSynth env t e
-  -- !_ <- traceM $ "appSynth: " <> pprint t <> "\n\t ⊢ " <> pprint e <> "\n\t >> " <> pprint outT
+  -- !_ <- traceM $ "appSynth: " <> pprint t <> "\n\t |- " <> pprint e <> "\n\t >> " <> pprint outT <> "\n\n"
   pure (c, outT)
 
 -- | env | tfun ⊢ y >>
@@ -257,7 +257,7 @@ single env x = case flattenRType <$> lookup x env of
 check :: CGenConstraints r e a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 check env e t = do
   c <- _check env e t
-  -- !_ <- traceM $ "check: " <> "⊢ " <> pprint e <> "\n\t <= " <> pprint t <> "\n\t ⊣ " <> show c <> "\n\n"
+  -- !_ <- traceM $ "check: " <> "|- " <> pprint e <> "\n\t <= " <> pprint t <> "\n\t ⊣ " <> show c <> "\n\n"
   pure c
 
 _check :: CGenConstraints r e a => Env r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
@@ -363,7 +363,7 @@ _check env e t = do
 appCheck :: CGenConstraints r e a => Env r a -> RType r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
 appCheck env t e t' = do
   c <- _appCheck env t e t'
-  -- !_ <- traceM $ "appCheck: " <> pprint t <> "\n\t ⊢ " <> pprint e <> "\n\t << " <> pprint t' <> "\n\t ⊣ " <> show c <> "\n\n"
+  -- !_ <- traceM $ "appCheck: " <> pprint t <> "\n\t |- " <> pprint e <> "\n\t << " <> pprint t' <> "\n\t ⊣ " <> show c <> "\n\n"
   pure c
 
 -- | env | t ⊢ y << t'
@@ -419,13 +419,32 @@ freshBaseType l env baseType = do
   pure $ RBase (Bind v l) baseType k
 
 freshRType :: CGenConstraints r e a => a -> Env r a -> RType r a -> Fresh (RType r a)
-freshRType l env (RIExists (Bind x _) tx ty) = do
+freshRType l env (RBase _ typ _) = freshBaseType l env typ
+freshRType l env (RApp ctor types) = do
+  kappa <- refreshId $ "kvar" ++ cSEPARATOR
+  v <- refreshId $ "freshCtorVV" ++ cSEPARATOR
+  let k = buildKvar kappa $ v : map fst (foTypes (eraseRTypes env))
+  appType <- RApp ctor <$> mapM (sequence . second (freshRType l env)) types
+  pure $ RRTy (Bind v l) appType k
+freshRType l env (RFun (Bind x _) tx ty) = do
   x' <- refreshId x
-  RIExists (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+  RFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
 freshRType l env (RIFun (Bind x _) tx ty) = do
   x' <- refreshId x
   RIFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
-freshRType l env rtype = fresh l env (eraseRType rtype)
+freshRType l env (RIExists (Bind x _) tx ty) = do
+  x' <- refreshId x
+  RIExists (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+freshRType l env (RRTy (Bind x _) rtype _) = do
+  kappa <- refreshId $ "kvar" ++ cSEPARATOR
+  x' <- refreshId x
+  let k = buildKvar kappa $ x' : map fst (foTypes (eraseRTypes env))
+  rtype' <- freshRType l env rtype
+  pure $ RRTy (Bind x' l) rtype' k
+freshRType l env (RForall tvar rtype) = do
+  RForall tvar <$> freshRType l env rtype
+freshRType l env (RForallP tvar rtype) = do
+  RForallP tvar <$> freshRType l env rtype
 
 -- filters out higher-order type binders in the environment
 -- TODO(Matt): check that this is the correct behavior
@@ -446,7 +465,7 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
 (<:) :: (CGenConstraints r e a, Located b) => RType r a -> RType r a -> b -> Fresh (NNF r)
 (<:) rtype1 rtype2 locable = do
   c <- (rtype1 <<: rtype2) locable
-  -- !_ <- traceM $ "subtyping: " <> "⊢ " <> pprint rtype1 <> "\n\t<: " <> pprint rtype2 <> "\n\t⊣  " <> show c <> "\n\n"
+  -- !_ <- traceM $ "subtyping: " <> "|- " <> pprint rtype1 <> "\n\t<: " <> pprint rtype2 <> "\n\t⊣  " <> show c <> "\n\n"
   pure c
 
 (<<:) :: (CGenConstraints r e a, Located b) => RType r a -> RType r a -> b -> Fresh (NNF r)
