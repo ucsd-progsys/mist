@@ -419,32 +419,32 @@ freshBaseType l env baseType = do
   pure $ RBase (Bind v l) baseType k
 
 freshRType :: CGenConstraints r e a => a -> Env r a -> RType r a -> Fresh (RType r a)
-freshRType l env (RBase _ typ _) = freshBaseType l env typ
-freshRType l env (RApp ctor types) = do
-  kappa <- refreshId $ "kvar" ++ cSEPARATOR
-  v <- refreshId $ "freshCtorVV" ++ cSEPARATOR
-  let k = buildKvar kappa $ v : map fst (foTypes (eraseRTypes env))
-  appType <- RApp ctor <$> mapM (sequence . second (freshRType l env)) types
-  pure $ RRTy (Bind v l) appType k
-freshRType l env (RFun (Bind x _) tx ty) = do
-  x' <- refreshId x
-  RFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
-freshRType l env (RIFun (Bind x _) tx ty) = do
-  x' <- refreshId x
-  RIFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
-freshRType l env (RIExists (Bind x _) tx ty) = do
-  x' <- refreshId x
-  RIExists (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
-freshRType l env (RRTy (Bind x _) rtype _) = do
-  kappa <- refreshId $ "kvar" ++ cSEPARATOR
-  x' <- refreshId x
-  let k = buildKvar kappa $ x' : map fst (foTypes (eraseRTypes env))
-  rtype' <- freshRType l env rtype
-  pure $ RRTy (Bind x' l) rtype' k
-freshRType l env (RForall tvar rtype) = do
-  RForall tvar <$> freshRType l env rtype
-freshRType l env (RForallP tvar rtype) = do
-  RForallP tvar <$> freshRType l env rtype
+freshRType l env rtype = go l env (flattenRType rtype)
+  where
+    go :: CGenConstraints r e a => a -> Env r a -> RType r a -> Fresh (RType r a)
+    go l env (RBase _ typ _) = fresh l env typ
+    go l env (RApp ctor types) = do
+      RApp ctor <$> mapM (sequence . second (freshRType l env)) types
+    go l env (RFun (Bind x _) tx ty) = do
+      x' <- refreshId x
+      RFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+    go l env (RIFun (Bind x _) tx ty) = do
+      x' <- refreshId x
+      RIFun (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+    go l env (RIExists (Bind x _) tx ty) = do
+      x' <- refreshId x
+      RIExists (Bind x' l) <$> freshRType l env tx <*> freshRType l ((x',tx):env) ty
+    go l env (RRTy (Bind x _) rtype _) = do
+      kappa <- refreshId $ "kvar" ++ cSEPARATOR
+      x' <- refreshId x
+      let k = buildKvar kappa $ x' : map fst (foTypes (eraseRTypes env))
+      rtype' <- freshRType l env rtype
+      pure $ RRTy (Bind x' l) rtype' k
+    go l env (RForall tvar rtype) = do
+      RForall tvar <$> freshRType l env rtype
+    go l env (RForallP tvar rtype) = do
+      RForallP tvar <$> freshRType l env rtype
+
 
 -- filters out higher-order type binders in the environment
 -- TODO(Matt): check that this is the correct behavior
@@ -486,6 +486,10 @@ eraseRTypes = map (\(id, rtype) -> (id, eraseRType rtype))
     go (RApp c1 vts1) (RApp c2 vts2)
       | c1 == c2  = CAnd <$> sequence (concat $ zipWith (constructorSub locable) vts1 vts2)
       | otherwise = error "CGen: constructors don't match"
+    go (RIFun (Bind x1 _) t1 t1') (RIFun (Bind x2 _) t2 t2') = do
+      c <- (t2 <: t1) locable
+      c' <- (substReftPred (x1 |-> x2) t1' <: t2') locable
+      pure $ CAnd [c, mkAll x2 t2 c']
     go t1 (RIFun (Bind x _) t2 t2') = do
       z <- refreshId x
       cSub <- (t1 <: substReftPred (x |-> z) t2') locable
