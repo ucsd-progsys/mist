@@ -1,131 +1,240 @@
+{-# LANGUAGE TupleSections #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 --------------------------------------------------------------------------------
 -- | This module contains the code for converting an `Expr` to a "A-Normal" form.
 --------------------------------------------------------------------------------
 
 -- TODO make this a typed normalization (preserve t that we get)
 
-module Language.Mist.Normalizer ( anormal, liftSigmas ) where
+module Language.Mist.Normalizer ( liftSigmas, annotateSigmas ) where
 
 import Language.Mist.Types
 import Language.Mist.Names
 import Language.Mist.Checker (primType)
-import Data.Maybe (fromMaybe)
-import Data.Bifunctor (first, second)
+import Data.Maybe (fromJust)
+import Data.Bifunctor (Bifunctor(..))
+import Control.Monad.Identity
+
+type ElaboratedExpRType r a = Expr (Maybe (ElaboratedAnnotation r a)) (RType () a, a)
+type Env a = [(Id, RType () a)]
+
+-- |
+-- prop> (snd <$> annotateSigmas e) == e
+annotateSigmas :: ElaboratedExpr r a -> ElaboratedExpRType r a
+annotateSigmas =  synth []
+
+extractSigma = fst . extractLoc
+
+instance MonadFresh Identity where
+    refreshId = Identity
+
+synth :: forall r a. Env a -> ElaboratedExpr r a -> ElaboratedExpRType r a
+synth _ (Unit a) = Unit (liftType a TUnit, a)
+synth _ (Number i a) = Number i (liftType a TInt, a)
+synth _ (Boolean b a) = Boolean b (liftType a TBool, a)
+synth _ (Prim p a) = Prim p (liftType a $ runIdentity $ primType p, a)
+synth env e@(Id x _) = (fromJust $ lookup x env,) <$> e
+
+synth env (If e1 e2 e3 l) = If e1' e2' e3' (extractSigma e2', l)
+  where
+    e1' = synth env e1
+    e2' = synth env e2
+    e3' = synth env e3
+
+synth env (Unpack (Bind x lx) (Bind y ly) e1 e2 loc) =
+  Unpack (Bind x (tx, lx)) (Bind y (ty, ly)) e1' e2' (extractSigma e2', loc)
+  where
+    e1' = synth env e1
+    e2' = synth ((x, tx):(y, ty):env) e2
+    RIExists _ tx ty = extractSigma e1'
+
+synth env (ILam b@(AnnBind x (Just tx) loc) e l) =
+  ILam (AnnBind x (Just tx) (tx', loc)) e' (t', l)
+  where
+  e' = synth env e
+  tx' = liftType loc tx
+  t' = RIFun (first (const ()) b) tx' (extractSigma e')
+
+synth _env (ILam (AnnBind _ Nothing _) _ _) =
+    error "should not occur after Elaboration"
+
+synth env (Let b e1 e2 loc) = Let b' e1' e2' (extractSigma e2', loc)
+  where
+  (b', e1', e2') = go b
+
+  go b@(AnnBind x (Just (ElabAssume tx)) _) = ((dropPreds tx,) <$> b, e1',e2')
+    where
+      e1' = (dropPreds tx,) <$> e1
+      e2' = synth ((x, dropPreds tx): env) e2
+
+  go b@(AnnBind x (Just (ElabRefined tx)) _) = ((dropPreds tx,) <$> b, e1',e2')
+    where
+      e1' = check ((x, dropPreds tx):env) e1 $ dropPreds tx
+      e2' = synth ((x, dropPreds tx):env) e2
+
+  -- Unrefined
+  -- Not allowed to be recursive
+  go b@(AnnBind x (Just (ElabUnrefined _typ)) _) = ((tx,) <$> b, e1',e2')
+    where
+      e1' = synth env e1
+      tx = extractSigma e1'
+      e2' = synth ((x, tx):env) e2
+
+  go (AnnBind _ Nothing _) = error "INTERNAL ERROR: annotation missing on let"
+
+synth _ (Lam (AnnBind _ Nothing _) _ _) = error "should not occur"
+synth _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) = error "should not occur"
+
+synth env (Lam b@(AnnBind x (Just (ElabRefined tx)) loc) e l) =
+    Lam ((dropPreds tx,)<$>b) e' (RFun (Bind x loc) (dropPreds tx) (dropPreds $ extractSigma e'), l)
+  where e' = synth ((x, dropPreds tx):env) e
+
+synth env (Lam b@(AnnBind x (Just (ElabUnrefined typ)) loc) e l) =
+    Lam ((liftType loc typ,)<$>b) e' (RFun (Bind x loc) (liftType loc typ) (extractSigma e'), l)
+  where e' = synth ((x, liftType loc typ):env) e
+  -- NB: this ist liftType because in synthesis mode we have no more info, but in checking mode, we should propogate type information
+
+synth env (TApp e typ loc) = TApp e' typ (t', loc)
+  where
+    e' = synth env e
+    t' = case extractSigma e' of
+              RForall tvar t' -> substReftReft (unTV tvar |-> liftType loc typ) t'
+              RForallP tvar t' -> substReftReft (unTV tvar |-> liftType loc typ) t'
+              _ -> error "should not happen"
+
+synth env (TAbs tvar e l) =
+  TAbs tvar e' (RForall tvar (extractSigma e'),l)
+    where e' = synth env e
+
+synth env (App e1 e2 l) = App e1' e2' (descend $ extractSigma e2', l)
+  where
+    e1' = synth env e1
+    e2' = synth env e2
+
+check :: Env a -> ElaboratedExpr r a -> RType () a -> Expr (Maybe (ElaboratedAnnotation r a)) (RType () a, a)
+check env (If e1 e2 e3 l) t = If e1' e2' e3' (t, l)
+  where
+    e1' = synth env e1
+    e2' = check env e2 t
+    e3' = check env e3 t
+
+check env (Unpack (Bind x lx) (Bind y ly) e1 e2 loc) t =
+  Unpack (Bind x (tx, lx)) (Bind y (ty, ly)) e1' e2' (extractSigma e2', loc)
+  where
+    e1' = synth env e1
+    e2' = check ((x, tx):(y, ty):env) e2 t
+    RIExists _ tx ty = extractSigma e1'
+
+check env (ILam (Bind x loc) e l) t'@(RIFun _ ty t) =
+  ILam (Bind x (ty,loc)) e' (t', l)
+  where
+  e' = check env e t
+
+check env (Let b e1 e2 loc) t = Let b' e1' e2' (t, loc)
+  where
+  (b', e1', e2') = go b
+
+  go b@(AnnBind x (Just (ElabAssume tx)) _) = ((dropPreds tx,) <$> b, e1',e2')
+    where
+      e1' = (dropPreds tx,) <$> e1
+      e2' = check ((x, dropPreds tx): env) e2 t
+
+  go b@(AnnBind x (Just (ElabRefined tx)) _) = ((dropPreds tx,) <$> b, e1',e2')
+    where
+      e1' = check ((x, dropPreds tx):env) e1 $ dropPreds tx
+      e2' = check ((x, dropPreds tx):env) e2 t
+
+  -- Unrefined
+  -- Not allowed to be recursive
+  go b@(AnnBind x (Just (ElabUnrefined _)) _) = ((tx,) <$> b, e1',e2')
+    where
+      e1' = synth env e1
+      tx = extractSigma e1'
+      e2' = check ((x, tx):env) e2 t
+
+  go (AnnBind _ Nothing _) = error "INTERNAL ERROR: annotation missing on let"
+
+
+check env (Lam (Bind x loc) e l) t'@(RFun y ty t) =
+  let ty' = substReftPred (bindId y |-> x) ty
+      e' = check ((x, ty):env) e (substReftPred (bindId y |-> x) t) in
+    Lam (Bind x (ty',loc)) e' (t',l)
+
+-- I don't think the names matter here. If they do ... oops
+check env (TAbs tvar' e loc) t'@(RForall (TV tvar) t) =
+  let e' = check env e (substReftType (tvar |-> TVar tvar') t) in
+    TAbs tvar' e' (t',loc)
+check env (TAbs tvar' e loc) t'@(RForallP (TV tvar) t) =
+  let e' = check env e (substReftType (tvar |-> TVar tvar') t) in
+    TAbs tvar' e' (t',loc)
+
+check env (App e1 e2 loc) t = App e1' e2' (t,loc)
+  where
+    e2' = synth env e2
+    e1' = check env e1 (RFun (Bind "" loc) (extractSigma e2') t)
+
+check env e _ = synth env e
 
 --------------------------------------------------------------------------------
 -- | Insert explicit unpacking of implicit sigmas
 --------------------------------------------------------------------------------
-type Env a = [(Id, RType () a)]
 type SigmaBinds r a = [(Id, Id, ElaboratedExpr r a)]
 
 liftSigmas :: ElaboratedExpr r a -> ElaboratedExpr r a
-liftSigmas e = fst $ runFresh (anfSigmas [] e)
+liftSigmas e = runFresh (anfSigmas $ annotateSigmas e)
 
-anfSigmas :: (MonadFresh m) => Env a -> ElaboratedExpr r a -> m (ElaboratedExpr r a, RType () a)
-anfSigmas _ e@AnnNumber{} = pure (e, liftType (extractLoc e) TInt)
-anfSigmas _ e@AnnBoolean{} = pure (e, liftType (extractLoc e) TBool)
-anfSigmas _ e@AnnUnit{} = pure (e, liftType (extractLoc e) TUnit)
-anfSigmas env e@(AnnId x _ _) =
-  pure (e, fromMaybe (error "variable not found") (lookup x env))
-anfSigmas _ e@(AnnPrim p _ l) = do
-  typ <- primType p
-  pure (e, liftType l typ)
-anfSigmas env (AnnIf e1 e2 e3 tag l) = do
-  (e1', bs, _) <- immSigmas env e1
-  (e2', t2) <- anfSigmas env e2
-  (e3', _t3) <- anfSigmas env e3
-  pure (stitchUnpacks bs (AnnIf e1' e2' e3' tag l), t2)
+anfSigmas :: (MonadFresh m) => ElaboratedExpRType r a -> m (ElaboratedExpr r a)
+anfSigmas e@Number{} = pure $ snd <$> e
+anfSigmas e@Boolean{} = pure $ snd <$> e
+anfSigmas e@Unit{} = pure $ snd <$> e
+anfSigmas e@Id{} =  uncurry stitchUnpacks <$> immSigmas e
+anfSigmas e@Prim{} = uncurry stitchUnpacks <$> immSigmas e
+anfSigmas (If e1 e2 e3 l) = do
+  (bs, e1') <- immSigmas e1
+  e2' <- anfSigmas e2
+  e3' <- anfSigmas e3
+  pure $ stitchUnpacks bs $ If e1' e2' e3' $ snd l
 
-anfSigmas _ (AnnLet (AnnBind _x Nothing _) _e1 _e2 _tag _l) =
+anfSigmas (Let (AnnBind _x Nothing _) _e1 _e2 _l) =
   error "this shouldn't happen"
-anfSigmas env (AnnLet b@(AnnBind x (Just (ElabRefined t)) _) e1 e2 tag l) = do
-  let env' = (x, dropPreds t):env
-  (e1', _) <- anfSigmas env' e1
-  (e2', t2) <- anfSigmas env' e2
-  pure (AnnLet b e1' e2' tag l, t2)
-anfSigmas env (AnnLet b@(AnnBind x (Just (ElabAssume t)) _) e1 e2 tag l) = do
-  let env' = (x, dropPreds t):env
-  (e2', t2) <- anfSigmas env' e2
-  pure (AnnLet b e1 e2' tag l, t2)
-anfSigmas env (AnnLet b@(AnnBind x (Just (ElabUnrefined typ)) _) e1 e2 tag l) = do
-  let env' = (x, liftType l typ):env
-  (e1', _) <- anfSigmas env' e1
-  (e2', t2) <- anfSigmas env' e2
-  pure (AnnLet b e1' e2' tag l, t2)
+anfSigmas (Let b@(AnnBind _ (Just (ElabAssume _)) _) e1 e2 l) = do
+  e2' <- anfSigmas e2
+  pure $ Let (snd <$> b) (snd <$> e1) e2' $ snd l
+anfSigmas (Let b e1 e2 l) = do
+  (bs, e1') <- immSigmas e1
+  e2' <- anfSigmas e2
+  pure $ stitchUnpacks bs $ Let (snd <$> b) e1' e2' $ snd l
+anfSigmas (App e1 e2 l) = do
+  (bs1, e1') <- immSigmas e1
+  (bs2, e2')  <- immSigmas e2
+  pure $ stitchUnpacks (bs1 <> bs2) (App e1' e2' (snd $ l))
 
-anfSigmas env e@AnnApp{} = do
-  (e', bs, t) <- anfAppSigmas env e
-  pure (stitchUnpacks bs e', t)
-
-anfSigmas _env (AnnLam (AnnBind _x Nothing _) _e _tag _l) =
+anfSigmas (Lam (AnnBind _ Nothing _) _ _) =
   error "this shouldn't happen"
-anfSigmas env (AnnLam b@(AnnBind x (Just (ElabRefined t)) _) e tag l) = do
-  (e', t') <- anfSigmas ((x, dropPreds t):env) e
-  pure (AnnLam b e' tag l, RFun (AnnBind x () l) (dropPreds t) t')
-anfSigmas _env (AnnLam (AnnBind _x (Just ElabAssume{}) _) _e _tag _l) =
+anfSigmas (Lam (AnnBind _x (Just ElabAssume{}) _) _e _l) =
   error "this shouldn't happen"
-anfSigmas env (AnnLam b@(AnnBind x (Just (ElabUnrefined typ)) _) e tag l) = do
-  (e', t') <- anfSigmas ((x, liftType l typ):env) e
-  pure (AnnLam b e' tag l, RFun (AnnBind x () l) (liftType l typ) t')
+anfSigmas (Lam b e l) =
+  Lam (snd <$> b) `flip` (snd $ l) <$> anfSigmas e
 
-anfSigmas env (AnnILam b@(Bind x _) e tag l) = do
-  (e', t') <- anfSigmas env e
-  pure (AnnILam b e' tag l, RIFun (AnnBind x () l) (liftType l TUnit) t')
-anfSigmas env (AnnTApp e typ tag l) = do
-  (e', t) <- anfSigmas env e
-  let t' = case t of
-            RForall tvar t' -> substReftReft (unTV tvar |-> liftType l typ) t'
-            RForallP tvar t' -> substReftReft (unTV tvar |-> liftType l typ) t'
-            _ -> error "should not happen"
-  pure (AnnTApp e' typ tag l, t')
+anfSigmas (ILam b e l) = do
+  (e') <- anfSigmas e
+  pure (ILam (snd <$> b) e' (snd $ l))
+anfSigmas (TApp e typ l) = do
+  (e') <- anfSigmas e
+  pure (TApp e' typ (snd $ l))
 
-anfSigmas env (AnnTAbs tv e tag l) = do
-  (e', t) <- anfSigmas env e
-  pure (AnnTAbs tv e' tag l, RForall tv t)
-anfSigmas _env (AnnUnpack _x _y _e1 _e2 _tag _l) = error "todo?"
+anfSigmas (TAbs tv e l) = do
+  (e') <- anfSigmas e
+  pure (TAbs tv e' (snd $ l))
+anfSigmas (Unpack _x _y _e1 _e2 _l) = error "todo?"
 
-anfAppSigmas :: (MonadFresh m) => Env a -> ElaboratedExpr r a -> m (ElaboratedExpr r a, SigmaBinds r a, RType () a)
-anfAppSigmas env (AnnApp e1 e2 tag l) = do
-  (e1', bs1, t) <- anfAppSigmas env e1
-  (e2', bs2, _) <- immSigmas env e2
-  pure (AnnApp e1' e2' tag l, bs1 <> bs2, descend t)
-
-anfAppSigmas env e = immSigmas env e
-
-immSigmas :: (MonadFresh m) => Env a -> ElaboratedExpr r a -> m (ElaboratedExpr r a, SigmaBinds r a, RType () a)
-immSigmas env e@AnnNumber{} = immExpSigma env e
-immSigmas env e@AnnBoolean{} = immExpSigma env e
-immSigmas env e@AnnUnit{} = immExpSigma env e
-immSigmas env e@AnnId{} = immExpSigma env e
-immSigmas env e@AnnPrim{} = immExpSigma env e
-immSigmas env e@AnnIf{} = immExpSigma env e
-immSigmas env (AnnApp e1 e2 tag l) = do
-  (e1', bs1, t1) <- immSigmas env e1
-  (e2', bs2, _) <- immSigmas env e2
-  let t1' = descend t1
-  (eapp, bsapp, tout) <- unpackAllSigmas t1' (AnnApp e1' e2' tag l)
-  pure (eapp, bs1 <> bs2 <> bsapp, tout) -- TODO: is this the correct order?
-immSigmas env e@AnnLet{} = immExpSigma env e
-immSigmas env e@AnnLam{} = immExpSigma env e
-immSigmas env e@AnnILam{} = immExpSigma env e
-immSigmas env e@AnnTApp{} = immExpSigma env e
-immSigmas env e@AnnTAbs{} = immExpSigma env e
-immSigmas env e@AnnUnpack{} = immExpSigma env e
-
-immExpSigma :: (MonadFresh m) => Env a -> ElaboratedExpr r a -> m (ElaboratedExpr r a, SigmaBinds r a, RType () a)
-immExpSigma env e = do
-  (e', t) <- anfSigmas env e
-  unpackAllSigmas t e'
-
-unpackAllSigmas :: (MonadFresh m) => RType () a -> ElaboratedExpr r a -> m (ElaboratedExpr r a, SigmaBinds r a, RType () a)
-unpackAllSigmas (RIExists b _ t') e = do
-  let l = extractLoc e
+immSigmas :: (MonadFresh m) => ElaboratedExpRType r a -> m (SigmaBinds r a, ElaboratedExpr r a)
+immSigmas e | (RIExists b _ t', l) <- extractLoc e = do
   let tag = extractAnn e
   (x, y) <- freshSigmaNames (bindId b)
-  (e', bs, tout) <- unpackAllSigmas t' (AnnId y tag l)
-  pure (e', (x, y, e):bs, tout)
-unpackAllSigmas t e = do
-  pure (e, [], t)
+  (bs, e') <- immSigmas (AnnId y tag (t', l))
+  pure ((x, y, snd <$> e):bs, e')
+immSigmas e = pure ([], snd <$> e)
 
 stitchUnpacks :: SigmaBinds r a -> ElaboratedExpr r a -> ElaboratedExpr r a
 stitchUnpacks [] e' = e'
@@ -139,7 +248,7 @@ descend (RIFun _ _ t') = descend t'
 descend (RFun _ _ t') = t'
 descend _ = error "shouldn't happen"
 
-dropPreds :: RType r a -> RType () a
+dropPreds :: Bifunctor b => b a c -> b () c
 dropPreds = first (const ())
 
 freshSigmaNames :: (MonadFresh m) => Id -> m (Id, Id)
@@ -156,103 +265,3 @@ liftType loc TBool = RBase (Bind "x" loc) TBool ()
 liftType loc (t1 :=> t2) = RFun (Bind "x" loc) (liftType loc t1) (liftType loc t2)
 liftType loc (TCtor ctor types) = RApp ctor (fmap (second (liftType loc)) types)
 liftType loc (TForall tvar typ) = RForall tvar (liftType loc typ)
-
-
-type Binds t a = [(Bind t a, (AnfExpr t a, a))] -- TODO: is there a reason for this not to be a triple?
-
---------------------------------------------------------------------------------
--- | Convert an Expr into A-Normal Form
---------------------------------------------------------------------------------
-anormal :: Expr t a -> AnfExpr t a
---------------------------------------------------------------------------------
-anormal e = runFresh (anf e)
-
---------------------------------------------------------------------------------
-anf :: (MonadFresh m) => Expr t a -> m (AnfExpr t a)
---------------------------------------------------------------------------------
-anf e@AnnUnit{} = pure e
-anf e@AnnNumber{} = pure e
-anf e@AnnBoolean{} = pure e
-anf e@AnnId{} = pure e
-anf e@AnnPrim{} = pure e
-anf (AnnLet x e b tag l) = do
-  e' <- anf e
-  b' <- anf b
-  pure $ AnnLet x e' b' tag l
-anf (AnnIf c e1 e2 tag l) = do
-  (bs, c') <- imm c
-  e1' <- anf e1
-  e2' <- anf e2
-  pure $ stitch bs (AnnIf c' e1' e2' tag l)
-anf e@AnnApp{} = uncurry stitch <$> anfApp e
-anf (AnnLam x e tag l) = AnnLam x <$> anf e <*> pure tag <*> pure l
-anf (AnnILam x e tag l) = AnnILam x <$> anf e <*> pure tag <*> pure l
-anf e@AnnTApp{}  = uncurry stitch <$> anfApp e
-anf (AnnTAbs alpha e tag l) = AnnTAbs alpha <$> anf e <*> pure tag <*> pure l
-
-anfApp (AnnApp e1 e2 tag l) = do
-  (bs, e1') <- anfApp e1
-  (bs', e2') <- imm e2
-  pure (bs ++ bs', AnnApp e1' e2' tag l)
-anfApp (AnnTApp e1 t tag l) = do
-  (bs, e1') <- anfApp e1
-  pure (bs, AnnTApp e1' t tag l)
-anfApp e = imm e
-
---------------------------------------------------------------------------------
--- | `stitch bs e` takes a "context" `bs` which is a list of temp-vars and their
---   definitions, and an expression `e` that uses the temp-vars in `bs` and glues
---   them together into a `Let` expression.
---------------------------------------------------------------------------------
-stitch :: Binds t a -> AnfExpr t a -> AnfExpr t a
---------------------------------------------------------------------------------
-stitch bs e = bindsExpr [(x, e) | (x, (e, _)) <- reverse bs] e (extractAnn e) (extractLoc e)
-
---------------------------------------------------------------------------------
--- | `imm e` takes as input an expression `e` and
---   returns an output `(bs, e')` where
---   * `bs` are the temporary binders needed to render `e` in ANF, and
---   * `e'` is an `imm` value Id equivalent to `e`.
---------------------------------------------------------------------------------
-imm :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
---------------------------------------------------------------------------------
-imm e@AnnUnit{} = immExp e
-imm e@AnnNumber{} = immExp e
-imm e@AnnBoolean{} = immExp e
-imm e@AnnPrim{} = immExp e
-imm e@AnnId{} = pure ([], e)
-imm (AnnApp e1 e2 tag l) = do
-  (bs, v1) <- imm e1
-  (bs', v2) <- imm e2
-  x <- freshBind tag l
-  let bs'' = (x, (AnnApp v1 v2 tag l, l)) : (bs ++ bs')
-  pure (bs'', mkId x tag l)
-imm e@AnnIf{} = immExp e
-imm e@AnnLet{} = immExp e
-imm e@AnnLam{} = immExp e
-imm e@AnnILam{} = immExp e
-imm e@AnnTApp{} = immExp e
-imm e@AnnTAbs{} = immExp e
-
-immExp :: (MonadFresh m) => Expr t a -> m (Binds t a, ImmExpr t a)
-immExp e = do
-  let l = extractLoc e
-  let t = extractAnn e
-  e' <- anf e
-  v <- freshBind t l
-  let bs = [(v, (e', l))]
-  pure (bs, mkId v t l)
-
-freshBind :: (MonadFresh m) => t -> a -> m (Bind t a)
-freshBind t l = do
-  x <- refreshId $ "anf" ++ cSEPARATOR
-  pure AnnBind { bindId = x
-               , bindAnn = t
-               , bindTag = l
-               }
-
-mkId :: Bind t a -> t -> a -> Expr t a
-mkId x tag l = AnnId (bindId x) tag l
-
-bindsExpr :: [(Bind t a, Expr t a)] -> Expr t a -> t -> a -> Expr t a
-bindsExpr bs e t l = foldr (\(x, e1) e2 -> AnnLet x e1 e2 t l) e bs
