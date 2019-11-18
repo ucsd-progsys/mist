@@ -200,7 +200,7 @@ exprAddParsedInfers = goE
     goE (AnnILam x e _ l)    = ParsedExpr $ ILam x (goUn e) l
     goE (AnnTApp e typ _ l)  = ParsedExpr $ TApp (goUn e) typ l
     goE (AnnTAbs tvar e _ l) = ParsedExpr $ TAbs tvar (goUn e) l
-    goE (AnnUnpack b1 b2 e1 e2 _ l) = ParsedExpr $ Unpack b1 (goB b2) (goUn e1) (goUn e2) l
+    goE (AnnUnpack b1 b2 e1 e2 _ l) = ParsedExpr $ Unpack b1 b2 (goUn e1) (goUn e2) l
 
     goUn = unParsedExpr . goE
 
@@ -341,7 +341,7 @@ unpackExpr = fmap ParsedExpr $ withSpan' $ do
   symbol "("
   bx <- uncurry Bind <$> identifier
   symbol ","
-  be <- letBinder
+  be <- uncurry Bind <$> identifier
   symbol ")"
   symbol "="
   ParsedExpr e1 <- expr

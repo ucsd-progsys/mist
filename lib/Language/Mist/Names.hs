@@ -172,7 +172,7 @@ instance Subable Type t => Subable Type (Expr t a) where
   _subst su (AnnTApp e typ tag l) = AnnTApp (_subst su e) (_subst su typ) (_subst su tag) l
   _subst su (AnnTAbs tvar e tag l) = AnnTAbs tvar (_subst su' e) (_subst su tag) l
     where su' = M.delete (unTV tvar) su
-  _subst su (AnnUnpack b1 b2 e1 e2 tag l) = AnnUnpack (_subst su b1) (_subst su b2) (_subst su e1) (_subst su e2) (_subst su tag) l
+  _subst su (AnnUnpack b1 b2 e1 e2 tag l) = AnnUnpack b1 b2 (_subst su e1) (_subst su e2) (_subst su tag) l
 
 instance Subable Type Type where
   _subst su t@(TVar (TV a)) = fromMaybe t $ M.lookup a su

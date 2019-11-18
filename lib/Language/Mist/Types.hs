@@ -132,7 +132,7 @@ data Expr t a
   | AnnILam !(Bind (Maybe Type) a) !(Expr t a) !t !a
   | AnnTApp !(Expr t a) !Type !t !a
   | AnnTAbs TVar !(Expr t a) !t !a
-  | AnnUnpack !(Bind (Maybe Type) a) !(Bind t a) !(Expr t a) !(Expr t a) !t !a -- unpack (x, y) = e1 in e2 (e1 : Σx:t.t')
+  | AnnUnpack !(Bind () a) !(Bind () a) !(Expr t a) !(Expr t a) !t !a -- unpack (x, y) = e1 in e2 where (e1 : Σx:t.t')
   deriving (Show, Functor, Eq, Read)
 
 data Bind t a = AnnBind
@@ -180,7 +180,7 @@ pattern TApp e typ l <- AnnTApp e typ _ l
 pattern TAbs :: (Default t) => TVar -> Expr t a -> a -> Expr t a
 pattern TAbs tvar e l <- AnnTAbs tvar e _ l
   where TAbs tvar e l = AnnTAbs tvar e defaultVal l
-pattern Unpack :: (Default t) => (Bind (Maybe Type) a) -> (Bind t a) -> Expr t a -> Expr t a -> a -> Expr t a
+pattern Unpack :: (Default t) => (Bind () a) -> (Bind () a) -> Expr t a -> Expr t a -> a -> Expr t a
 pattern Unpack b1 b2 e1 e2 l <- AnnUnpack b1 b2 e1 e2 _ l
   where Unpack b1 b2 e1 e2 l = AnnUnpack b1 b2 e1 e2 defaultVal l
 
@@ -601,7 +601,7 @@ instance Bifunctor Expr where
   first f (AnnILam bind e ann l) = AnnILam bind (first f e) (f ann) l
   first f (AnnTApp e t ann l) = AnnTApp (first f e) t (f ann) l
   first f (AnnTAbs alpha e ann l) = AnnTAbs alpha (first f e) (f ann) l
-  first f (AnnUnpack b1 b2 e1 e2 ann l) = AnnUnpack b1 (first f b2) (first f e1) (first f e2) (f ann) l
+  first f (AnnUnpack b1 b2 e1 e2 ann l) = AnnUnpack b1 b2 (first f e1) (first f e2) (f ann) l
 
 instance Bifunctor Bind where
   second = fmap

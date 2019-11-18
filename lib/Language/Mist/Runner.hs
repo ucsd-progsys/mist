@@ -12,6 +12,7 @@ import Language.Mist.CGen
 import Language.Mist.Config
 import Language.Mist.ToFixpoint
 import Language.Mist.Names
+import Language.Mist.Normalizer
 import qualified Language.Fixpoint.Horn.Types as HC
 import qualified Language.Fixpoint.Types as F
 import qualified Control.Exception as Ex
@@ -19,7 +20,7 @@ import qualified Control.Exception as Ex
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
 
--- import Debug.Trace (traceM)
+import Debug.Trace (traceM)
 
 type R = HC.Pred
 
@@ -52,7 +53,8 @@ act _h config = do
   case r of
     Right (measures', t) -> do
       -- !_ <- traceM $ pprint t
-      let c = generateConstraints t
+      !_ <- traceM $ pprint (liftSigmas t)
+      let c = generateConstraints t --(liftSigmas t)
       solverResult <- solve measures' c
       case F.resStatus solverResult of
         F.Safe -> return (Right ())

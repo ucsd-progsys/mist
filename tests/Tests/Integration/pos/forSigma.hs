@@ -39,10 +39,10 @@ for2 :: (n:Int ~>
           score:Int ->
           (exists m2:{v: Int | v > m}.
             (ST <{v: Int | v = m} >{v: Int | v = m2} >Int)))
-for2 = \f -> \score ->
-  unpack (s1, ms1) = f 1 in
-  unpack (s2, ms2) = f 2 in
-  (thenn ms1 ms2)
+for2 = \f -> \score -> thenn (f 1) (f 2)
+  -- unpack (s1, ms1) = f 1 in
+  -- unpack (s2, ms2) = f 2 in
+  -- (thenn ms1 ms2)
 
 get as forall s. wg:s ~> Int -> ST <{v:s|v==wg} >{v:s|v==wg} >{v:s|v==wg}
 get = undefined
@@ -64,9 +64,10 @@ bar :: x:Int ~>
 bar = \under -> bind (get 8) (\y -> put (y + 1))
 
 main :: x:{v: Int | v > 3} ~> ST <{v: Int | v = x} >{v: Int | v > 3} >Int
-main = unpack (s1, ms1) = ((for2 foo) 8) in
-       unpack (s2, ms2) = ((for2 bar) 9) in
-       (thenn ms1 ms2)
+-- main = unpack (s1, ms1) = ((for2 foo) 8) in
+--        unpack (s2, ms2) = ((for2 bar) 9) in
+--        (thenn ms1 ms2)
+main = thenn ((for2 foo) 8) ((for2 foo) 9)
 
 -- for2 :: rforall a, b.
 --   ((rforall c, d.

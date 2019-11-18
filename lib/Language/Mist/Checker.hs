@@ -29,6 +29,7 @@ module Language.Mist.Checker
   , errUnboundFun
 
   , annotate
+  , primType
   ) where
 
 
@@ -38,6 +39,7 @@ import           Text.Printf (printf)
 import           Control.Monad.State
 import           Control.Monad.Except
 import           Data.Foldable (fold)
+import           Data.Bifunctor (first)
 
 import           Language.Mist.Types
 import           Language.Mist.Utils
@@ -338,10 +340,10 @@ synthesize_ (ILam bind e l) = do
   (c, t) <- synthesize_ e
   pure (ILam bind c l, t)
 synthesize_ (Unpack b1 b2 e1 e2 l) =
-  typeCheckLet b2 e1 e2 l
-  (\b2' c1 e2 l -> do
+  typeCheckLet (first (const $ Just ParsedInfer) b2) e1 e2 l
+  (\_ c1 e2 l -> do
       (c2, inferredType) <- synthesize_ e2
-      pure (Unpack b1 b2' c1 c2 l, inferredType))
+      pure (Unpack b1 b2 c1 c2 l, inferredType))
 
 
 -- DEBUGGING
@@ -393,10 +395,10 @@ check_ expr typ = do
       c <- go e t
       pure $ ILam bind c l
     go (Unpack b1 b2 e1 e2 l) t =
-      typeCheckLet b2 e1 e2 l
-      (\b2' c1 e2 l -> do
+      typeCheckLet (first (const $ Just ParsedInfer) b2) e1 e2 l
+      (\_ c1 e2 l -> do
           c2 <- check e2 t
-          pure $ Unpack b1 b2' c1 c2 l)
+          pure $ Unpack b1 b2 c1 c2 l)
     go e typ = throwError $ [errCheckingError (sourceSpan e) typ]
 
 synthesizeApp :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> a -> Context (ElaboratedExpr r a, Type)
