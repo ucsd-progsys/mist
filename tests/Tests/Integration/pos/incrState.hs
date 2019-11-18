@@ -19,5 +19,5 @@ put as wp:Int -> ST <Int >{p:Int|p==wp} >Unit
 put = 0
 
 -- incr
-incr :: ST <{i:Int|i==2} >{w:Int|w==3} >Unit
+incr :: i:Int ~> ST <{v:Int|i==v} >{w:Int|w==i+1} >Unit
 incr = bind (get True) (\x -> put (x+1))

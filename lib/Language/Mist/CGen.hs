@@ -166,7 +166,12 @@ _synth env (Lam (AnnBind x (Just (ElabUnrefined typ)) loc) e _) = do
   (c, t) <- synth ((x, tHat):env) e
   pure (mkAll x tHat c, RFun (Bind x loc) tHat t)
 
--- TODO: ILam?
+_synth env (ILam (AnnBind x (Just tx) loc) e _) = do
+    (c, te) <- synth env e
+    tx' <- stale loc tx
+    pure (mkAll x tx' c, RIFun (Bind x loc) tx' te)
+_synth _env (ILam (AnnBind _ (Nothing) _) _ _) =
+    error "should not occur"
 
 _synth env (TApp e typ loc) = do
   (c, scheme ) <- synth env e

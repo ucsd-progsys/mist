@@ -18,7 +18,7 @@ import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
 import qualified Data.HashMap.Strict as HM
 import Data.Maybe (fromMaybe, fromJust)
-import Data.List (intercalate, intersect)
+import Data.List (intercalate)
 import Text.Printf
 
 import Language.Mist.Types as M
