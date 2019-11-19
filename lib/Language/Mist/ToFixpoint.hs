@@ -17,7 +17,7 @@ import Data.String (fromString)
 import Data.Bifunctor
 import qualified Data.Map.Strict as MAP
 import qualified Data.HashMap.Strict as HM
-import Data.Maybe (fromMaybe, fromJust)
+import Data.Maybe (fromMaybe)
 import Data.List (intercalate)
 import Text.Printf
 
@@ -79,7 +79,7 @@ collectKVars cstr = go MAP.empty cstr
 -- | Translate base `Type`s to `Sort`s
 --------------------------------------------------------------------
 typeToSort :: M.Type -> F.Sort
-typeToSort = fromJust . safeTypeToSort
+typeToSort t = fromMaybe (error $ "typeToSort: " <> pprint t) $ safeTypeToSort t
 
 safeTypeToSort :: M.Type -> Maybe F.Sort
 safeTypeToSort (TVar (TV t)) = Just $ F.FVar (MN.varNum t) -- TODO: this is bad and needs to be changed

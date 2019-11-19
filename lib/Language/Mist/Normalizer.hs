@@ -12,7 +12,7 @@ module Language.Mist.Normalizer ( liftSigmas, annotateSigmas ) where
 import Language.Mist.Types
 import Language.Mist.Names
 import Language.Mist.Checker (primType)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromMaybe)
 import Data.Bifunctor (Bifunctor(..))
 import Control.Monad.Identity
 
@@ -34,7 +34,7 @@ synth _ (AnnUnit tag a) = AnnUnit tag (liftType a TUnit, a)
 synth _ (AnnNumber i tag a) = AnnNumber i tag (liftType a TInt, a)
 synth _ (AnnBoolean b tag a) = AnnBoolean b tag (liftType a TBool, a)
 synth _ (AnnPrim p tag a) = AnnPrim p tag (liftType a $ runIdentity $ primType p, a)
-synth env e@(AnnId x _ _) = (fromJust $ lookup x env,) <$> e
+synth env e@(AnnId x _ _) = (fromMaybe (error "lookup failure") $ lookup x env,) <$> e
 
 synth env (AnnIf e1 e2 e3 tag l) = AnnIf e1' e2' e3' tag (extractSigma e2', l)
   where
