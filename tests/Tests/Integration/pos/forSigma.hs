@@ -46,38 +46,39 @@ fmap :: rforall a, b, p, q, s, t.
   ST <p >q >b
 fmap = \f x -> bind x (\xx -> pure (f xx))
 
-for ::
-  (n:Int ~>
-   under:Int ->
-   (exists n2:{v: Int | v > n}.
-     (ST <{v: Int | v = n} >{v: Int | v = n2} >Int))) ->
-  Int ->
-  (m:Int ~>
-   score:Int ->
-   (exists m2:{v: Int | v > m}.
-    (ST <{v: Int | v = m} >{v: Int | v = m2} >Int)))
-for = \f -> \x ->
-  if x == 0
-  then \score -> f score
-  else \score -> thenn (f x) (for f (x - 1) score)
-
 get as forall s. wg:s ~> Int -> ST <{v:s|v==wg} >{v:s|v==wg} >{v:s|v==wg}
 get = undefined
 
 put as forall s. wp:s -> ST <s >{v:s|v==wp} >Int
 put = undefined
 
-foo :: x:Int ~>
-       under:Int ->
-       (exists x2:{v: Int | v > x}.
-         (ST <{v: Int | v = x} >{v: Int | v = x2} >Int))
-foo = \under -> bind (get 6) (\y -> put (y + 4))
+loop ::
+  (n:Int ~>
+   under:Int ->
+   (exists n2:{v: Int | v > n}.
+     (ST <{v: Int | v = n} >{v: Int | v = n2} >Int))) ->
+  (Int -> Bool) ->
+  (m:Int ~>
+   score:Int ->
+   (exists m2:{v: Int | v > m}.
+    (ST <{v: Int | v = m} >{v: Int | v = m2} >Int)))
+loop = \f -> \cond -> \score ->
+  bind (get 0) (\s ->
+  if cond s
+  then f 6000005
+  else thenn (f 30002) (loop f cond score))
 
-bar :: x:Int ~>
-       under:Int ->
-       ST <{v: Int | v = x} >{v: Int | v = x + 1} >Int
-bar = \under -> bind (get 8) (\y -> put (y + 1))
+-- foo :: x:Int ~>
+--        under:Int ->
+--        (exists x2:{v: Int | v > x}.
+--          (ST <{v: Int | v = x} >{v: Int | v = x2} >Int))
+-- foo = \under -> bind (get 6) (\y -> put (y + 4))
 
-main :: x:{v: Int | v > 3} ~> ST <{v: Int | v = x} >{v: Int | v > 3} >Int
-main = thenn ((for foo 7) 8) ((for foo 399) 9)
+-- bar :: x:Int ~>
+--        under:Int ->
+--        ST <{v: Int | v = x} >{v: Int | v = x + 1} >Int
+-- bar = \under -> bind (get 8) (\y -> put (y + 1))
+
+-- main :: x:{v: Int | v > 3} ~> ST <{v: Int | v = x} >{v: Int | v > 3} >Int
+-- main = thenn ((loop foo (\x -> True)) 8) ((loop foo (\x -> False)) 9)
 
