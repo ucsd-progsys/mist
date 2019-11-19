@@ -20,7 +20,7 @@ import qualified Control.Exception as Ex
 import Text.Megaparsec.Pos (initialPos) -- NOTE: just for debugging
 
 
-import Debug.Trace (traceM)
+-- import Debug.Trace (traceM)
 
 type R = HC.Pred
 
@@ -53,7 +53,7 @@ act _h config = do
   case r of
     Right (measures', t) -> do
       let liftedT = liftSigmas t
-      !_ <- traceM $ pprint liftedT
+      -- !_ <- traceM $ pprint liftedT
       let c = generateConstraints liftedT
       solverResult <- solve measures' c
       case F.resStatus solverResult of
