@@ -67,10 +67,7 @@ client :: m:(Map <Int >Int) ~> token:{v:Int | select m v = good} ->
 client = \token ->
   if token == done
   then pure 1
-  else unpack (next, mnext) = nextPage token in
-       bind mnext (\tok -> client token) -- reusing a token
+  else bind (nextPage token) (\tok -> client token)
 
 main :: ST <{v: Map <Int >Int | v = empty} >{v: Map <Int >Int | select v done = good} >Int
-main = unpack (token, mstart) = start 1 in
-       bind mstart (\startToken -> client startToken)
-
+main = bind (start 1) (\startToken -> client startToken)

@@ -52,9 +52,8 @@ act _h config = do
   let r = mist measures e
   case r of
     Right (measures', t) -> do
-      -- !_ <- traceM $ pprint t
-      !_ <- traceM $ pprint (liftSigmas t)
-      let c = generateConstraints t --(liftSigmas t)
+      -- !_ <- traceM $ pprint (liftSigmas t)
+      let c = generateConstraints (liftSigmas t)
       solverResult <- solve measures' c
       case F.resStatus solverResult of
         F.Safe -> return (Right ())

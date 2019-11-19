@@ -118,5 +118,4 @@ getData :: it:(Map <Int >Int) ~> ST <{v:Map <Int >Int | v = it} >(Map <Int >Int)
 -- getData =  withConnection (\conn -> thenn conn (pure 0))
 getData = withConnection (\conn ->
             bind conn (\server ->
-            unpack (gstatus, mstatus) = login server in
-              bind mstatus (\status -> if status == loggedIn then readSecret server else pure 0)))
+            bind (login server) (\status -> if status == loggedIn then readSecret server else pure 0)))

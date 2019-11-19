@@ -95,9 +95,7 @@ send = undefined
 main ::
   empty:(Map <Int >Int) ~>
   ST <{v:Int| v == 0} >Int <{v:Map <Int >Int| v == empty} >(Map <Int >Int) >Int
-main = bind chan (\c ->
-       unpack (gc1, mc1) = send c tick in
-       mc1)
+main = bind chan (\c -> send c tick)
        -- unpack (gc1, mc1) = send c tick in
        -- bind mc1 (\c ->
        -- unpack (gc2, mc2) = send c tock in

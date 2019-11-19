@@ -68,8 +68,7 @@ startChannel :: init:(Map <Int >Int) ~>
        >{v:Map <Int >Int | v == store init channel channelStart}
        >{v:Int | v == channel})
 startChannel = \underscore ->
-  unpack (gc, mc) = new 0 in
-  bind mc (\v -> (thenn (write v channelStart) (pure v)))
+  bind (new 0) (\v -> (thenn (write v channelStart) (pure v)))
 
 -----------------------------------------------------------------------------
 -- | Typed Session Wrappers
@@ -93,8 +92,7 @@ tock = \c -> thenn (write c ticked) (pure c)
 -----------------------------------------------------------------------------
 -- pos
 main :: empty:(Map <Int >Int) ~> ST <{v:Map <Int >Int| v == empty} >(Map <Int >Int) >Int
-main = unpack (gc1, mc1) = startChannel 0 in
-       bind mc1 (\c ->
+main = bind (startChannel 0) (\c ->
        bind (tick c) (\c ->
        tock c))
 -- neg
