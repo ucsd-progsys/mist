@@ -24,13 +24,20 @@ rest = (0)
 undefined as rforall a. a
 undefined = 0
 
-bind :: rforall a, b, p, q, r, s, t, u.
-  ST <p >q >a ->
-  (x:a -> ST <q >r >b) ->
-  ST <p >r >b
+bind as rforall a, b. forall s.
+  bw1:s ~> bw2:s ~> bw3:s ~>
+  ST <{v:s | v = bw1} >{v:s | v = bw2} >a ->
+  (x:a -> ST <{v:s | v = bw2} >{v:s | v = bw3} >b) ->
+  (exists out:{v:s | v = bw3}. ST <{v:s | v = bw1} >{v:s | v = out} >b)
 bind = undefined
 
-pure :: rforall a, p, q, s, t. x:a -> ST <p >q >a
+-- bind as rforall a, b, p, q, r.
+--   ST <p >q >a ->
+--   (x:a -> ST <q >r >b) ->
+--   ST <p >r >b
+-- bind = undefined
+
+pure as rforall a, p, q, s, t. x:a -> ST <p >q >a
 pure = undefined
 
 thenn as rforall a, b. forall p.
@@ -40,7 +47,7 @@ thenn as rforall a, b. forall p.
   ST <{v:p | v = w1} >{v:p | v = w3} >b
 thenn = \f g -> bind f (\underscore -> g)
 
-fmap :: rforall a, b, p, q, s, t.
+fmap as rforall a, b, p, q, s, t.
   (underscore:a -> b) ->
   ST <p >q >a ->
   ST <p >q >b
@@ -61,12 +68,14 @@ loop ::
   (m:Int ~>
    score:Int ->
    (exists m2:{v: Int | v > m}.
-    (ST <{v: Int | v = m} >{v: Int | v = m2} >Int)))
-loop = \f -> \cond -> \score ->
+     ST <{v: Int | v = m} >{v: Int | v = m2} >Int))
+loop = \f -> \cond -> \m ~> \score ->
   bind (get 0) (\s ->
-  if cond s
-  then f 6000005
-  else thenn (f 30002) (loop f cond score))
+  let result :: (exists m3:{v: Int | v > m}. (ST <{v: Int | v = m} >{v: Int | v = m3} >Int)) =
+    (if cond s
+      then f 6000005
+      else thenn (f 30002) (loop f cond score))
+  in result)
 
 -- foo :: x:Int ~>
 --        under:Int ->
