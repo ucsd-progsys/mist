@@ -62,7 +62,7 @@ _synth env e@(Id x _) = (Head (sourceSpan e) true,) <$> single env x
 --     (c2, t2) <- synth ((idT, t1):env) e2
 --     (c3, t3) <- synth ((idF, t1):env) e3
 --     -- TODO make these check, after pulling the right thing out of l
---     tHat <- fresh l env (eraseRType t2) -- could just as well be t2
+--     tHat <- fresh l env (eraseRType t2) -- could just as well be t3
 --     cSub2 <- (t2 <: tHat) l
 --     cSub3 <- (t3 <: tHat) l
 --     let c = CAnd [ c1
@@ -70,7 +70,7 @@ _synth env e@(Id x _) = (Head (sourceSpan e) true,) <$> single env x
 --                  , All idF TBool (makePred $ exprNot cond) (CAnd [c3, cSub3]) ]
 --     pure (c, tHat)
 
-_synth env (If e1@(Id y _) e2 e3 l) = do -- TODO: put this back
+_synth env (If e1@(Id y _) e2 e3 l) = do
     idT <- refreshId "then:"
     idF <- refreshId "else:"
     (c1, t1) <- synth env e1
@@ -80,7 +80,7 @@ _synth env (If e1@(Id y _) e2 e3 l) = do -- TODO: put this back
     (c2, t2) <- synth ((idT, t1):env) e2
     (c3, t3) <- synth ((idF, t1):env) e3
     -- TODO make these check, after pulling the right thing out of l
-    tHat <- freshRType l env t2 -- could just as well be t2
+    tHat <- freshRType l env t2 -- could just as well be t3
     cSub2 <- (t2 <: tHat) l
     cSub3 <- (t3 <: tHat) l
     let c = CAnd [ c1
@@ -345,7 +345,7 @@ _check env (If e1 e2 e3 _) t2 = do
                 , All condVar TBool (strengthen (makePred $ exprNot $ var condVar) cond') c3 ]
   pure c
 
-_check _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) _ = pure (CAnd [])
+_check _ (Lam (AnnBind _ (Just (ElabAssume _)) _) _ _) _ = error "what does this even mean?"
 _check env (Lam (AnnBind x _ _) e _) (RFun y ty t) =
   mkAll x ty <$> check ((x, ty):env) e (substReftPred (bindId y |-> x) t)
 

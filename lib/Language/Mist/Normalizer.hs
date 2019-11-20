@@ -34,7 +34,7 @@ synth _ (AnnUnit tag a) = AnnUnit tag (liftType a TUnit, a)
 synth _ (AnnNumber i tag a) = AnnNumber i tag (liftType a TInt, a)
 synth _ (AnnBoolean b tag a) = AnnBoolean b tag (liftType a TBool, a)
 synth _ (AnnPrim p tag a) = AnnPrim p tag (liftType a $ runIdentity $ primType p, a)
-synth env e@(AnnId x _ _) = (fromMaybe (error "lookup failure") $ lookup x env,) <$> e
+synth env e@(AnnId x _ _) = (fromMaybe (error $ "lookup failure: " <> x) $ lookup x env,) <$> e
 
 synth env (AnnIf e1 e2 e3 tag l) = AnnIf e1' e2' e3' tag (extractSigma e2', l)
   where
@@ -56,8 +56,12 @@ synth env (AnnILam b@(AnnBind x (Just tx) loc) e tag l) =
   tx' = liftType loc tx
   t' = RIFun (first (const ()) b) tx' (extractSigma e')
 
-synth _env (AnnILam (AnnBind _ Nothing _) _ _ _) =
-    error "should not occur after Elaboration"
+synth env (AnnILam b@(AnnBind _ Nothing loc) e tag l) =
+  AnnILam ((tx',) <$> b) e' tag (t', l)
+  where
+  e' = synth env e
+  tx' = liftType loc TUnit
+  t' = RIFun (first (const ()) b) tx' (extractSigma e')
 
 synth env (AnnLet b e1 e2 tag loc) = AnnLet b' e1' e2' tag (extractSigma e2', loc)
   where
@@ -125,8 +129,8 @@ check env (AnnUnpack (Bind x lx) (Bind y ly) e1 e2 tag loc) t =
     e2' = check ((x, tx):(y, ty):env) e2 t
     RIExists _ tx ty = extractSigma e1'
 
-check env (AnnILam (AnnBind x btag loc) e tag l) t'@(RIFun _ ty t) =
-  AnnILam (AnnBind x btag (ty,loc)) e' tag (t', l)
+check env (AnnILam (AnnBind x btag loc) e tag l) t'@(RIFun _ tx t) =
+  AnnILam (AnnBind x btag (tx, loc)) e' tag (t', l)
   where
   e' = check env e t
 
@@ -230,7 +234,8 @@ anfSigmas (TApp e typ l) = do
 anfSigmas (TAbs tv e l) = do
   e' <- anfSigmas e
   pure (TAbs tv e' (snd l))
-anfSigmas (Unpack _x _y _e1 _e2 _l) = error "todo?"
+-- anfSigmas (Unpack x y e1 e2 l) = error "todo?"
+anfSigmas e@Unpack{} = pure (snd <$> e)
 
 anfAppSigmas :: (MonadFresh m) => ElaboratedExpRType r a -> m (SigmaBinds r a, ElaboratedExpr r a)
 anfAppSigmas (AnnApp e1 e2 tag l) = do

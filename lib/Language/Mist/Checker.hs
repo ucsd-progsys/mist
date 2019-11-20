@@ -290,7 +290,7 @@ elaborate e =
 synthesize :: ElaborateConstraints r a => RefinedExpr r a -> Context (ElaboratedExpr r a, Type)
 synthesize e = do
   env <- getEnv
-  _tell $ show env ++ " ⊢ " ++ pprint e ++ " =>"
+  _tell $ show env ++ " |- " ++ pprint e ++ " =>"
   synthesize_ e
 
 -- TODO: add judgments for documentation
@@ -350,7 +350,7 @@ synthesize_ (Unpack b1 b2 e1 e2 l) =
 check :: ElaborateConstraints r a => RefinedExpr r a -> Type -> Context (ElaboratedExpr r a)
 check e t = do
   env <- getEnv
-  _tell $ show env ++ " ⊢ " ++ pprint e ++ " <= " ++ pprint t
+  _tell $ show env ++ " |- " ++ pprint e ++ " <= " ++ pprint t
   check_ e t
 
 -- | Γ ⊢ e ~> c <= A ⊣ Θ
@@ -410,7 +410,7 @@ synthesizeApp tFun cFun eArg l = do
 synthesizeSpine :: ElaborateConstraints r a => Type -> ElaboratedExpr r a -> RefinedExpr r a -> Context (ElaboratedExpr r a, ElaboratedExpr r a, Type)
 synthesizeSpine funType cFun eArg = do
   env <- getEnv
-  _tell $ show env ++ " ⊢ " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
+  _tell $ show env ++ " |- " ++ pprint funType ++ " • " ++ pprint eArg ++ " >>"
   synthesizeSpine_ funType cFun eArg
 
 -- | Γ ⊢ A_c • e ~> (cFun, cArg) >> C ⊣ Θ
@@ -471,7 +471,7 @@ instSub c a b = do
 (<:) :: Type -> Type -> Context ()
 a <: b = do
   env <- getEnv
-  _tell $ show env ++ " ⊢ " ++ pprint a ++ " <: " ++ pprint b
+  _tell $ show env ++ " |- " ++ pprint a ++ " <: " ++ pprint b
   a <<: b
 
 -- | Γ ⊢ A <: B ⊣ Θ
@@ -529,7 +529,7 @@ a <<: b = do
 instantiateL :: EVar -> Type -> Context ()
 instantiateL a b = do
   env <- getEnv
-  _tell $ show env ++ " ⊢ " ++ pprint a ++ " <=: " ++ pprint b
+  _tell $ show env ++ " |- " ++ pprint a ++ " <=: " ++ pprint b
   instantiateL_ a b
 
 -- TODO: figure out why we reverse the newly created existentials
@@ -574,7 +574,7 @@ instantiateL_ alpha typ = do
 instantiateR :: Type -> EVar -> Context ()
 instantiateR a b = do
   env <- getEnv
-  _tell $ show env ++ " ⊢ " ++ pprint a ++ " :=> " ++ pprint b
+  _tell $ show env ++ " |- " ++ pprint a ++ " :=> " ++ pprint b
   instantiateR_ a b
 
 instantiateR_ :: Type -> EVar -> Context ()
