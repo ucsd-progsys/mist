@@ -1,0 +1,18 @@
+%BEGING
+Main_7  -> App F_1_50  unit  .
+Bottom0  -> Bottom0 .
+App f k_app  -> br (F_52 f  k_app  True  ) (F_52 f  k_app  False  ) .
+F_1_50 k_check_21_45  -> br (F_51 k_check_21_45  True  ) (F_51 k_check_21_45  False  ) .
+F_51 k_check_21_45 b_46  -> b_46 (l0 k_check_21_45  ) (l1 (Fail_15 unit  ) ) .
+F_52 f k_app b_48  -> b_48 (l0 (App f  k_app  ) ) (l1 (f k_app  ) ) .
+Fail_15 k_17  -> event_fail k_17  .
+True x y  -> x .
+False x y  -> y .
+%ENDG
+
+%BEGINA
+q0 br -> q0 q0 .
+q0 l0 -> q0 .
+q0 l1 -> q0 .
+q0 unit -> .
+%ENDA

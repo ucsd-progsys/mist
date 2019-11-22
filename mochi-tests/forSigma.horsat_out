@@ -1,0 +1,10 @@
+HorSat2 0.95: Saturation-based model checker for higher-order recursion schemes
+analyzing /home/atondwal/src/mist/mochi-tests/forSigma.hors...
+The number of rewrite rules: 138
+The size of recursion scheme: 1079
+The number of states: 1
+size of ACG: 1152
+The property is NOT satisfied.
+A counterexample is:
+(br,1)(l1,1)(br,2)(br,2)(l0,1)(br,2)(br,1)(l1,1)(br,2)(br,2)(l0,1)(br,2)(br,2)(br,2)(br,2)(l1,1)(event_fail,0)
+Elapsed Time: 0.011194sec

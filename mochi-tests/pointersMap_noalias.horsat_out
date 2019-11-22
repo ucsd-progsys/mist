@@ -1,0 +1,5 @@
+HorSat2 0.95: Saturation-based model checker for higher-order recursion schemes
+analyzing /home/atondwal/src/mist/mochi-tests/pointersMap_noalias.hors...
+The number of rewrite rules: 830
+The size of recursion scheme: 9688
+The number of states: 1

@@ -1,0 +1,8 @@
+HorSat2 0.95: Saturation-based model checker for higher-order recursion schemes
+analyzing /home/atondwal/src/mist/mochi-tests/incrState.hors...
+The number of rewrite rules: 5
+The size of recursion scheme: 7
+The number of states: 1
+size of ACG: 3
+The property is satisfied.
+Elapsed Time: 0.000467sec

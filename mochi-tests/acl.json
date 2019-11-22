@@ -1,0 +1,1 @@
+{"filename":"/home/atondwal/src/mist/mochi-tests/acl.ml","result":"Failure of abstraction type refinement","cycles":2,"total":3.434764,"pre":0.04536900000000001,"abst":0.3069759999999999,"mc":0.03236200000000003,"refine":2.700113}
