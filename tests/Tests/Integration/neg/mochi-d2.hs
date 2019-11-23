@@ -1,11 +1,17 @@
-check :: x:Int -> y:{v:Int | x <= v} -> Int
-check = \x y -> 0
+assume as b:Bool -> {v:Int | b == True}
+assume = 0
 
-bool :: Bool
-bool = True
+assert as {b:Bool | b == True} -> Int
+assert = 0
 
-app :: i:Int ~> (x:{v: Int | i <= v} -> Int) -> {v:Int | i <= v} -> Int
+bool as Bool
+bool = 0
+
+app :: n:Int ~> (x:{u:Int | n <= u} -> Int) -> {u:Int | n <= u} -> Int
 app = \f x -> if bool then app f (x + 1) else f x
 
+check :: x:Int -> {u:Int | x <= u} -> Int
+check = \x y -> if x <= y then 1 else assert False
+
 main :: Int -> Int
-main = \ i -> app (check i) i
+main = \i -> app (check i) i
