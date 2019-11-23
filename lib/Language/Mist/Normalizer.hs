@@ -264,10 +264,10 @@ stitchUnpacks ((x, y, e):bs) e' =
   where
     l = extractLoc e
 
-descend :: RType r a -> RType r a
+descend :: (PPrint r) => RType r a -> RType r a
 descend (RIFun _ _ t') = descend t'
 descend (RFun _ _ t') = t'
-descend _ = error $ "descend on non-function"
+descend t = error $ "descend on non-function: " <> pprint t
 
 dropPreds :: Bifunctor b => b a c -> b () c
 dropPreds = first (const ())
