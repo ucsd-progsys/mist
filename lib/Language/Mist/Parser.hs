@@ -318,7 +318,7 @@ idExpr = L.indentGuard sc GT pos1 *> (ParsedExpr <$> (\case
    ("setSubset", l) -> Prim SetSub l
    ("store", l) -> Prim Store l
    ("select", l) -> Prim Select l
-   ("∅", l) -> Prim EmptySet l
+   ("emptySet", l) -> Prim EmptySet l
    (id,l) -> Id id l) <$> identifier)
 
 constExpr :: Parser SSParsedExpr
