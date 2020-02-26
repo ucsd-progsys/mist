@@ -284,6 +284,7 @@ binops =
   [ [ InfixL (pure op <*> primitive Times "*")
     , InfixL (pure op <*> primitive Elem "∈")
     , InfixL (pure op <*> primitive Union "∪")
+    , InfixL (pure op <*> primitive Intersection "∩")
     ]
   , [ InfixL (pure op <*> primitive Plus "+")
     , InfixL (pure op <*> primitive Minus "-")
@@ -317,6 +318,7 @@ idExpr = L.indentGuard sc GT pos1 *> (ParsedExpr <$> (\case
    ("setSubset", l) -> Prim SetSub l
    ("store", l) -> Prim Store l
    ("select", l) -> Prim Select l
+   ("∅", l) -> Prim EmptySet l
    (id,l) -> Id id l) <$> identifier)
 
 constExpr :: Parser SSParsedExpr

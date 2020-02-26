@@ -114,6 +114,8 @@ data Prim
   | SetSub
   | Store
   | Select
+  | EmptySet
+  | Intersection
   deriving (Show, Eq, Read)
 
 -- | Mist expressions
@@ -349,11 +351,14 @@ instance PPrint Prim where
   pprint Implies = "=>"
   pprint Elem    = "∈"
   pprint Union   = "∪"
+  pprint Intersection   = "∪"
   pprint SetDel  = "setMinus"
   pprint SetAdd  = "setAdd"
   pprint SetSub  = "setSubset"
   pprint Store   = "store"
-  pprint Select  = "select"
+  pprint Select   = "select"
+  pprint EmptySet  = "∅"
+
 
 instance PPrint Bool where
   pprint True  = "True"

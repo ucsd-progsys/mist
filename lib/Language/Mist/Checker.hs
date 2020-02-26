@@ -634,6 +634,10 @@ primType Union   = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
   pure $ TForall (TV a) (sa :=> (sa :=> sa))
+primType Intersection   = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) (sa :=> (sa :=> sa))
 primType Elem    = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
@@ -650,6 +654,10 @@ primType SetSub  = do
   a <- refreshId $ "a" ++ cSEPARATOR
   let sa = setType $ TVar $ TV a
   pure $ TForall (TV a) (sa :=> (sa :=> TBool))
+primType EmptySet  = do
+  a <- refreshId $ "a" ++ cSEPARATOR
+  let sa = setType $ TVar $ TV a
+  pure $ TForall (TV a) sa
 
 primType Store = do
   k <- refreshId $ "k" ++ cSEPARATOR
