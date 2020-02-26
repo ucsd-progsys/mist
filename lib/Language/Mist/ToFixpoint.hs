@@ -107,7 +107,7 @@ exprToFixpoint (AnnNumber n _ _) = pure $ F.ECon (F.I n)
 exprToFixpoint (AnnBoolean True _ _) = pure $ F.PTrue
 exprToFixpoint (AnnBoolean False _ _) = pure $ F.PFalse
 exprToFixpoint (AnnId x _ _) = pure $ idToFix x
-exprToFixpoint (AnnPrim _ _ _) = error "primitives should be handled by appToFixpoint"
+exprToFixpoint (AnnPrim p _ _) = primToFixpoint p
 exprToFixpoint (AnnIf e1 e2 e3 _ _) =
   F.EIte <$> exprToFixpoint e1 <*> exprToFixpoint e2 <*> exprToFixpoint e3
 exprToFixpoint e@AnnApp{} = appToFixpoint e
@@ -145,6 +145,10 @@ appToFixpoint e
 
 data FPrim = FBop F.Bop | FBrel F.Brel | FPrim F.Expr
 
+primToFixpoint :: Prim -> Maybe F.Expr
+primToFixpoint EmptySet = Just $ (F.EApp (F.EVar T.setEmpty) (F.ECon $ F.I 0))
+primToFixpoint _ = Nothing
+
 prim2ToFixpoint :: Prim -> FPrim
 prim2ToFixpoint M.Plus  = FBop F.Plus
 prim2ToFixpoint M.Minus = FBop F.Minus
@@ -160,7 +164,6 @@ prim2ToFixpoint SetDel  = FPrim (F.EVar "internal_setDel")
 prim2ToFixpoint SetSub  = FPrim (F.EVar T.setSub)
 prim2ToFixpoint Store  = FPrim (F.EVar T.mapSto)
 prim2ToFixpoint Select  = FPrim (F.EVar T.mapSel)
-prim2ToFixpoint EmptySet  = FPrim (F.EVar T.setEmpty)
 prim2ToFixpoint Union  = FPrim (F.EVar T.setCup)
 prim2ToFixpoint Intersection  = FPrim (F.EVar T.setCap)
 prim2ToFixpoint _       = error "Internal Error: prim2fp"
