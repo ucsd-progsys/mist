@@ -12,4 +12,4 @@ check = \x y -> 0
 
 main :: Int -> Int
 main = \n ->
-    app (check n) n
+    app (check 0) 0

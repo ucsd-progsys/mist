@@ -1,5 +1,0 @@
-assert as {v:Bool | v = True}
-
-f = \ x y -> assert (x () = y ())
-let h (x:int) u = x
-let main n = f (h n) (h n)

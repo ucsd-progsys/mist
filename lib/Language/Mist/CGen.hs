@@ -219,31 +219,39 @@ appSynth env t e = do
 
 -- | env | tfun ⊢ y >>
 _appSynth :: (CGenConstraints r e a) => Env r a -> RType r a -> ElaboratedExpr r a -> Fresh (NNF r, RType r a)
--- _appSynth env (RFun x tx t) e -- TODO fix substE and this
---   | Just reft <- interp e = do
---   c <- check env e tx
---   pure (c, substReftPredWith substE (bindId x |-> reft) t)
+_appSynth env rt e = go env (flattenRType rt) e
+  where
+    -- go env (RFun x tx t) e -- TODO fix substE and this
+    --   | Just reft <- interp e = do
+    --   c <- check env e tx
+    --   pure (c, substReftPredWith substE (bindId x |-> reft) t)
 
-_appSynth env (RFun x tx t) e@(Id y _) = do
-  c <- check env e tx
-  pure (c, substReftPred (bindId x |-> y) t)
+    go env (RFun x tx t) e@(Id y _) = do
+      c <- check env e tx
+      pure (c, substReftPred (bindId x |-> y) t)
 
-_appSynth env (RFun x tx t) e = do
-  (c1, te) <- synth env e
-  c2 <- (te <: tx) (sourceSpan e)
-  tHat <- freshRType (extractLoc e) env t
-  y <- refreshId "Y"
-  c3 <- (substReftPred (bindId x |-> y) t <: tHat) (sourceSpan e)
-  pure (CAnd [c1, c2, mkAll y te c3], tHat)
+    go env (RFun x tx t) e = do
+      (c1, te) <- synth env e
+      c2 <- (te <: tx) (sourceSpan e)
+      tHat <- freshRType (extractLoc e) env t
+      y <- refreshId "Y"
+      c3 <- (substReftPred (bindId x |-> y) t <: tHat) (sourceSpan e)
+      pure (CAnd [c1, c2, mkAll y te c3], tHat)
 
-_appSynth env (RIFun (Bind x _) tx t) e = do
-  z <- refreshId x
-  (c, t') <- appSynth ((z, tx):env) (substReftPred (x |-> z) t) e
-  tHat <- freshRType (extractLoc e) env t'
-  c' <- (t' <: tHat) (sourceSpan e)
-  pure (mkExists z tx (CAnd [c, c']), tHat)
+    go env (RIFun (Bind x _) tx t) e = do
+      z <- refreshId x
+      (c, t') <- appSynth ((z, tx):env) (substReftPred (x |-> z) t) e
+      tHat <- freshRType (extractLoc e) env t'
+      c' <- (t' <: tHat) (sourceSpan e)
+      pure (mkExists z tx (CAnd [c, c']), tHat)
 
-_appSynth _ _ _ = error "Applying non function"
+    -- go env (RRTy (Bind x _) t r) e = do
+    --   z <- refreshId x
+    --   (c, t') <- appSynth env t e
+    --   let c' = varSubstP (x |-> z) c
+    --   pure (mkAll z c', t')
+
+    go _ f _ = error $ "Applying non function: " <> pprint f
 
 single :: CGenConstraints r e a => Env r a -> Id -> Fresh (RType r a)
 single env x = case flattenRType <$> lookup x env of
@@ -373,28 +381,30 @@ appCheck env t e t' = do
 
 -- | env | t ⊢ y << t'
 _appCheck :: CGenConstraints r e a => Env r a -> RType r a -> ElaboratedExpr r a -> RType r a -> Fresh (NNF r)
--- _appCheck env (RFun (Bind x _) tx t) e t' -- TODO: get this and substE working properly
---   | Just reft <- interp e = do
---   c <- check env e tx
---   cSub <- (substReftPredWith substE (x |-> reft) t <: t') (sourceSpan e)
---   pure $ CAnd [c, cSub]
-_appCheck env (RFun (Bind x _) tx t) e@(Id y _) t' = do -- TODO: get this and substE working properly
-  c <- check env e tx
-  cSub <- (substReftPred (x |-> y) t <: t') (sourceSpan e)
-  pure $ CAnd [c, cSub]
-_appCheck env (RFun (Bind x _) tx t) e t' = do
-  (c1, te) <- synth env e
-  c2 <- (te <: tx) (sourceSpan e)
-  y <- refreshId "Y"
-  c3 <- (substReftPred (x |-> y) t <: t') (sourceSpan e)
-  pure $ CAnd [c1, c2, mkAll y te c3]
+_appCheck env t e t' = go env (flattenRType t) e t'
+  where
+    -- go env (RFun (Bind x _) tx t) e t' -- TODO: get this and substE working properly
+    --   | Just reft <- interp e = do
+    --   c <- check env e tx
+    --   cSub <- (substReftPredWith substE (x |-> reft) t <: t') (sourceSpan e)
+    --   pure $ CAnd [c, cSub]
+    go env (RFun (Bind x _) tx t) e@(Id y _) t' = do -- TODO: get this and substE working properly
+      c <- check env e tx
+      cSub <- (substReftPred (x |-> y) t <: t') (sourceSpan e)
+      pure $ CAnd [c, cSub]
+    go env (RFun (Bind x _) tx t) e t' = do
+      (c1, te) <- synth env e
+      c2 <- (te <: tx) (sourceSpan e)
+      y <- refreshId "Y"
+      c3 <- (substReftPred (x |-> y) t <: t') (sourceSpan e)
+      pure $ CAnd [c1, c2, mkAll y te c3]
 
-_appCheck env (RIFun (Bind x _) tx t) e t' = do
-  z <- refreshId x
-  c <- appCheck ((z, tx):env) (substReftPred (x |-> z) t) e t'
-  pure $ mkExists z tx c
+    go env (RIFun (Bind x _) tx t) e t' = do
+      z <- refreshId x
+      c <- appCheck ((z, tx):env) (substReftPred (x |-> z) t) e t'
+      pure $ mkExists z tx c
 
-_appCheck _ _ _ _ = error "application at non function type"
+    go _ f _ _ = error $ "application at non function type" <> pprint f
 
 fresh :: CGenConstraints r e a => a -> Env r a -> Type -> Fresh (RType r a)
 fresh l _ (TVar alpha) = do
@@ -540,6 +550,8 @@ rtsymreft (RRTy (Bind x _) _ r) = (x,r)
 rtsymreft _ = ("_",true)
 
 flattenRType :: CGenConstraints r e a => RType r a -> RType r a
+flattenRType (RRTy _ rt p)
+  | isTrue p = rt
 flattenRType rrty@(RRTy (Bind x _) rt p)
   | (RBase by typ p') <- rt = RBase by typ (strengthen p' (varSubstP (x |-> bindId by) p))
   | (RRTy by rt' p') <- rt = flattenRType (RRTy by rt' (strengthen p' (varSubstP (x |-> bindId by) p)))

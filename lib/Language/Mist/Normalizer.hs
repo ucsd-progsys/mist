@@ -267,6 +267,8 @@ stitchUnpacks ((x, y, e):bs) e' =
 descend :: (PPrint r) => RType r a -> RType r a
 descend (RIFun _ _ t') = descend t'
 descend (RFun _ _ t') = t'
+descend (RRTy _ rt _) = descend rt
+descend (RIExists _ _ rt) = descend rt
 descend t = error $ "descend on non-function: " <> pprint t
 
 dropPreds :: Bifunctor b => b a c -> b () c
