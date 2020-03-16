@@ -520,7 +520,6 @@ data NNF r
 class Predicate p e | p -> e, e -> p where
   true :: p
   false :: p
-  isTrue :: p -> Bool
   makePred :: e -> p
   var :: Id -> e
   exprNot :: e -> e
@@ -537,7 +536,6 @@ class Predicate p e | p -> e, e -> p where
 instance Predicate () () where
     true = ()
     false = ()
-    isTrue _ = True
     var _ = ()
     exprNot _ = ()
     exprsEqual _ _ = ()

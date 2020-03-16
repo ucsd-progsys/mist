@@ -171,8 +171,6 @@ prim2ToFixpoint _       = error "Internal Error: prim2fp"
 instance Predicate HC.Pred F.Expr where
   true = HC.Reft F.PTrue
   false = HC.Reft F.PFalse
-  isTrue (HC.Reft F.PTrue) = True
-  isTrue _ = False
 
   var x = F.EVar $ fromString x
   exprNot e = F.PNot $ e

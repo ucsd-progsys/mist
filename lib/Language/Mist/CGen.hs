@@ -550,8 +550,6 @@ rtsymreft (RRTy (Bind x _) _ r) = (x,r)
 rtsymreft _ = ("_",true)
 
 flattenRType :: CGenConstraints r e a => RType r a -> RType r a
-flattenRType (RRTy _ rt p)
-  | isTrue p = rt
 flattenRType rrty@(RRTy (Bind x _) rt p)
   | (RBase by typ p') <- rt = RBase by typ (strengthen p' (varSubstP (x |-> bindId by) p))
   | (RRTy by rt' p') <- rt = flattenRType (RRTy by rt' (strengthen p' (varSubstP (x |-> bindId by) p)))
