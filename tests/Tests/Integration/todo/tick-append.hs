@@ -77,9 +77,24 @@ ap as rforall a, b. t1:Int ~> t2:Int ~>
   Tick >{v:Int | v == t1 + t2 + 1} >b
 ap = (0)
 
+ap0 as rforall a, b. t10:Int ~> t20:Int ~>
+  (Tick >{v:Int | v == t10} >x:a -> b) ->
+  Tick >{v:Int | v == t20} >a ->
+  Tick >{v:Int | v == t10 + t20} >b
+ap0 = (0)
+
 append :: xs:(List >Int) -> ys:(List >Int) ->
   Tick >{v:Int | v = mLength xs} >{v: List >Int | mLength v = (mLength xs) + (mLength ys)}
 append = \xs -> \ys ->
   if empty xs
     then pure ys
     else (ap (pure (\rest -> cons (first xs) rest)) (append (rest xs) ys))
+
+mapA :: n:Int ~>
+  (x:Int -> Tick >{v:Int | v == n} >Int) ->
+  xs:(List >Int) ->
+  Tick >{v:Int | v == n * (mLength xs)} >(List >Int)
+mapA = \f xs ->
+  if empty xs
+    then pure nil
+    else (ap0 (ap0 (pure cons) (f (first xs))) (mapA f (rest xs)))
