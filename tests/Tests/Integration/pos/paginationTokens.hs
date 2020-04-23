@@ -4,18 +4,8 @@ undefined = 0
 done as Int
 done = undefined
 
-empty as Map <Int >Int
-empty = undefined
-
-----------------------------------------------------------------------------
--- | State Space
-----------------------------------------------------------------------------
-
--- States
-stale       :: { v : Int | v = 2 }
-stale       =  2
-good        :: { v : Int | v = 3 }
-good        =  3
+startTok as Int
+startTok = undefined
 
 ----------------------------------------------------------------------------
 -- | The ST Monad ----------------------------------------------------------
@@ -44,31 +34,29 @@ fmap = \f x -> bind x (\xx -> pure (f xx))
 ----------------------------------------------------------------------------
 -- | The Token API ----------------------------------------------------------
 ----------------------------------------------------------------------------
--- nextPage :: m:{Map <Int >Int} ~> t:{v:Int | select m v = good /\ v ≠ done} -> Σt':Int. ST <{m} >{v = store (store m t stale) t' good} >{v = t'}
 nextPage as
-  m:(Map <Int >Int) ~>
-  token:{v: Int | (select m v = good) /\ (v ≠ done)} ->
+  m:Int ~>
+  token:{v: Int | (v = m) /\ (v ≠ done)} ->
   (exists tok:Int.
-    (ST <{v:Map <Int >Int | v = m}
-        >{v:Map <Int >Int | v = store (store m token stale) tok good}
+    (ST <{v:Int | v = m}
+        >{v:Int | (v = tok) /\ (v ≠ m)}
         >{v:Int | v = tok}))
 nextPage = undefined
 
--- start :: m:{Map <Int >Int} ~> _:Int -> (Σstart:Int. ST <{m} >{v = store m start good} >{v = start})
 start as underscore:Int ->
   (exists tok:Int.
-    ST <{v:Map <Int >Int | v = empty}
-       >{v:Map <Int >Int | v = store empty tok good}
+    ST <{v:Int | v = startTok}
+       >{v:Int | (v = tok) /\ (v ≠ startTok)}
        >{v:Int | v = tok})
 start = undefined
 
-client :: m:(Map <Int >Int) ~> token:{v:Int | select m v = good} ->
-  (ST <{v:Map <Int >Int | v = m} >{v:Map <Int >Int | select v done = good} >Int)
+client :: m:Int ~> token:{v:Int | v = m} ->
+  (ST <{v:Int | v = m} >{v:Int | v = done} >Int)
 client = \token ->
   if token == done
   then pure 1
   else bind (nextPage token) (\tok -> client tok)
 
-main :: ST <{v: Map <Int >Int | v = empty} >{v: Map <Int >Int | select v done = good} >Int
+main :: ST <{v: Int | v = startTok} >{v: Int | v = done} >Int
 main = bind (start 1) (\startToken -> client startToken)
 
