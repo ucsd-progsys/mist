@@ -35,11 +35,10 @@ fmap = \f x -> bind x (\xx -> pure (f xx))
 -- | The Token API ----------------------------------------------------------
 ----------------------------------------------------------------------------
 nextPage as
-  m:Int ~>
-  token:{v: Int | (v = m) /\ (v ≠ done)} ->
+  token:{v: Int | v ≠ done} ->
   (exists tok:Int.
-    (ST <{v:Int | v = m}
-        >{v:Int | (v = tok) /\ (v ≠ m)}
+    (ST <{v:Int | v = token}
+        >{v:Int | (v = tok) /\ (v ≠ token)}
         >{v:Int | v = tok}))
 nextPage = undefined
 
@@ -50,8 +49,8 @@ start as underscore:Int ->
        >{v:Int | v = tok})
 start = undefined
 
-client :: m:Int ~> token:{v:Int | v = m} ->
-  (ST <{v:Int | v = m} >{v:Int | v = done} >Int)
+client :: token:Int ->
+  (ST <{v:Int | v = token} >{v:Int | v = done} >Int)
 client = \token ->
   if token == done
   then pure 1
