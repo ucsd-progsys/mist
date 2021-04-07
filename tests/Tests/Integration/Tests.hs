@@ -23,9 +23,9 @@ import Language.Mist.UX (Result, SourceSpan, UserError)
 import System.Console.CmdArgs.Verbosity
 
 integrationTests = testGroupM "Integration"
-  [ testGroup "pos" <$> dirTests "tests/Tests/Integration/pos" (mkTest mistSuccess)
-  , testGroup "neg" <$> dirTests "tests/Tests/Integration/neg" (mkTest mistFailure)
-  , testGroup "todo" <$> dirTests "tests/Tests/Integration/todo" crashTest
+  [ testGroup "pos" <$> dirTests "tests/pos" (mkTest mistSuccess)
+  , testGroup "neg" <$> dirTests "tests/neg" (mkTest mistFailure)
+  , testGroup "todo" <$> dirTests "tests/todo" crashTest
   ]
 
 ---------------------------------------------------------------------------
