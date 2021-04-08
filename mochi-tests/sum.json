@@ -1,1 +1,0 @@
-{"filename":"/home/atondwal/src/mist/mochi-tests/sum.ml","result":"CEGAR_syntax.NoProgress","cycles":12,"total":13.46116,"pre":0.006588999999999991,"abst":11.244171,"mc":0.057689000000001656,"refine":0.7359349999999999}

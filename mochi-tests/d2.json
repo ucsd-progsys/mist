@@ -1,1 +1,0 @@
-{"filename":"/home/atondwal/src/mist/mochi-tests/d2.ml","result":"Failure of abstraction type refinement","cycles":1,"total":0.44156500000000004,"pre":0.005205999999999995,"abst":0.06633399999999999,"mc":0.005570999999999993,"refine":0.256342}

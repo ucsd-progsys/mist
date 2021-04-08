@@ -1,0 +1,7 @@
+*.json
+*.hors
+*.horsat_out
+*.smt2
+*.status
+*.sol
+*.annot
