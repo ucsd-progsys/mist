@@ -2,19 +2,20 @@ FROM fpco/stack-build:lts-14.0
 
 # install deps
 RUN export DEBIAN_FRONTEND=noninteractive
-RUN apt-get -qq update
-RUN apt-get install -y software-properties-common
-RUN add-apt-repository -y ppa:avsm/ppa # for opam 2
-RUN apt-get -qq update
-# Mist deps
-RUN apt-get -y install z3 git-core curl build-essential time libgmp-dev locales
-# FStar deps
-RUN apt-get -y install libssl-dev libsqlite3-dev g++ gcc m4 make opam pkg-config python libgmp3-dev unzip cmake
-# MoCHi deps
-RUN apt-get install -y git make gcc m4 opam libgmp-dev libmpfr-dev libglpk-dev autoconf cpanminus
-RUN update-locale LANG=C.UTF-8
-#RUN apt-get -y clean autoclean
-#RUN rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
+RUN apt-get -qq update && \
+    apt-get install -y software-properties-common vim && \
+    # for opam2 \
+    add-apt-repository -y ppa:avsm/ppa && \
+    apt-get -qq update && \
+    # Mist deps \
+    apt-get -y install z3 git-core curl build-essential time libgmp-dev locales && \
+    # FStar deps \
+    apt-get -y install libssl-dev libsqlite3-dev g++ gcc m4 make opam pkg-config python libgmp3-dev unzip cmake && \
+    # MoCHi deps \
+    apt-get install -y git make gcc m4 opam libgmp-dev libmpfr-dev libglpk-dev autoconf cpanminus && \
+    update-locale LANG=C.UTF-8 && \
+    apt-get -y clean autoclean && \
+    rm -rf /var/lib/apt/lists/* /tmp/* /var/tmp/*
 
 # set shell to bash
 RUN ln -sf /bin/bash /bin/sh
@@ -65,6 +66,8 @@ RUN git clone https://github.com/FStarLang/FStar.git --depth=1
 ENV FSTAR_HOME=/home/ecoop21/FStar
 WORKDIR $FSTAR_HOME
 RUN opam config exec -- make
+RUN echo PATH=/home/ecoop21/z3-4.8.5-x64-debian-8.11/bin:/root/.local/bin:/usr/local/cuda-10.0/bin:/home/stackage/.stack/programs/x86_64-linux/ghc-8.6.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /home/ecoop21/FStar/bin/fstar.exe '$@' > /home/ecoop21/.local/bin/fstar
+RUN chmod +x /home/ecoop21/.local/bin/fstar
 WORKDIR /home/ecoop21
 
 # Build mochi
@@ -83,11 +86,9 @@ RUN eval $(opam env) && \
     make install-lib && \
     make && \
     LD_LIBRARY_PATH=/home/mochi/.opam/$ocaml_ver/lib/z3 ./src/mochi.exe -v
+RUN cp src/mochi.exe /home/ecoop21/.local/bin/mochi
 
 # Set things up nicely for the user
-RUN cp src/mochi.exe /home/ecoop21/.local/bin/mochi
-RUN echo PATH=/home/ecoop21/z3-4.8.5-x64-debian-8.11/bin:/root/.local/bin:/usr/local/cuda-10.0/bin:/home/stackage/.stack/programs/x86_64-linux/ghc-8.6.5/bin:/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin /home/ecoop21/FStar/bin/fstar.exe '$@' > /home/ecoop21/.local/bin/fstar
-RUN chmod +x /home/ecoop21/.local/bin/fstar
 ENV PATH "/home/ecoop21/.local/bin:${PATH}"
 WORKDIR /home/ecoop21/mist
 RUN git pull
