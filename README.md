@@ -46,6 +46,7 @@ You can use `docker start` to restart exited containers
 You'll need git, [z3 version 4.8.10](https://github.com/Z3Prover/z3/releases), and [stack](https://docs.haskellstack.org/en/stable/README/).
 
     $ git clone -b ecoop21 --recursive https://github.com/uscd-progsys/mist
+    $ cd mist
     $ stack install
 
 You can then run the full `mist` test suite (which is located in the `tests/` directory).
