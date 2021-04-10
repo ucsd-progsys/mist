@@ -1,0 +1,5 @@
+% mystylefile.pandoc
+\usepackage{tcolorbox}
+\newtcolorbox{myquote}{colback=red!5!white, colframe=red!75!black}
+% redefine the 'quote' environment to use this 'myquote' environment
+\renewenvironment{quote}{\begin{myquote}}{\end{myquote}}
