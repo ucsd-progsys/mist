@@ -116,4 +116,24 @@ still mark it as passing in the paper.
 
 # Writing Mist
 
-(TODO)
+> A note about UX: Mist is in part a programming language for demonstrating
+refinement types in programming language and compiler education, so we favor
+simplicity of implementation and alacrity of evolution over robustness to
+failure and specificity of error messages. In this prototype, we demonstrate
+the ability of our type system to localize error messages, but when it comes to
+the parser, we favor an easy to modify and understand grammar over one that
+provides the best user experience, similar to the grammar we use in our
+undergraduate compilers class. As such...
+
+When experimenting with `mist`, we recommend starting with one of the known
+working test cases, and then expanding on it to achieve the desired result,
+rather than starting from scratch in an empty text file. In this short tutorial
+we will take the same approach, starting from a minimal test case and building
+up to the pagination example from the ECOOP21 paper that demonstrates both
+implicit refinement function types and pair types.
+
+We start from an extremely simple example that demonstrates the concrete
+semantics of mist's refinement type system.
+
+https://github.com/ucsd-progsys/mist/blob/9fb1a2bbc0e11eda9849a06b7e041b1a7e0efd5d/tests/pos/one.hs#L1-L2
+
