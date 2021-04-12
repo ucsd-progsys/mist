@@ -158,19 +158,17 @@ $ vim tests/.../mytest.hs
 We start from an extremely simple example that demonstrates the concrete
 semantics of mist's refinement type system.
 
-<!-- use Int00.hs instead of one.hs ? -->
-
-```{include=tests/pos/one.hs .haskell .numberLines}
-one :: {v:Int| v == 1}
-one = 1
+```{include=tests/pos/Int00.hs .haskell .numberLines}
+int :: { v : Int  | v == 12 }
+int = 12
 ```
 
-Here, we have a top-level binder for the constant `one`. Each top level binder
-includes a type signature (line 1), and a body (line 2). The body of `one`
+Here, we have a top-level binder for the constant `int`. Each top level binder
+includes a type signature (line 1), and a body (line 2). The body of `int`
 simply states that it's equal to the integer constant `1`. This type signature
 is a minimal example of a refinement type: we refine the base type `Int`,
 binding its values to `v`, and taking the quotient of this type by the
-proposition `v == 1`. This results in a singleton type that checks against the
+proposition `v == 12`. This results in a singleton type that checks against the
 body of one.
 
     $ mist tests/pos/one.hs
