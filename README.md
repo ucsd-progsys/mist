@@ -189,10 +189,10 @@ We'd see a type error:
 $ mist tests/neg/Int01.hs
 Working 150% [=================================================================]
 Errors found!
-tests/neg/Int01.hs:2:9-11: Expected (VV##0 == 14) :
+tests/neg/Int01.hs:2:7-9: Expected (VV##0 == 14) :
 
-         2|  int = ( 12 )
-                     ^^^
+         2|  int = 12
+                   ^^^
 ```
 
 ## Functions and polymorphism
@@ -427,11 +427,11 @@ We can define a State Monad datatype!
 Given a world to `put` (called `wp`), `put` updates the state to one where the state of the
 world is now `wp`.
 
-```{include=tests/pos/incrState.hs .haskell .numberLines startLine=18 endLine=18}
+```{include=tests/pos/incrState.hs .haskell .numberLines startLine=20 endLine=20}
 put as wp:Int -> ST <Int >{p:Int|p==wp} >Unit
 ```
 `get` leaves the state of the world unchanged, but returns its value in the `ST` monad.
-```{include=tests/pos/incrState.hs .haskell .numberLines startLine=15 endLine=15}
+```{include=tests/pos/incrState.hs .haskell .numberLines startLine=17 endLine=17}
 get as wg:Int ~> Bool -> ST <{gi:Int|gi==wg} >{go:Int|go==wg} >{gr:Int|gr==wg}
 ```
 And then we have the standard monadic interface:
@@ -439,7 +439,7 @@ And then we have the standard monadic interface:
 -- Monadic Interface
 ret as rforall a. wr:Int ~> x:a -> ST <{ri:Int|ri==wr} >{ro:Int|ro==wr} >a
 ```
-```{include=tests/pos/incrState.hs .haskell .numberLines startLine=10 endLine=12}
+```{include=tests/pos/incrState.hs .haskell .numberLines startLine=11 endLine=14}
 bind as rforall a, b. w1:Int ~> w2:Int ~> w3:Int ~> (ST <{v:Int|v==w1} >{v:Int|v==w2} >a)
   -> (unused:a -> ST <{v:Int|v==w2} >{v:Int|v==w3} >b)
   -> ST <{v:Int|v==w1} >{v:Int|v==w3} >b
@@ -447,7 +447,7 @@ bind as rforall a, b. w1:Int ~> w2:Int ~> w3:Int ~> (ST <{v:Int|v==w1} >{v:Int|v
 
 Using this, we can verify a more stateful version of the incr example from before.
 
-```{include=tests/pos/incrState.hs .haskell .numberLines startLine=22 endLine=23}
+```{include=tests/pos/incrState.hs .haskell .numberLines startLine=24 endLine=25}
 incr :: i:Int ~> ST <{v:Int|i==v} >{w:Int|w==i+1} >Unit
 incr = bind (get True) (\x -> put (x+1))
 ```
