@@ -1,2 +1,2 @@
 tutorial:
-	pandoc README.md --template=template.latex --filter pandoc-include-code  -o /tmp/tutorial.pdf
+	pandoc README.md --template=template.latex -V documentclass=lipics-v2021 --filter pandoc-include-code  -No /tmp/tutorial.pdf

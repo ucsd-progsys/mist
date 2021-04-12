@@ -325,6 +325,17 @@ $endif$
 $if(pagestyle)$
 \pagestyle{$pagestyle$}
 $endif$
+\nolinenumbers
+\author{Anish Tondwalkar}{UC San Diego}{atondwal@eng.ucsd.edu}{}{}{}{}{}{}
+\author{Matt Kolosick}{UC San Diego}{mkolosick@eng.ucsd.edu}{}{}{}{}{}{}
+\author{Ranjit Jhala}{UC San Diego}{rjhala@cs.ucsd.edu}{}{}{}{}{}{}
+\authorrunning{A. Tondwalkar, M. Kolosick, and R. Jhala}
+\usepackage{tcolorbox}
+\newtcolorbox{myquote}{colback=lipicsLightGray, arc=1mm, boxrule=0mm}
+\renewenvironment{quote}{\begin{myquote}}{\end{myquote}}
+\ccsdesc{}
+\keywords{Refinement Types, Theorem Proving, Verification}  %% \keywords is optional
+\hideLIPIcs
 $for(header-includes)$
 $header-includes$
 $endfor$

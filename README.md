@@ -1,21 +1,5 @@
 ---
 title: "`mist`: Artifact for the ECOOP21 Paper _Refinements of Futures Past_"
-numbersections: true
-documentclass: lipics-v2021
-header-includes: |
-  ```{=latex}
-  \nolinenumbers
-  \author{Anish Tondwalkar}{UC San Diego}{atondwal@eng.ucsd.edu}{}{}{}{}{}{}
-  \author{Matt Kolosick}{UC San Diego}{mkolosick@eng.ucsd.edu}{}{}{}{}{}{}
-  \author{Ranjit Jhala}{UC San Diego}{rjhala@cs.ucsd.edu}{}{}{}{}{}{}
-  \authorrunning{A. Tondwalkar, M. Kolosick, and R. Jhala}
-  \usepackage{tcolorbox}
-  \newtcolorbox{myquote}{colback=lipicsLightGray, arc=1mm, boxrule=0mm}
-  \renewenvironment{quote}{\begin{myquote}}{\end{myquote}}
-  \ccsdesc{}
-  \keywords{Refinement Types, Theorem Proving, Verification}  %% \keywords is optional
-  \hideLIPIcs
-  ```
 abstract: |
   `mist` is a tiny language for teaching and experimenting with refinement types, in the style of
   [LiquidHaskell](https://github.com/ucsd-progsys/liquidhaskell). We use it as
