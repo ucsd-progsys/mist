@@ -496,6 +496,32 @@ fmap :: rforall a, b, p, q.
   ST <p >q >b
 fmap = \f x -> bind x (\xx -> pure (f xx))
 ```
-
 ## Implicit pair types
-paginationTokens
+
+Next, we demonstrate how to use another core feature unique to Mist: implicit pair types as described in the paper. Consider iterating through an infinite stream of tokens. The API for getting the next token is:
+
+```{include=tests/pos/paginationTokens.hs .haskell .numberLines startLine=37 endLine=42}
+nextPage as
+  token:{v: Int | v ≠ done} ->
+  (exists tok:Int.
+    (ST <{v:Int | v = token}
+        >{v:Int | (v = tok) /\ (v ≠ token)}
+        >{v:Int | v = tok}))
+```
+
+> Remember to parenthesize both sides of conjunctions (`/\`)!
+
+That is, given a token, `nextPage` give you a state action where it picks a new token that's not equal to the old token, and updates the state of the world to reflect the new token.
+
+```{include=tests/pos/paginationTokens.hs .haskell .numberLines startLine=52 endLine=57}
+client :: token:Int ->
+  (ST <{v:Int | v = token} >{v:Int | v = done} >Int)
+client = \token ->
+  if token == done
+  then pure 1
+  else bind (nextPage token) (\tok -> client tok)
+```
+    $ mist tests/pos/pagination.hs
+    SAFE
+
+And that concludes our short tutorial on `mist`. Go forth and verify!
