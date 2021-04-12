@@ -10,22 +10,22 @@ startTok = undefined
 ----------------------------------------------------------------------------
 -- | The ST Monad ----------------------------------------------------------
 ----------------------------------------------------------------------------
-bind :: rforall a, b, p, q, r, s, t, u.
+bind :: rforall a, b, p, q, r.
   ST <p >q >a ->
   (x:a -> ST <q >r >b) ->
   ST <p >r >b
 bind = undefined
 
-pure :: rforall a, p, q, s, t. x:a -> ST <p >q >a
+pure :: rforall a, p. x:a -> ST <p >p >a
 pure = undefined
 
-thenn :: rforall a, b, p, q, r, s, t, u.
+thenn :: rforall a, b, p, q, r.
   ST <p >q >a ->
   ST <q >r >b ->
   ST <p >r >b
 thenn = \f g -> bind f (\underscore -> g)
 
-fmap :: rforall a, b, p, q, s, t.
+fmap :: rforall a, b, p, q.
   (underscore:a -> b) ->
   ST <p >q >a ->
   ST <p >q >b
