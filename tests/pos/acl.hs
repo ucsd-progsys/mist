@@ -15,32 +15,42 @@ thenn as rforall a, b. acl1:(Set >Int) ~> acl2:(Set >Int) ~> acl3:(Set >Int) ~>
 thenn = (0)
 
 canRead as acl:(Set >Int) ~>
-  f:Int -> Perm <{v:Set >Int | v == acl}  >{v:Set >Int | v == acl} >{v:Bool | v == f ∈ acl}
+  f:Int
+  -> Perm <{v:Set >Int | v == acl}
+          >{v:Set >Int | v == acl}
+          >{v:Bool | v == f ∈ acl}
 canRead = 0
 
 grant as aclGrant:(Set >Int) ~>
-  f:Int -> Perm <{v:Set >Int | v == aclGrant} >{v:Set >Int | v == setPlus aclGrant f} >Unit
+  f:Int
+  -> Perm <{v:Set >Int | v == aclGrant}
+          >{v:Set >Int | v == setPlus aclGrant f}
+          >Unit
 grant = 0
 
 revoke as acl:(Set >Int) ~>
-  f:Int -> Perm <{v:Set >Int | v == acl} >{v:Set >Int | v == setMinus acl f} >Unit
+  f:Int
+  -> Perm <{v:Set >Int | v == acl}
+          >{v:Set >Int | v == setMinus acl f}
+          >Unit
 revoke = 0
 
 read as aclRead:(Set >Int) ~>
-  {v:Int | v ∈ aclRead} -> Perm <{v:Set >Int | v == aclRead} >{v:Set >Int | v == aclRead} >String
+  {v:Int | v ∈ aclRead}
+  -> Perm <{v:Set >Int | v == aclRead} >{v:Set >Int | v == aclRead} >String
 read = 0
 
-runPerm as rforall a. acl:(Set >Int) ->
-  Perm <{v:Set >Int | v == acl} >{v:Set >Int | True} >a -> a
+runPerm as rforall a. acl:(Set >Int)
+  -> Perm <{v:Set >Int | v == acl} >{v:Set >Int | True} >a -> a
 runPerm = 0
 
--- TODO: should use theory emptyset, but failing that we should actually
--- make this assume work.
--- emptySet as {v: Set >Int | 0 == 0}
--- emptySet = 0
-
-foo :: start:(Set >Int) ~> f:Int -> Perm <{v:Set >Int | v == start} >{v:Set >Int | 0 == 0} >String
-foo = \f -> (bind (grant f) (\asdf -> (bind (read f) (\contents -> (bind (revoke f) (\asdf -> pure contents))))))
+foo :: start:(Set >Int) ~> f:Int
+  -> Perm <{v:Set >Int | v == start} >{v:Set >Int | 0 == 0} >String
+foo = \f -> (bind
+                  (grant f) (\asdf -> (bind
+                  (read f) (\contents -> (bind
+                  (revoke f) (\asdf ->
+                  pure contents))))))
 
 -- foo :: start:(Set >Int) ~> f:Int -> Perm <{v:Set >Int | v == start} >{v:Set >Int | f ∈ v} >Unit
 -- foo = \f -> (grant f)

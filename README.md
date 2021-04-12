@@ -367,17 +367,18 @@ terms in a linear DSL:
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=4 endLine=4}
 var as x:Int -> (Lin >{v:Set >Int | v = setPlus emptySet x})
 ```
-```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=7 endLine=7}
+```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=7 endLine=10}
 fun as env:(Set >Int) ~> n:{v:Int | (v ∈ env) ≠ True} -> (Lin >{v:Set >Int | v = setPlus env n}) -> (Lin >{v:Set >Int | v = env})
 ```
-```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=10 endLine=10}
+> It's not always obvious when you need parenthesis around datatypes. Sometimes it's best to just on the safe side and just parenthesize them all.
+```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=13 endLine=16}
 app as env1:(Set >Int) ~> env2:{v:Set >Int | env1 ∩ v = emptySet} ~> (Lin >{v:Set >Int | v = env1}) -> (Lin >{v:Set >Int | v = env2}) -> (Lin >{v:Set >Int | v = env1 ∪ env2})
 ```
-```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=13 endLine=13}
+```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=19 endLine=19}
 typecheck as (Lin >{v:Set >Int | v = emptySet}) -> (Lin >(Set >Int))
 ```
 
-```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=19 endLine=20}
+```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=25 endLine=100}
 program2 :: Lin >(Set >Int)
 program2 = typecheck (fun 1 (fun 2 (app (var 1) (var 2))))
 ```
@@ -408,22 +409,22 @@ types, which use the usual space-separated syntax.
 We can use these measures in constructor axioms to effectively define
 structurally recursive functions over a datatype.
 
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=9 endLine=9}
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=10 endLine=10}
 nil as {v: List >Int | (mNil v) /\ (mLength v = 0) /\ (not (mCons v))}
 ```
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=12 endLine=12}
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=13 endLine=14}
 cons as x:Int -> xs:(List >Int) -> {v: List >Int | (mCons v) /\ (mLength v = mLength xs + 1) /\ (not (mNil v))}
 ```
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=15 endLine=15}
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=17 endLine=17}
 first as {v: List >Int | mCons v} -> Int
 ```
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=18 endLine=18}
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=20 endLine=22}
 rest as rs:{v: List >Int | mCons v} -> {v: List >Int | mLength v + 1 == mLength rs }
 ```
 
 and we can then use them in verification!
 
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=21 endLine=100}
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=24 endLine=100}
 append :: xs:(List >Int) -> ys:(List >Int) -> {v: List >Int | mLength v = (mLength xs) + (mLength ys)}
 append = \xs -> \ys ->
   if empty xs

@@ -31,14 +31,23 @@ new :: rforall a. ST <a >a >Int
 new = undefined
 
 -- | Read a `Int`
-read :: hg:(Map <Int >Int) ~> p:Int -> ST <{h:Map <Int >Int | h == hg} >{h:Map <Int >Int | h == hg} >{v:Int| v == select hg p}
+read :: hg:(Map <Int >Int) ~> p:Int
+     -> ST <{h:Map <Int >Int | h == hg}
+           >{h:Map <Int >Int | h == hg}
+           >{v:Int| v == select hg p}
 read = undefined
 
 -- | Write a `Int`
-write :: h:(Map <Int >Int) ~> p:Int -> v:Int -> ST <{hg:Map <Int >Int | h == hg} >{hg:Map <Int >Int | store h p v == hg} >Unit
+write :: h:(Map <Int >Int) ~> p:Int -> v:Int
+       -> ST <{hg:Map <Int >Int | h == hg}
+             >{hg:Map <Int >Int | store h p v == hg}
+             >Unit
 write = undefined
 
 -----------------------------------------------------------------------------
-increment :: h:(Map <Int >Int) ~> r:Int -> ST <{v:Map <Int >Int | v == h} >{v:Map <Int >Int| store h r ((select h r)+1) == v} >Unit
+increment :: h:(Map <Int >Int) ~> r:Int
+          -> ST <{v:Map <Int >Int | v == h}
+                >{v:Map <Int >Int| store h r ((select h r)+1) == v}
+                >Unit
 increment = \r -> bind (read r) (\n -> write r (n+1))
 
