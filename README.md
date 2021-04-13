@@ -159,26 +159,26 @@ We start from an extremely simple example that demonstrates the concrete
 semantics of mist's refinement type system.
 
 ```{include=tests/pos/Int00.hs .haskell .numberLines}
-int :: { v : Int  | v == 12 }
-int = 12
+twelve :: { v : Int  | v == 12 }
+twelve = 12
 ```
 
 Here, we have a top-level binder for the constant `int`. Each top level binder
 includes a type signature (line 1), and a body (line 2). The body of `int`
-simply states that it's equal to the integer constant `1`. This type signature
+simply states that it's equal to the integer constant `12`. This type signature
 is a minimal example of a refinement type: we refine the base type `Int`,
 binding its values to `v`, and taking the quotient of this type by the
 proposition `v == 12`. This results in a singleton type that checks against the
-body of one.
+body of `twelve`.
 
-    $ mist tests/pos/one.hs
+    $ mist tests/pos/twelve.hs
     SAFE
 
 If we had used a different value in the type and body:
 
 ```{include=tests/neg/Int01.hs .haskell .numberLines}
-int :: { v : Int  | v == 14 }
-int = ( 12 )
+twelve :: { v : Int  | v == 14 }
+twelve = 12
 ```
 
 We'd see a type error:
@@ -209,9 +209,6 @@ This program checks that `incr`menting 7 results in 8.
 
 Here, the binder `x:Int` binds `x` in the type on the right-hand side of `->`.
 Similarly, at the value level, `\` denotes a lambda.
-
-> If a function type signature is failing to parse, try assigning a name to the
-argument (e.g. `x:Int ->` instead of `Int ->`)
 
 Functions can also be polymorphic:
 
@@ -245,7 +242,7 @@ the squiggly arrow `~>` instead of the straight arrow `->`:
 
 ```{include=tests/pos/incr00.hs .haskell .numberLines}
 incr :: n:Int ~> (Int -> { v : Int | v == n }) -> { v : Int | v == n + 1 }
-incr = \ f -> (f 0) + 1
+incr = \f -> (f 0) + 1
 
 test1 :: { v : Int | v == 11 }
 test1 = incr (\x -> 10)
@@ -295,16 +292,21 @@ subtyping relationships.
 Here, the variance annotation `>` indicates that `a` appears covariantly in
 `List` (that is, `List` contains things that are subtypes of `a`). If it
 appeared contravariantly, we would have written `List <a` (a `List` of
-supertypes of `a`).
+supertypes of `a`). Or in other words, a `List >a` behaves like a `List` that
+might produce `a`s, whereas a `List <a` behaves as a list that might consume
+`a`s.
 
 This notation is intended to evoke a function arrow `->`:
 Just as you can use a function that _returns_ any subtype of the type you need,
 and that _accepts_ any supertype of the arguments you have, if you're a type
 variable on the pointy end of the variance annotation (or function arrow)
 you're a covariant type variable, and if you're on the other end you're
-contravariant.
+contravariant. 
 
-If you try to pass a `List >a` as a `List <a`, that is a (base/unrefined) type error.
+If you try to pass a `List >a` as a `List <a`, that is a (base/unrefined) type
+error --- variance annotations are essentially a part of the type name.
+
+You do not need to declare datatypes before using them in type signatures.
 
 Some such datatypes (`Int`, `Bool`, `Set`, and `Map`) have special meaning when
 used in types, as they come with primitives (such as `+`, which we saw above)
@@ -313,7 +315,7 @@ that have meaning to the solver's theories of arithmetic, sets, maps, etc.
 ### Axioms
 
 Mist relies on axioms to introduce data constructors. An axiom in Mist is
-written with `as` (assumed types) instead of `::` (checked types):
+written with "`as`" (assumed types) instead of "`::`" (checked types):
 
 ```{.haskell}
 exFalsoQuodlibet as forall a. False -> a
@@ -324,7 +326,7 @@ Whatever we put for ... is taken to be the witness of the axiom, and executed
 when the axiom is used in code that is run.
 
 To use the `List` datatype, we need constructors, and projections from these
-constructor (or induction princples, but let's keep it simple for the
+constructor (or induction principles, but let's keep it simple for the
 tutorial). To introduce axioms for each of these, we write something like
 
 ```{.haskell}
@@ -338,13 +340,13 @@ rest as forall a. List >a -> List >a
 rest = ...
 ```
 
-where `...` can be the Boehm-Beraraducci encoding of constructors and
+where `...` can be e.g. Boehm-Beraraducci (1985) encoding of constructors and
 projection operators, but since we're focused on testing the typechecker here,
-we generally set them equal to 0 as the witnesses to axioms don't matter as
+we generally set them equal to 0 as the witnesses to axioms don't matter so
 far as the typechecker is concerned.
 
-We can use axiomatized constructors and `Set` primitives to define a type of
-terms in a linear DSL:
+We can use axiomatized constructors to define a datatype `Lin`, the type of terms of
+a linear DSL. Here, we use `Set` primitives.
 
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=4 endLine=4}
 var as x:Int -> (Lin >{v:Set >Int | v = setPlus emptySet x})
@@ -352,7 +354,10 @@ var as x:Int -> (Lin >{v:Set >Int | v = setPlus emptySet x})
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=7 endLine=10}
 fun as env:(Set >Int) ~> n:{v:Int | (v ∈ env) ≠ True} -> (Lin >{v:Set >Int | v = setPlus env n}) -> (Lin >{v:Set >Int | v = env})
 ```
-> It's not always obvious when you need parenthesis around datatypes. Sometimes it's best to just on the safe side and just parenthesize them all.
+> It may not always be obvious when you need parenthesis around type
+constructor applications. Some rules of thumb: parenthesize them on both sides
+of `->`, but in the left-hand side of a refinement type (the binder), `(` may
+not follow `:`.
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=13 endLine=16}
 app as env1:(Set >Int) ~> env2:{v:Set >Int | env1 ∩ v = emptySet} ~> (Lin >{v:Set >Int | v = env1}) -> (Lin >{v:Set >Int | v = env2}) -> (Lin >{v:Set >Int | v = env1 ∪ env2})
 ```
@@ -374,19 +379,27 @@ SAFE
 
 But these `List` constructors are all a bit boring --- what good are user
 datatypes if we can't say anything about them at the type level?!
-We use (purely) type-level functions called measures [Vazou et al] to enrich the types
-of our constructors.
+Until now, we've only been able to form refinements out of variables and
+primitive functions such as `+` and `∩` on special types such as `Int` and `Set`.
+We use (purely) refinement-level functions called measures (Vazou et al, ICFP 2014)
+to extend the language of refinements and enrich the types of our constructors.
 
 ```{include=tests/pos/recursion.hs .haskell .numberLines startLine=1 endLine=1}
 measure mNil :: List [>Int] -> Bool
 ```
 
-This declares a measure mNil that takes a List of Ints and returns a Bool.
+> If you get an error message about free vars that implicates the start of the
+file, you probably tried to use a measure you didn't declare. This will cause
+the solver print a list of unbound measures and crash with some mumbo-jumbo
+about `--prune-unsorted`.
+
+This declares a measure `mNil` that takes a `List` of `Int`s and returns a `Bool`.
 Measure have unrefined types.
 
-> Type constructor application to base types takes a list of parameters in square
-brackets separated by commas, unlike applications of type constructors to refinement
-types, which use the usual space-separated syntax.
+> Type constructor application in the realm of base types takes a list of
+parameters in square brackets separated by commas, unlike applications of type
+constructors in the realm of refinement types, which use the usual
+space-separated syntax.
 
 We can use these measures in constructor axioms to effectively define
 structurally recursive functions over a datatype.
@@ -479,6 +492,9 @@ fmap :: rforall a, b, p, q.
   ST <p >q >b
 fmap = \f x -> bind x (\xx -> pure (f xx))
 ```
+> If a function type signature is failing to parse, try assigning a name to the
+argument (e.g. `x:Int ->` instead of `Int ->`).
+
 ## Implicit pair types
 
 Next, we demonstrate how to use another core feature unique to Mist: implicit pair types as described in the paper. Consider iterating through an infinite stream of tokens. The API for getting the next token is:
