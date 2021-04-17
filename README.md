@@ -12,14 +12,13 @@ abstract: |
   `liquid-fixpoint` horn clause solver.
 
   We present source code and binaries for `mist` in a container image that
-  includes installations of the competing tools we compare to: FStar and MoCHi.
+  includes installations of the competing tools we compare to.
 ---
 
 # Initial build, install, and running all tests
 
 You can use the Docker image or install `mist` manually. The
-Docker image also includes Fstar and MoCHi, the other tools we compare against
-in our paper
+Docker image also includes the tools we compare against.
 
 ## Manually
 
@@ -80,9 +79,8 @@ You can run a specific test by calling mist on the test file, e.g.
 
     $ mist tests/pos/incrState.hs
 
-If you're using the docker image, you can also run tests for `fstar` and `mochi`:
+If you're using the docker image, you can also run tests for `fstar`:
 
-    $ mochi mochi-tests/incrState.ml
     $ fstar fstar-tests/incrState.fst
 
 # Benchmarks from the paper
@@ -110,16 +108,14 @@ Here's a table of where you can find each of the tests described in the paper:
 
 As in the paper, an `x` indicates that the specification cannot be directly expressed with that tool.
 
-<!--
-(TODO)
-N.B. We use the latest version of mochi, to give it the best chance of passing
-the above case studies. However, while the latest version of mochi fails the
-`d2.ml` test, the version of mochi from the mochi paper passes it, so we
-still mark it as passing in the paper.
-So, actually we just use the online version from the relcomp paper, and we tried with both the first
-and last public release of mochi and don't get good results, but that online
-version is no longer ....online
--->
+Unfortunately, the verison of MoCHi we commpare against was made available as a
+[web demo](http://www.kb.is.s.u-tokyo.ac.jp/~uhiro/relcomp/) that is no longer functional.
+Since then, there has been a source relase of MoCHi, but it does not support
+the `-relative-complete` verification mode that we compared against in our
+paper. We inclue a build of the latest version of MoCHi anyways, in case you want to
+play with it yourself and get an idea of how it works:
+
+    $ mochi mochi-tests/incrState.ml
 
 # A quick tutorial in writing mist
 
