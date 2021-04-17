@@ -24,7 +24,7 @@ Docker image also includes the tools we compare against.
 
 You'll need git, [z3 version 4.8.10](https://github.com/Z3Prover/z3/releases), and [stack](https://docs.haskellstack.org/en/stable/README/).
 
-    $ git clone -b ecoop21 --recursive https://github.com/uscd-progsys/mist
+    $ git clone -b ecoop21 --recursive https://github.com/ucsd-progsys/mist
     $ cd mist
     $ stack install
 
