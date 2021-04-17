@@ -20,19 +20,6 @@ abstract: |
 You can use the Docker image or install `mist` manually. The
 Docker image also includes the tools we compare against.
 
-## Manually
-
-You'll need git, [z3 version 4.8.10](https://github.com/Z3Prover/z3/releases), and [stack](https://docs.haskellstack.org/en/stable/README/).
-
-    $ git clone -b ecoop21 --recursive https://github.com/ucsd-progsys/mist
-    $ cd mist
-    $ stack install
-
-You can then run the full `mist` test suite (which is located in the `tests/` directory).
-
-    $ stack test
-
-
 ## Using `docker`
 
 > **Windows and Mac users:** Make sure your docker container has at least 4GB of RAM
@@ -72,6 +59,19 @@ You can use `docker start` to restart exited containers
     vibrant_leavitt
     $ docker exec -it vibrant_leavitt bash
     ecoop21@696b2221e3ad:~/mist$
+
+## Manually
+
+You'll need git, [z3 version 4.8.10](https://github.com/Z3Prover/z3/releases), and [stack](https://docs.haskellstack.org/en/stable/README/).
+
+    $ git clone -b ecoop21 --recursive https://github.com/ucsd-progsys/mist
+    $ cd mist
+    $ stack install
+    $ export PATH=$HOME/.local/bin/:$PATH
+
+You can then run the full `mist` test suite (which is located in the `tests/` directory).
+
+    $ stack test
 
 # Running specific tests
 
@@ -135,9 +135,10 @@ implicit refinement function types and pair types.
 
 We recommend reading the pdf verion of this tutorial as it is the easiest to
 read, but we also recommend keeping open a copy of the markdown source in your
-text editor as you follow along. You'll be able to follow links in both versions
-to the test files and experiment with them. We recommend running a continuous build
-in a terminal while you experiment with a mist file, e.g.:
+text editor as you follow along, as the markdown source includes the location
+of each snippet as range of lines in a test file, so you can open, edit, and
+rerun those tests yourself. We recommend running a continuous build in
+a terminal while you experiment with a mist file, e.g.:
 
 ```{.console}
 $ find tests | entr mist /_
@@ -251,11 +252,11 @@ test2 = \mv -> incr (\x -> mv)
 
 > Note the parentheses around `(f 0)` --- there are no precedence rules for infix primitives.
 
-Given a constant function, `incr` increment the result. This is
-straightforwared at the value level, but encoding it at the type level requires
+Given a constant function, `incr` increments the result. This is
+straightforward at the value level, but encoding it at the type level requires
 the use of implicit parameters. Here, `n` in bound at the type level, but has
 no corresponding binder at the value level in the surface syntax. The body of
-the function much typecheck for all values of `n`, but each call to the
+the function must typecheck for all values of `n`, but each call to the
 function need only be valid for some particular choice of `n`. `n` is picked at
 the call site by the implicit instantiation algorithm for refinement types
 described in the paper, such that the function application typechecks.
@@ -314,12 +315,14 @@ Mist relies on axioms to introduce data constructors. An axiom in Mist is
 written with "`as`" (assumed types) instead of "`::`" (checked types):
 
 ```{.haskell}
-exFalsoQuodlibet as forall a. False -> a
+exFalsoQuodlibet as rforall a. False -> a
 exFalsoQuodlibet = ...
 ```
 
 Whatever we put for ... is taken to be the witness of the axiom, and executed
 when the axiom is used in code that is run.
+
+> You need to provide a body for every binding, axioms or otherwise.
 
 To use the `List` datatype, we need constructors, and projections from these
 constructor (or induction principles, but let's keep it simple for the
@@ -354,6 +357,10 @@ fun as env:(Set >Int) ~> n:{v:Int | (v ∈ env) ≠ True} -> (Lin >{v:Set >Int |
 constructor applications. Some rules of thumb: parenthesize them on both sides
 of `->`, but in the left-hand side of a refinement type (the binder), `(` may
 not follow `:`.
+
+> Note that the not-equals operator is the unicode symbol, not
+a multi-character sigil --- all infix operators in Mist are single characters.
+
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=13 endLine=16}
 app as env1:(Set >Int) ~> env2:{v:Set >Int | env1 ∩ v = emptySet} ~> (Lin >{v:Set >Int | v = env1}) -> (Lin >{v:Set >Int | v = env2}) -> (Lin >{v:Set >Int | v = env1 ∪ env2})
 ```
@@ -387,7 +394,7 @@ measure mNil :: List [>Int] -> Bool
 > If you get an error message about free vars that implicates the start of the
 file, you probably tried to use a measure you didn't declare. This will cause
 the solver print a list of unbound measures and crash with some mumbo-jumbo
-about `--prune-unsorted`.
+about `--prune-unsorted`. Measures always go at the top of the file.
 
 This declares a measure `mNil` that takes a `List` of `Int`s and returns a `Bool`.
 Measure have unrefined types.
