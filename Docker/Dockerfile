@@ -8,7 +8,7 @@ RUN apt-get -qq update && \
     add-apt-repository -y ppa:avsm/ppa && \
     apt-get -qq update && \
     # Mist deps \
-    apt-get -y install z3 git-core curl build-essential time libgmp-dev locales && \
+    apt-get -y install z3 git-core curl build-essential time libgmp-dev locales entr && \
     # FStar deps \
     apt-get -y install libssl-dev libsqlite3-dev g++ gcc m4 make opam pkg-config python libgmp3-dev unzip cmake && \
     # MoCHi deps \
@@ -91,5 +91,4 @@ RUN cp src/mochi.exe /home/ecoop21/.local/bin/mochi
 # Set things up nicely for the user
 ENV PATH "/home/ecoop21/.local/bin:${PATH}"
 WORKDIR /home/ecoop21/mist
-RUN git pull
-CMD stack test && /bin/bash
+RUN git pull && stack test && /bin/bash

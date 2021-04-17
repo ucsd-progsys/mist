@@ -336,6 +336,9 @@ $endif$
 \ccsdesc{}
 \keywords{Refinement Types, Theorem Proving, Verification}  %% \keywords is optional
 \hideLIPIcs
+\lstset{
+  literate={~} {\ensuremath{\sim}}{1}
+}
 $for(header-includes)$
 $header-includes$
 $endfor$

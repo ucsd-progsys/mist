@@ -108,11 +108,11 @@ Here's a table of where you can find each of the tests described in the paper:
 
 As in the paper, an `x` indicates that the specification cannot be directly expressed with that tool.
 
-Unfortunately, the verison of MoCHi we commpare against was made available as a
+Unfortunately, the version of MoCHi we compare against was made available as a
 [web demo](http://www.kb.is.s.u-tokyo.ac.jp/~uhiro/relcomp/) that is no longer functional.
-Since then, there has been a source relase of MoCHi, but it does not support
+Since then, there has been a source release of MoCHi, but it does not support
 the `-relative-complete` verification mode that we compared against in our
-paper. We inclue a build of the latest version of MoCHi anyways, in case you want to
+paper. We include a build of the latest version of MoCHi anyways, in case you want to
 play with it yourself and get an idea of how it works:
 
     $ mochi mochi-tests/incrState.ml
@@ -133,16 +133,19 @@ implicit refinement function types and pair types.
 
 ## How to read this tutorial
 
-We recommend reading the pdf verion of this tutorial as it is the easiest to
-read, but we also recommend keeping open a copy of the markdown source in your
-text editor as you follow along, as the markdown source includes the location
-of each snippet as range of lines in a test file, so you can open, edit, and
-rerun those tests yourself. We recommend running a continuous build in
-a terminal while you experiment with a mist file, e.g.:
+We recommend reading the pdf version of this tutorial as it is the easiest to
+read, but we also recommend keeping open a copy of the markdown source
+(`~/mist/README.md`) in your text editor as you follow along, as the markdown
+source includes the location of each snippet as range of lines in a test file,
+so you can open, edit, and rerun those tests yourself.
+
+We recommend running a continuous build in a terminal while you experiment with
+a mist file. For example, this sets up `entr` to run `mist` on a file every
+time it gets written (whether or not it's a `mist` file).
 
 ```{.console}
 $ find tests | entr mist /_
-(in another window)
+(in another window - see above for docker instructions)
 $ vim tests/.../mytest.hs
 ```
 
@@ -168,7 +171,7 @@ binding its values to `v`, and taking the quotient of this type by the
 proposition `v == 12`. This results in a singleton type that checks against the
 body of `twelve`.
 
-    $ mist tests/pos/twelve.hs
+    $ mist tests/pos/Int00.hs
     SAFE
 
 If we had used a different value in the type and body:
@@ -202,7 +205,7 @@ moo :: {v:Int | v == 8}
 moo = incr 7
 ```
 
-This program checks that `incr`menting 7 results in 8.
+This program checks that `incr`ementing 7 results in 8.
 
 Here, the binder `x:Int` binds `x` in the type on the right-hand side of `->`.
 Similarly, at the value level, `\` denotes a lambda.
@@ -234,7 +237,7 @@ base types.
 ## Implicit function types
 
 We're ready for our first example of a feature introduced in this paper! We
-write an implicit function type the same was as a normal function, but using
+write an implicit function type the same way as a normal function, but using
 the squiggly arrow `~>` instead of the straight arrow `->`:
 
 ```{include=tests/pos/incr00.hs .haskell .numberLines}
@@ -261,8 +264,8 @@ function need only be valid for some particular choice of `n`. `n` is picked at
 the call site by the implicit instantiation algorithm for refinement types
 described in the paper, such that the function application typechecks.
 
-Here, for the call to `incr` on line 5 inside `test1`, `n` takes the value 10, and
-on line 8, it takes the value `mv`.
+Here, for the call to `incr` on line 5 inside `test1`, `n` takes on the value 10, and
+on line 8, it takes on the value `mv`.
 
 ## Datatypes, axioms, and measures
 
@@ -290,8 +293,8 @@ Here, the variance annotation `>` indicates that `a` appears covariantly in
 `List` (that is, `List` contains things that are subtypes of `a`). If it
 appeared contravariantly, we would have written `List <a` (a `List` of
 supertypes of `a`). Or in other words, a `List >a` behaves like a `List` that
-might produce `a`s, whereas a `List <a` behaves as a list that might consume
-`a`s.
+might produce `a`s when it is used up, whereas a `List <a` behaves as a list
+that might consume `a`s to use up.
 
 This notation is intended to evoke a function arrow `->`:
 Just as you can use a function that _returns_ any subtype of the type you need,
@@ -331,9 +334,9 @@ tutorial). To introduce axioms for each of these, we write something like
 ```{.haskell}
 nil as forall a. List >a
 nil = ...
-cons as forall a. Int -> List >a -> List >a
+cons as forall a. a -> List >a -> List >a
 cons = ...
-first as forall a. List >a -> Int
+first as forall a. List >a -> a
 first = ...
 rest as forall a. List >a -> List >a
 rest = ...
@@ -344,29 +347,37 @@ projection operators, but since we're focused on testing the typechecker here,
 we generally set them equal to 0 as the witnesses to axioms don't matter so
 far as the typechecker is concerned.
 
-We can use axiomatized constructors to define a datatype `Lin`, the type of terms of
-a linear DSL. Here, we use `Set` primitives.
+We can use axiomatized constructors to define a datatype `Lin` which isthe type
+of terms of a linear DSL. Here, we use `Set` primitives.
 
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=4 endLine=4}
 var as x:Int -> (Lin >{v:Set >Int | v = setPlus emptySet x})
 ```
+`var` constructs a term that is a variable mention. It checks that the variable is in the environment.
+$\frac{x \in \Gamma}{\Gamma \vdash \texttt{var } x}$
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=7 endLine=10}
 fun as env:(Set >Int) ~> n:{v:Int | (v ∈ env) ≠ True} -> (Lin >{v:Set >Int | v = setPlus env n}) -> (Lin >{v:Set >Int | v = env})
 ```
+`fun` constructs a lambda term, while checking that the variable it binds is fresh.
+$\frac{x\not\in\Gamma \quad \Gamma \cup \{x\} \vdash e}{\Gamma \vdash \texttt{fun } x\,  e}$
+
 > It may not always be obvious when you need parenthesis around type
 constructor applications. Some rules of thumb: parenthesize them on both sides
-of `->`, but in the left-hand side of a refinement type (the binder), `(` may
-not follow `:`.
+of `->`, but in the left-hand side of a refinement type (the binder), "`(`" may
+not follow "`:`"
 
 > Note that the not-equals operator is the unicode symbol, not
-a multi-character sigil --- all infix operators in Mist are single characters.
+a multi-character sigil --- infix operators in Mist are single characters.
 
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=13 endLine=16}
 app as env1:(Set >Int) ~> env2:{v:Set >Int | env1 ∩ v = emptySet} ~> (Lin >{v:Set >Int | v = env1}) -> (Lin >{v:Set >Int | v = env2}) -> (Lin >{v:Set >Int | v = env1 ∪ env2})
 ```
+`app` applies a function to a value, checking that no variable is used more
+than once in either argument. $\frac{\Gamma_1 \cap \Gamma_2 = \emptyset\quad \Gamma_2 \vdash e \quad \Gamma_1 \vdash f}{\Gamma_1 \cup \Gamma_2\vdash \texttt{app } f\,  e}$
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=19 endLine=19}
 typecheck as (Lin >{v:Set >Int | v = emptySet}) -> (Lin >(Set >Int))
 ```
+`typecheck` simply checks that a term is closed $\frac{\emptyset\vdash e}{\vdash e}$
 
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=25 endLine=100}
 program2 :: Lin >(Set >Int)
@@ -378,73 +389,18 @@ $ mist tests/pos/linearTypes.hs
 SAFE
 ```
 
-## Measures
-
-But these `List` constructors are all a bit boring --- what good are user
-datatypes if we can't say anything about them at the type level?!
-Until now, we've only been able to form refinements out of variables and
-primitive functions such as `+` and `∩` on special types such as `Int` and `Set`.
-We use (purely) refinement-level functions called measures (Vazou et al, ICFP 2014)
-to extend the language of refinements and enrich the types of our constructors.
-
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=1 endLine=1}
-measure mNil :: List [>Int] -> Bool
-```
-
-> If you get an error message about free vars that implicates the start of the
-file, you probably tried to use a measure you didn't declare. This will cause
-the solver print a list of unbound measures and crash with some mumbo-jumbo
-about `--prune-unsorted`. Measures always go at the top of the file.
-
-This declares a measure `mNil` that takes a `List` of `Int`s and returns a `Bool`.
-Measure have unrefined types.
-
-> Type constructor application in the realm of base types takes a list of
-parameters in square brackets separated by commas, unlike applications of type
-constructors in the realm of refinement types, which use the usual
-space-separated syntax.
-
-We can use these measures in constructor axioms to effectively define
-structurally recursive functions over a datatype.
-
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=10 endLine=10}
-nil as {v: List >Int | (mNil v) /\ (mLength v = 0) /\ (not (mCons v))}
-```
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=13 endLine=14}
-cons as x:Int -> xs:(List >Int) -> {v: List >Int | (mCons v) /\ (mLength v = mLength xs + 1) /\ (not (mNil v))}
-```
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=17 endLine=17}
-first as {v: List >Int | mCons v} -> Int
-```
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=20 endLine=22}
-rest as rs:{v: List >Int | mCons v} -> {v: List >Int | mLength v + 1 == mLength rs }
-```
-
-and we can then use them in verification!
-
-```{include=tests/pos/recursion.hs .haskell .numberLines startLine=24 endLine=100}
-append :: xs:(List >Int) -> ys:(List >Int) -> {v: List >Int | mLength v = (mLength xs) + (mLength ys)}
-append = \xs -> \ys ->
-  if empty xs
-    then ys
-    else cons (first xs) (append (rest xs) ys)
-```
-
-```{.console}
-$ mist tests/pos/recursion.hs
-SAFE
-```
 
 ## State
 
-We can define a State Monad datatype! 
-Given a world to `put` (called `wp`), `put` updates the state to one where the state of the
+We can define a State Monad datatype! See section 2.3 of the paper for more explanation.
+`put` takes a world (called `wp`), `put` updates the state to one where the state of the
 world is now `wp`.
 
 ```{include=tests/pos/incrState.hs .haskell .numberLines startLine=20 endLine=20}
 put as wp:Int -> ST <Int >{p:Int|p==wp} >Unit
 ```
-`get` leaves the state of the world unchanged, but returns its value in the `ST` monad.
+`get` takes a boolean and ignores it, then leaves the state of the world
+unchanged, but returns its value in the `ST` monad.
 ```{include=tests/pos/incrState.hs .haskell .numberLines startLine=17 endLine=17}
 get as wg:Int ~> Bool -> ST <{gi:Int|gi==wg} >{go:Int|go==wg} >{gr:Int|gr==wg}
 ```
@@ -500,7 +456,11 @@ argument (e.g. `x:Int ->` instead of `Int ->`).
 
 ## Implicit pair types
 
-Next, we demonstrate how to use another core feature unique to Mist: implicit pair types as described in the paper. Consider iterating through an infinite stream of tokens. The API for getting the next token is:
+Next, we demonstrate how to use another core feature unique to Mist: implicit
+pair types as described in the paper. In the paper the syntax is
+$[n:Int].\text{---}$, but in the implementation, we use `exists n. -`. Consider
+iterating through an infinite stream of token handlers. The API for getting the
+next token is:
 
 ```{include=tests/pos/paginationTokens.hs .haskell .numberLines startLine=37 endLine=42}
 nextPage as
@@ -513,7 +473,9 @@ nextPage as
 
 > Remember to parenthesize both sides of conjunctions (`/\`)!
 
-That is, given a token, `nextPage` give you a state action where it picks a new token that's not equal to the old token, and updates the state of the world to reflect the new token.
+That is, given a token, `nextPage` give you a state action where it picks a new
+token that's not equal to the old token, and updates the state of the world to
+reflect the new token.
 
 ```{include=tests/pos/paginationTokens.hs .haskell .numberLines startLine=52 endLine=57}
 client :: token:Int ->
@@ -523,7 +485,67 @@ client = \token ->
   then pure 1
   else bind (nextPage token) (\tok -> client tok)
 ```
-    $ mist tests/pos/pagination.hs
+    $ mist tests/pos/paginationTokens.hs
     SAFE
 
 And that concludes our short tutorial on `mist`. Go forth and verify!
+
+\appendix
+
+# Appendix : Measures
+
+But these `List` constructors are all a bit boring --- what good are user
+datatypes if we can't say anything about them at the type level?!
+Until now, we've only been able to form refinements out of variables and
+primitive functions such as `+` and `∩` on special types such as `Int` and `Set`.
+We use (purely) refinement-level functions called measures (Vazou et al, ICFP 2014)
+to extend the language of refinements and enrich the types of our constructors.
+
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=1 endLine=1}
+measure mNil :: List [>Int] -> Bool
+```
+
+> Measures use a different syntax for types --- type applications have a list
+of parameters in `[`square`,` brackets`,` separated`,` by`,` commas`]`, unlike
+applications of type constructors that produce refinement types, which use the
+usual space-separated syntax.
+
+This declares a measure `mNil` that takes a `List` of `Int`s and returns a `Bool`.
+Measure have unrefined types.
+
+> If you get an error message about free vars that implicates the start of the
+file, you probably tried to use a measure you didn't declare. This will cause
+the solver print a list of unbound measures and crash with some mumbo-jumbo
+about `--prune-unsorted`. Measures always go at the top of the file.
+
+We can use these measures in constructor axioms to effectively define
+structurally recursive functions over a datatype.
+
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=10 endLine=10}
+nil as {v: List >Int | (mNil v) /\ (mLength v = 0) /\ (not (mCons v))}
+```
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=13 endLine=14}
+cons as x:Int -> xs:(List >Int) -> {v: List >Int | (mCons v) /\ (mLength v = mLength xs + 1) /\ (not (mNil v))}
+```
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=17 endLine=17}
+first as {v: List >Int | mCons v} -> Int
+```
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=20 endLine=22}
+rest as rs:{v: List >Int | mCons v} -> {v: List >Int | mLength v + 1 == mLength rs }
+```
+
+and we can then use them in verification!
+
+```{include=tests/pos/recursion.hs .haskell .numberLines startLine=24 endLine=100}
+append :: xs:(List >Int) -> ys:(List >Int) -> {v: List >Int | mLength v = (mLength xs) + (mLength ys)}
+append = \xs -> \ys ->
+  if empty xs
+    then ys
+    else cons (first xs) (append (rest xs) ys)
+```
+
+```{.console}
+$ mist tests/pos/recursion.hs
+SAFE
+```
+
