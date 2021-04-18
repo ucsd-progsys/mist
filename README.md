@@ -347,7 +347,7 @@ projection operators, but since we're focused on testing the typechecker here,
 we generally set them equal to 0 as the witnesses to axioms don't matter so
 far as the typechecker is concerned.
 
-We can use axiomatized constructors to define a datatype `Lin` which isthe type
+We can use axiomatized constructors to define a datatype `Lin` which is the type
 of terms of a linear DSL. Here, we use `Set` primitives.
 
 ```{include=tests/pos/linearTypes.hs .haskell .numberLines startLine=4 endLine=4}
