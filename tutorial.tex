@@ -1,0 +1,896 @@
+% Options for packages loaded elsewhere
+\PassOptionsToPackage{unicode}{hyperref}
+\PassOptionsToPackage{hyphens}{url}
+%
+\documentclass[
+]{darts-v2021}
+\usepackage{amsmath,amssymb}
+\usepackage{lmodern}
+\usepackage{iftex}
+\ifPDFTeX
+  \usepackage[T1]{fontenc}
+  \usepackage[utf8x]{inputenx}
+  \usepackage{textcomp} % provide euro and other symbols
+\else % if luatex or xetex
+  \usepackage{unicode-math}
+  \defaultfontfeatures{Scale=MatchLowercase}
+  \defaultfontfeatures[\rmfamily]{Ligatures=TeX,Scale=1}
+\fi
+% Use upquote if available, for straight quotes in verbatim environments
+\IfFileExists{upquote.sty}{\usepackage{upquote}}{}
+\IfFileExists{microtype.sty}{% use microtype if available
+  \usepackage[]{microtype}
+  \UseMicrotypeSet[protrusion]{basicmath} % disable protrusion for tt fonts
+}{}
+\usepackage{xcolor}
+\IfFileExists{bookmark.sty}{\usepackage{bookmark}}{\usepackage{hyperref}}
+\hypersetup{
+  pdftitle={mist: Artifact for the ECOOP21 Paper Refinements of Futures Past},
+  hidelinks,
+  pdfcreator={LaTeX via pandoc}}
+\urlstyle{same} % disable monospaced font for URLs
+\usepackage{color}
+\usepackage{fancyvrb}
+\newcommand{\VerbBar}{|}
+\newcommand{\VERB}{\Verb[commandchars=\\\{\}]}
+\DefineVerbatimEnvironment{Highlighting}{Verbatim}{commandchars=\\\{\}}
+% Add ',fontsize=\small' for more characters per line
+\newenvironment{Shaded}{}{}
+\newcommand{\AlertTok}[1]{\textcolor[rgb]{1.00,0.00,0.00}{\textbf{#1}}}
+\newcommand{\AnnotationTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\AttributeTok}[1]{\textcolor[rgb]{0.49,0.56,0.16}{#1}}
+\newcommand{\BaseNTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\BuiltInTok}[1]{#1}
+\newcommand{\CharTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\CommentTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textit{#1}}}
+\newcommand{\CommentVarTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\ConstantTok}[1]{\textcolor[rgb]{0.53,0.00,0.00}{#1}}
+\newcommand{\ControlFlowTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{\textbf{#1}}}
+\newcommand{\DataTypeTok}[1]{\textcolor[rgb]{0.56,0.13,0.00}{#1}}
+\newcommand{\DecValTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\DocumentationTok}[1]{\textcolor[rgb]{0.73,0.13,0.13}{\textit{#1}}}
+\newcommand{\ErrorTok}[1]{\textcolor[rgb]{1.00,0.00,0.00}{\textbf{#1}}}
+\newcommand{\ExtensionTok}[1]{#1}
+\newcommand{\FloatTok}[1]{\textcolor[rgb]{0.25,0.63,0.44}{#1}}
+\newcommand{\FunctionTok}[1]{\textcolor[rgb]{0.02,0.16,0.49}{#1}}
+\newcommand{\ImportTok}[1]{#1}
+\newcommand{\InformationTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\newcommand{\KeywordTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{\textbf{#1}}}
+\newcommand{\NormalTok}[1]{#1}
+\newcommand{\OperatorTok}[1]{\textcolor[rgb]{0.40,0.40,0.40}{#1}}
+\newcommand{\OtherTok}[1]{\textcolor[rgb]{0.00,0.44,0.13}{#1}}
+\newcommand{\PreprocessorTok}[1]{\textcolor[rgb]{0.74,0.48,0.00}{#1}}
+\newcommand{\RegionMarkerTok}[1]{#1}
+\newcommand{\SpecialCharTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\SpecialStringTok}[1]{\textcolor[rgb]{0.73,0.40,0.53}{#1}}
+\newcommand{\StringTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\VariableTok}[1]{\textcolor[rgb]{0.10,0.09,0.49}{#1}}
+\newcommand{\VerbatimStringTok}[1]{\textcolor[rgb]{0.25,0.44,0.63}{#1}}
+\newcommand{\WarningTok}[1]{\textcolor[rgb]{0.38,0.63,0.69}{\textbf{\textit{#1}}}}
+\usepackage{longtable,booktabs,array}
+\usepackage{calc} % for calculating minipage widths
+% Correct order of tables after \paragraph or \subparagraph
+\usepackage{etoolbox}
+\makeatletter
+\patchcmd\longtable{\par}{\if@noskipsec\mbox{}\fi\par}{}{}
+\makeatother
+% Allow footnotes in longtable head/foot
+\IfFileExists{footnotehyper.sty}{\usepackage{footnotehyper}}{\usepackage{footnote}}
+\makesavenoteenv{longtable}
+\nolinenumbers
+\author{Anish Tondwalkar}{UC San Diego}{atondwal@eng.ucsd.edu}{}{}{}{}{}{}
+\author{Matt Kolosick}{UC San Diego}{mkolosick@eng.ucsd.edu}{}{}{}{}{}{}
+\author{Ranjit Jhala}{UC San Diego}{rjhala@cs.ucsd.edu}{}{}{}{}{}{}
+\authorrunning{A. Tondwalkar, M. Kolosick, and R. Jhala}
+\usepackage{tcolorbox}
+\newtcolorbox{myquote}{colback=lightgray, arc=1mm, boxrule=0mm}
+\renewenvironment{quote}{\begin{myquote}}{\end{myquote}}
+\ccsdesc{Theory of computation~Program constructs}
+\ccsdesc{Theory of computation~Program specifications}
+\ccsdesc{Theory of computation~Program verification}
+\keywords{Refinement Types, Implicit Parameters, Verification, Dependent Pairs}  %% \keywords is optional
+\keywords{Refinement Types, Theorem Proving, Verification}  %% \keywords is optional
+\Volume{7}
+\Issue{2}
+\Article{20}
+\Copyright{Tondwalkar, Kolosick, and Jhala}
+\RelatedConference{35th European Conference on Object-Oriented
+Programming (ECOOP 2021), July 12-16, 2021, Aarhus, Denmark (Virtual
+Conference)}
+\lstset{
+  literate={~} {\ensuremath{\sim}}{1}
+}
+\ifLuaTeX
+  \usepackage{selnolig}  % disable illegal ligatures
+\fi
+
+\title{\texttt{mist}: Artifact for the ECOOP21 Paper \emph{Refinements
+of Futures Past}}
+\date{}
+
+\begin{document}
+\maketitle
+\begin{abstract}
+\texttt{mist} is a tiny language for teaching and experimenting with
+refinement types, in the style of
+\href{https://github.com/ucsd-progsys/liquidhaskell}{LiquidHaskell}. We
+use it as a platform for experimenting with and as a demonstration of
+implicit refinement types as presented in the ECOOP21 paper
+\emph{Refinements of Futures Past: Higher-Order Specification with
+Implicit Refinement Types}. We start with the parser and AST we use to
+teach our undergradute compilers class, and layer upon it a refinement
+type checker directly translated from the typing rules presented in that
+paper, which produces constraints that are solved with the
+\texttt{liquid-fixpoint} horn clause solver.
+
+We present source code and binaries for \texttt{mist} in a container
+image that includes installations of the competing tools we compare to.
+\end{abstract}
+
+\hypertarget{initial-build-install-and-running-all-tests}{%
+\section{Initial build, install, and running all
+tests}\label{initial-build-install-and-running-all-tests}}
+
+You can use the Docker image or install \texttt{mist} manually. The
+Docker image also includes the tools we compare against.
+
+\hypertarget{using-docker}{%
+\subsection{\texorpdfstring{Using
+\texttt{docker}}{Using docker}}\label{using-docker}}
+
+\begin{quote}
+\textbf{Windows and Mac users:} Make sure your docker container has at
+least 4GB of RAM
+\end{quote}
+
+The following command will download an image containing \texttt{mist},
+\texttt{fstar}, and \texttt{mochi}, run the full \texttt{mist} test
+suite, and then drop you into an interactive shell at the root of the
+\texttt{mist} code repository.
+
+\begin{verbatim}
+$ docker run -it atondwal/mist
+\end{verbatim}
+
+If you want to skip the test suite, instead run
+
+\begin{verbatim}
+$ docker run -it atondwal/mist /bin/bash
+\end{verbatim}
+
+You can then (re)run all of the tests in the \texttt{tests/} directory
+(perhaps after editing some) at any time by running
+
+\begin{verbatim}
+$ stack test
+\end{verbatim}
+
+\hypertarget{juggling-containers}{%
+\subsubsection{Juggling containers}\label{juggling-containers}}
+
+You can use \texttt{docker\ ps} to see the running container and open
+another shell to it using \texttt{docker\ exec}, e.g.:
+
+\begin{verbatim}
+$ docker ps
+CONTAINER ID      IMAGE             STATUS            NAMES
+696b2221e3ad      atondwal/mist     Up 45 seconds     vibrant_leavitt
+$ docker exec -it vibrant_leavitt bash
+ecoop21@696b2221e3ad:~/mist$
+\end{verbatim}
+
+You can use \texttt{docker\ start} to restart exited containers
+
+\begin{verbatim}
+$ docker ps -a
+CONTAINER ID      IMAGE             STATUS                     NAMES
+696b2221e3ad      atondwal/mist     Exited (137) 5 seconds ago vibrant_leavitt
+$ docker start vibrant_leavitt
+vibrant_leavitt
+$ docker exec -it vibrant_leavitt bash
+ecoop21@696b2221e3ad:~/mist$
+\end{verbatim}
+
+\hypertarget{manually}{%
+\subsection{Manually}\label{manually}}
+
+You'll need git, \href{https://github.com/Z3Prover/z3/releases}{z3
+version 4.8.10}, and
+\href{https://docs.haskellstack.org/en/stable/README/}{stack}.
+
+\begin{verbatim}
+$ git clone -b ecoop21 --recursive https://github.com/ucsd-progsys/mist
+$ cd mist
+$ stack install
+$ export PATH=$HOME/.local/bin/:$PATH
+\end{verbatim}
+
+You can then run the full \texttt{mist} test suite (which is located in
+the \texttt{tests/} directory).
+
+\begin{verbatim}
+$ stack test
+\end{verbatim}
+
+\hypertarget{running-specific-tests}{%
+\section{Running specific tests}\label{running-specific-tests}}
+
+You can run a specific test by calling mist on the test file, e.g.
+
+\begin{verbatim}
+$ mist tests/pos/incrState.hs
+\end{verbatim}
+
+If you're using the docker image, you can also run tests for
+\texttt{fstar}:
+
+\begin{verbatim}
+$ fstar fstar-tests/incrState.fst
+\end{verbatim}
+
+\hypertarget{benchmarks-from-the-paper}{%
+\section{Benchmarks from the paper}\label{benchmarks-from-the-paper}}
+
+Here's a table of where you can find each of the tests described in the
+paper:
+
+\begin{longtable}[]{@{}llll@{}}
+\toprule
+Name & Mist test (tests/pos/) & Mochi (mochi-tests/) & Fstar
+(fstar-tests/)\tabularnewline
+\midrule
+\endhead
+incr & \href{tests/pos/incr00.hs}{incr00.hs} &
+\href{mochi-tests/incr00.ml}{incr00.ml} &
+\href{fstar-tests/incr.fst}{incr.fst}\tabularnewline
+sum & \href{tests/pos/sum.hs}{sum.hs} &
+\href{mochi-tests/sum.ml}{sum.ml} &
+\href{fstar-tests/sum.fst}{sum.fst}\tabularnewline
+repeat & \href{tests/pos/repeat.hs}{repeat.hs} &
+\href{mochi-tests/repeat.ml}{repeat.ml} & x\tabularnewline
+d2 & \href{tests/pos/mochi-app-lin-ord2.hs}{mochi-app-lin-ord2.hs} &
+\href{mochi-tests/d2.ml}{d2.ml} &
+\href{fstar-tests/mochi-d2.fst}{mochi-d2.fst}\tabularnewline
+& & &\tabularnewline
+incrState & \href{tests/pos/incrStatePoly.hs}{incrStatePoly.hs} &
+\href{mochi-tests/incrState.ml}{incrState.ml} &
+\href{fstar-tests/incrState.fst}{incrState.fst}\tabularnewline
+accessControl & \href{tests/pos/acl.hs}{acl.hs} &
+\href{mochi-tests/acl.ml}{acl.ml} &
+\href{fstar-tests/accessControl.fst}{accessControl.fst}\tabularnewline
+tick & \href{tests/pos/tick-append.hs}{tick-append.hs} & x &
+\href{fstar-tests/tick.fst}{tick.fst}\tabularnewline
+linearDSL & \href{tests/pos/linearTypes.hs}{linearTypes.hs} & x &
+\href{fstar-tests/linearDSL.fst}{linearDSL.fst}\tabularnewline
+& & &\tabularnewline
+pagination & \href{tests/pos/paginationTokens.hs}{paginationTokens.hs} &
+x & x\tabularnewline
+login & \href{tests/pos/idr_login.hs}{idr\_login.hs} & x &
+x\tabularnewline
+twophase & \href{tests/pos/twoPhaseCommit.hs}{twoPhaseCommit.hs} & x &
+x\tabularnewline
+ticktock & \href{tests/pos/ticktock3.hs}{ticktock3.hs} & x &
+x\tabularnewline
+tcp & \href{tests/pos/tcp_client.hs}{tcp\_client.hs} & x &
+x\tabularnewline
+\bottomrule
+\end{longtable}
+
+As in the paper, an \texttt{x} indicates that the specification cannot
+be directly expressed with that tool.
+
+Unfortunately, the version of MoCHi we compare against was made
+available as a
+\href{http://www.kb.is.s.u-tokyo.ac.jp/~uhiro/relcomp/}{web demo} that
+is no longer functional. Since then, there has been a source release of
+MoCHi, but it does not support the \texttt{-relative-complete}
+verification mode that we compared against in our paper. We include a
+build of the latest version of MoCHi anyways, in case you want to play
+with it yourself and get an idea of how it works:
+
+\begin{verbatim}
+$ mochi mochi-tests/incrState.ml
+\end{verbatim}
+
+\hypertarget{a-quick-tutorial-in-writing-mist}{%
+\section{A quick tutorial in writing
+mist}\label{a-quick-tutorial-in-writing-mist}}
+
+\begin{quote}
+\textbf{A note about UX:} We demonstrate the ability of our type system
+to localize error messages in this prototype, but when it comes to the
+parser, we favor an easy to modify and understand grammar over one that
+provides the best user experience. As such\ldots{}
+\end{quote}
+
+When experimenting with \texttt{mist}, we recommend starting with one of
+the known working test cases, and then expanding on it to achieve the
+desired result, rather than starting from scratch in an empty text file.
+In this short tutorial we will take the same approach, starting from a
+minimal test case and building up to the pagination example from the
+ECOOP21 paper that demonstrates both implicit refinement function types
+and pair types.
+
+\hypertarget{how-to-read-this-tutorial}{%
+\subsection{How to read this tutorial}\label{how-to-read-this-tutorial}}
+
+We recommend reading the pdf version of this tutorial as it is the
+easiest to read, but we also recommend keeping open a copy of the
+markdown source (\texttt{\textasciitilde{}/mist/README.md}) in your text
+editor as you follow along, as the markdown source includes the location
+of each snippet as range of lines in a test file, so you can open, edit,
+and rerun those tests yourself.
+
+We recommend running a continuous build in a terminal while you
+experiment with a mist file. For example, this sets up \texttt{entr} to
+run \texttt{mist} on a file every time it gets written (whether or not
+it's a \texttt{mist} file).
+
+\begin{verbatim}
+$ find tests | entr mist /_
+(in another window - see above for docker instructions)
+$ vim tests/.../mytest.hs
+\end{verbatim}
+
+\begin{quote}
+Bits of syntax that are potential sources of confusion or frustration
+are highlighted in grey boxes. If you're struggling to make your code
+parse, checking to see if you've stepped on one of these Legos is a good
+place to start.
+\end{quote}
+
+\hypertarget{refinement-types}{%
+\subsection{Refinement Types}\label{refinement-types}}
+
+We start from an extremely simple example that demonstrates the concrete
+semantics of mist's refinement type system.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,]
+\OtherTok{twelve ::}\NormalTok{ \{ v }\OperatorTok{:} \DataTypeTok{Int}  \OperatorTok{|}\NormalTok{ v }\OperatorTok{==} \DecValTok{12}\NormalTok{ \}}
+\NormalTok{twelve }\OtherTok{=} \DecValTok{12}
+\end{Highlighting}
+\end{Shaded}
+
+Here, we have a top-level binder for the constant \texttt{int}. Each top
+level binder includes a type signature (line 1), and a body (line 2).
+The body of \texttt{int} simply states that it's equal to the integer
+constant \texttt{12}. This type signature is a minimal example of a
+refinement type: we refine the base type \texttt{Int}, binding its
+values to \texttt{v}, and taking the quotient of this type by the
+proposition \texttt{v\ ==\ 12}. This results in a singleton type that
+checks against the body of \texttt{twelve}.
+
+\begin{verbatim}
+$ mist tests/pos/Int00.hs
+SAFE
+\end{verbatim}
+
+If we had used a different value in the type and body:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,]
+\OtherTok{twelve ::}\NormalTok{ \{ v }\OperatorTok{:} \DataTypeTok{Int}  \OperatorTok{|}\NormalTok{ v }\OperatorTok{==} \DecValTok{14}\NormalTok{ \}}
+\NormalTok{twelve }\OtherTok{=} \DecValTok{12}
+\end{Highlighting}
+\end{Shaded}
+
+We'd see a type error:
+
+\begin{verbatim}
+$ mist tests/neg/Int01.hs
+Working 150% [=================================================================]
+Errors found!
+tests/neg/Int01.hs:2:7-9: Expected (VV##0 == 14) :
+
+         2|  int = 12
+                   ^^^
+\end{verbatim}
+
+\hypertarget{functions-and-polymorphism}{%
+\subsection{Functions and
+polymorphism}\label{functions-and-polymorphism}}
+
+We can extend this to writing functions in \texttt{mist}:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,]
+\OtherTok{incr ::}\NormalTok{ x}\OperatorTok{:}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}}\NormalTok{ \{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==}\NormalTok{ x }\OperatorTok{+} \DecValTok{1}\NormalTok{\}}
+\NormalTok{incr }\OtherTok{=}\NormalTok{ \textbackslash{}x }\OtherTok{{-}\textgreater{}}\NormalTok{ x }\OperatorTok{+} \DecValTok{1}
+
+\OtherTok{moo ::}\NormalTok{ \{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==} \DecValTok{8}\NormalTok{\}}
+\NormalTok{moo }\OtherTok{=}\NormalTok{ incr }\DecValTok{7}
+\end{Highlighting}
+\end{Shaded}
+
+This program checks that \texttt{incr}ementing 7 results in 8.
+
+Here, the binder \texttt{x:Int} binds \texttt{x} in the type on the
+right-hand side of \texttt{-\textgreater{}}. Similarly, at the value
+level, \texttt{\textbackslash{}} denotes a lambda.
+
+Functions can also be polymorphic:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=7,]
+\FunctionTok{id}\OtherTok{ ::}\NormalTok{ rforall a}\OperatorTok{.}\NormalTok{ \{v}\OperatorTok{:}\NormalTok{a }\OperatorTok{|} \DataTypeTok{True}\NormalTok{\} }\OtherTok{{-}\textgreater{}}\NormalTok{ \{v}\OperatorTok{:}\NormalTok{a }\OperatorTok{|} \DataTypeTok{True}\NormalTok{\}}
+\FunctionTok{id} \OtherTok{=}\NormalTok{ \textbackslash{}x }\OtherTok{{-}\textgreater{}}\NormalTok{ x}
+
+\OtherTok{bar ::}\NormalTok{ \{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==} \DecValTok{8}\NormalTok{\}}
+\NormalTok{bar }\OtherTok{=}\NormalTok{ incr (}\FunctionTok{id} \DecValTok{7}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+$ mist tests/pos/Inc02.hs
+SAFE
+\end{verbatim}
+
+\begin{quote}
+All function applications that are not directly under a binder or a
+function abstraction should be enclosed in parentheses.
+\end{quote}
+
+Here, \texttt{rforall} denotes that the function \texttt{id} is
+\emph{refinement polymorphic} in the type variable \texttt{a}. That is,
+\texttt{a} stands in for any \emph{refined} type, so we know that the
+result of applying \texttt{id} to any value will always result in a
+value of the same refinement type; i.e.~one for which all the same
+propositions are true. The only function of this type is \texttt{id}.
+
+Later we will also see \texttt{forall}, which allows functions to be
+polymorphic over base types.
+
+\hypertarget{implicit-function-types}{%
+\subsection{Implicit function types}\label{implicit-function-types}}
+
+We're ready for our first example of a feature introduced in this paper!
+We write an implicit function type the same way as a normal function,
+but using the squiggly arrow \texttt{\textasciitilde{}\textgreater{}}
+instead of the straight arrow \texttt{-\textgreater{}}:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,]
+\OtherTok{incr ::}\NormalTok{ n}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}}\NormalTok{ (}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}}\NormalTok{ \{ v }\OperatorTok{:} \DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==}\NormalTok{ n \}) }\OtherTok{{-}\textgreater{}}\NormalTok{ \{ v }\OperatorTok{:} \DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==}\NormalTok{ n }\OperatorTok{+} \DecValTok{1}\NormalTok{ \}}
+\NormalTok{incr }\OtherTok{=}\NormalTok{ \textbackslash{}f }\OtherTok{{-}\textgreater{}}\NormalTok{ (f }\DecValTok{0}\NormalTok{) }\OperatorTok{+} \DecValTok{1}
+
+\OtherTok{test1 ::}\NormalTok{ \{ v }\OperatorTok{:} \DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==} \DecValTok{11}\NormalTok{ \}}
+\NormalTok{test1 }\OtherTok{=}\NormalTok{ incr (\textbackslash{}x }\OtherTok{{-}\textgreater{}} \DecValTok{10}\NormalTok{)}
+
+\OtherTok{test2 ::}\NormalTok{ m}\OperatorTok{:}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}}\NormalTok{ \{ v }\OperatorTok{:} \DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OperatorTok{==}\NormalTok{ m}\OperatorTok{+}\DecValTok{1}\NormalTok{ \}}
+\NormalTok{test2 }\OtherTok{=}\NormalTok{ \textbackslash{}mv }\OtherTok{{-}\textgreater{}}\NormalTok{ incr (\textbackslash{}x }\OtherTok{{-}\textgreater{}}\NormalTok{ mv)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+$ mist tests/pos/incr00.hs
+SAFE
+\end{verbatim}
+
+\begin{quote}
+Note the parentheses around \texttt{(f\ 0)} --- there are no precedence
+rules for infix primitives.
+\end{quote}
+
+Given a constant function, \texttt{incr} increments the result. This is
+straightforward at the value level, but encoding it at the type level
+requires the use of implicit parameters. Here, \texttt{n} in bound at
+the type level, but has no corresponding binder at the value level in
+the surface syntax. The body of the function must typecheck for all
+values of \texttt{n}, but each call to the function need only be valid
+for some particular choice of \texttt{n}. \texttt{n} is picked at the
+call site by the implicit instantiation algorithm for refinement types
+described in the paper, such that the function application typechecks.
+
+Here, for the call to \texttt{incr} on line 5 inside \texttt{test1},
+\texttt{n} takes on the value 10, and on line 8, it takes on the value
+\texttt{mv}.
+
+\hypertarget{datatypes-axioms-and-measures}{%
+\subsection{Datatypes, axioms, and
+measures}\label{datatypes-axioms-and-measures}}
+
+Mist supports user-defined datatypes by axiomatising their constructors.
+In this section we're going to demonstrate specification and
+verification with the \texttt{List} datatype, which in Haskell one might
+write:
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\KeywordTok{data} \DataTypeTok{List}\NormalTok{ a }\OtherTok{=} \DataTypeTok{Nil} \OperatorTok{|} \DataTypeTok{Cons}\NormalTok{ a (}\DataTypeTok{List}\NormalTok{ a)}
+\end{Highlighting}
+\end{Shaded}
+
+\hypertarget{datatypes}{%
+\subsubsection{Datatypes}\label{datatypes}}
+
+In mist, \texttt{List\ a} is spelled \texttt{List\ \textgreater{}a}
+
+There are two things of note here:
+
+\begin{enumerate}
+\def\labelenumi{\arabic{enumi}.}
+\item
+  As in Haskell, Mist datatypes are written in TitleCamelCase.
+\item
+  Unlike Haskell, datatypes carry \emph{variance annotations} with them
+  that tell you if they're co- or contra-variant in a given argument.
+  Having these around can be helpful when you're debugging or reading
+  code with complex subtyping relationships.
+\end{enumerate}
+
+Here, the variance annotation \texttt{\textgreater{}} indicates that
+\texttt{a} appears covariantly in \texttt{List} (that is, \texttt{List}
+contains things that are subtypes of \texttt{a}). If it appeared
+contravariantly, we would have written \texttt{List\ \textless{}a} (a
+\texttt{List} of supertypes of \texttt{a}). Or in other words, a
+\texttt{List\ \textgreater{}a} behaves like a \texttt{List} that might
+produce \texttt{a}s when it is used up, whereas a
+\texttt{List\ \textless{}a} behaves as a list that might consume
+\texttt{a}s to use up.
+
+This notation is intended to evoke a function arrow
+\texttt{-\textgreater{}}: Just as you can use a function that
+\emph{returns} any subtype of the type you need, and that \emph{accepts}
+any supertype of the arguments you have, if you're a type variable on
+the pointy end of the variance annotation (or function arrow) you're a
+covariant type variable, and if you're on the other end you're
+contravariant.
+
+If you try to pass a \texttt{List\ \textgreater{}a} as a
+\texttt{List\ \textless{}a}, that is a (base/unrefined) type error ---
+variance annotations are essentially a part of the type name.
+
+You do not need to declare datatypes before using them in type
+signatures.
+
+Some such datatypes (\texttt{Int}, \texttt{Bool}, \texttt{Set}, and
+\texttt{Map}) have special meaning when used in types, as they come with
+primitives (such as \texttt{+}, which we saw above) that have meaning to
+the solver's theories of arithmetic, sets, maps, etc.
+
+\hypertarget{axioms}{%
+\subsubsection{Axioms}\label{axioms}}
+
+Mist relies on axioms to introduce data constructors. An axiom in Mist
+is written with ``\texttt{as}'' (assumed types) instead of
+``\texttt{::}'' (checked types):
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{exFalsoQuodlibet as rforall a}\OperatorTok{.} \DataTypeTok{False} \OtherTok{{-}\textgreater{}}\NormalTok{ a}
+\NormalTok{exFalsoQuodlibet }\OtherTok{=} \OperatorTok{...}
+\end{Highlighting}
+\end{Shaded}
+
+Whatever we put for \ldots{} is taken to be the witness of the axiom,
+and executed when the axiom is used in code that is run.
+
+\begin{quote}
+You need to provide a body for every binding, axioms or otherwise.
+\end{quote}
+
+To use the \texttt{List} datatype, we need constructors, and projections
+from these constructor (or induction principles, but let's keep it
+simple for the tutorial). To introduce axioms for each of these, we
+write something like
+
+\begin{Shaded}
+\begin{Highlighting}[]
+\NormalTok{nil as }\KeywordTok{forall}\NormalTok{ a}\OperatorTok{.} \DataTypeTok{List} \OperatorTok{\textgreater{}}\NormalTok{a}
+\NormalTok{nil }\OtherTok{=} \OperatorTok{...}
+\NormalTok{cons as }\KeywordTok{forall}\NormalTok{ a}\OperatorTok{.}\NormalTok{ a }\OtherTok{{-}\textgreater{}} \DataTypeTok{List} \OperatorTok{\textgreater{}}\NormalTok{a }\OtherTok{{-}\textgreater{}} \DataTypeTok{List} \OperatorTok{\textgreater{}}\NormalTok{a}
+\NormalTok{cons }\OtherTok{=} \OperatorTok{...}
+\NormalTok{first as }\KeywordTok{forall}\NormalTok{ a}\OperatorTok{.} \DataTypeTok{List} \OperatorTok{\textgreater{}}\NormalTok{a }\OtherTok{{-}\textgreater{}}\NormalTok{ a}
+\NormalTok{first }\OtherTok{=} \OperatorTok{...}
+\NormalTok{rest as }\KeywordTok{forall}\NormalTok{ a}\OperatorTok{.} \DataTypeTok{List} \OperatorTok{\textgreater{}}\NormalTok{a }\OtherTok{{-}\textgreater{}} \DataTypeTok{List} \OperatorTok{\textgreater{}}\NormalTok{a}
+\NormalTok{rest }\OtherTok{=} \OperatorTok{...}
+\end{Highlighting}
+\end{Shaded}
+
+where \texttt{...} can be e.g.~Boehm-Beraraducci (1985) encoding of
+constructors and projection operators, but since we're focused on
+testing the typechecker here, we generally set them equal to 0 as the
+witnesses to axioms don't matter so far as the typechecker is concerned.
+
+We can use axiomatized constructors to define a datatype \texttt{Lin}
+which is the type of terms of a linear DSL. Here, we use \texttt{Set}
+primitives.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=4,]
+\NormalTok{var as x}\OperatorTok{:}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}}\NormalTok{ (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ setPlus emptySet x\})}
+\end{Highlighting}
+\end{Shaded}
+
+\texttt{var} constructs a term that is a variable mention. It checks
+that the variable is in the environment.
+\(\frac{x \in \Gamma}{\Gamma \vdash \texttt{var } x}\)
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=7,]
+\NormalTok{fun as env}\OperatorTok{:}\NormalTok{(}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{) }\OperatorTok{\textasciitilde{}\textgreater{}}
+\NormalTok{  n}\OperatorTok{:}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ (v ∈ env) ≠ }\DataTypeTok{True}\NormalTok{\}}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ setPlus env n\})}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ env\})}
+\end{Highlighting}
+\end{Shaded}
+
+\texttt{fun} constructs a lambda term, while checking that the variable
+it binds is fresh.
+\(\frac{x\not\in\Gamma \quad \Gamma \cup \{x\} \vdash e}{\Gamma \vdash \texttt{fun } x\, e}\)
+
+\begin{quote}
+It may not always be obvious when you need parenthesis around type
+constructor applications. Some rules of thumb: parenthesize them on both
+sides of \texttt{-\textgreater{}}, but in the left-hand side of a
+refinement type (the binder), ``\texttt{(}'' may not follow
+``\texttt{:}''
+\end{quote}
+
+\begin{quote}
+Note that the not-equals operator is the unicode symbol, not a
+multi-character sigil --- infix operators in Mist are single characters.
+\end{quote}
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=13,]
+\NormalTok{app as env1}\OperatorTok{:}\NormalTok{(}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{) }\OperatorTok{\textasciitilde{}\textgreater{}}\NormalTok{ env2}\OperatorTok{:}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ env1 ∩ v }\OtherTok{=}\NormalTok{ emptySet\} }\OperatorTok{\textasciitilde{}\textgreater{}}
+\NormalTok{  (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ env1\})}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ env2\})}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ env1 ∪ env2\})}
+\end{Highlighting}
+\end{Shaded}
+
+\texttt{app} applies a function to a value, checking that no variable is
+used more than once in either argument.
+\(\frac{\Gamma_1 \cap \Gamma_2 = \emptyset\quad \Gamma_2 \vdash e \quad \Gamma_1 \vdash f}{\Gamma_1 \cup \Gamma_2\vdash \texttt{app } f\, e}\)
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=19,]
+\NormalTok{typecheck as (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ emptySet\}) }\OtherTok{{-}\textgreater{}}\NormalTok{ (}\DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{(}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\texttt{typecheck} simply checks that a term is closed
+\(\frac{\emptyset\vdash e}{\vdash e}\)
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=25,]
+\OtherTok{program2 ::} \DataTypeTok{Lin} \OperatorTok{\textgreater{}}\NormalTok{(}\DataTypeTok{Set} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{)}
+\NormalTok{program2 }\OtherTok{=}\NormalTok{ typecheck (fun }\DecValTok{1}\NormalTok{ (fun }\DecValTok{2}\NormalTok{ (app (var }\DecValTok{1}\NormalTok{) (var }\DecValTok{2}\NormalTok{))))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+$ mist tests/pos/linearTypes.hs
+SAFE
+\end{verbatim}
+
+\hypertarget{state}{%
+\subsection{State}\label{state}}
+
+We can define a State Monad datatype! See section 2.3 of the paper for
+more explanation. \texttt{put} takes a world (called \texttt{wp}),
+\texttt{put} updates the state to one where the state of the world is
+now \texttt{wp}.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=20,]
+\NormalTok{put as wp}\OperatorTok{:}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\DataTypeTok{Int} \OperatorTok{\textgreater{}}\NormalTok{\{p}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{p}\OperatorTok{==}\NormalTok{wp\} }\OperatorTok{\textgreater{}}\DataTypeTok{Unit}
+\end{Highlighting}
+\end{Shaded}
+
+\texttt{get} takes a boolean and ignores it, then leaves the state of
+the world unchanged, but returns its value in the \texttt{ST} monad.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=17,]
+\NormalTok{get as wg}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}} \DataTypeTok{Bool} \OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{gi}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{gi}\OperatorTok{==}\NormalTok{wg\} }\OperatorTok{\textgreater{}}\NormalTok{\{go}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{go}\OperatorTok{==}\NormalTok{wg\} }\OperatorTok{\textgreater{}}\NormalTok{\{gr}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{gr}\OperatorTok{==}\NormalTok{wg\}}
+\end{Highlighting}
+\end{Shaded}
+
+And then we have the standard monadic interface:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,]
+\CommentTok{{-}{-} Monadic Interface}
+\NormalTok{ret as rforall a}\OperatorTok{.}\NormalTok{ wr}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}}\NormalTok{ x}\OperatorTok{:}\NormalTok{a }\OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{ri}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{ri}\OperatorTok{==}\NormalTok{wr\} }\OperatorTok{\textgreater{}}\NormalTok{\{ro}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{ro}\OperatorTok{==}\NormalTok{wr\} }\OperatorTok{\textgreater{}}\NormalTok{a}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=11,]
+\NormalTok{bind as rforall a, b}\OperatorTok{.}\NormalTok{ w1}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}}\NormalTok{ w2}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}}\NormalTok{ w3}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}}
+\NormalTok{  (}\DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{v}\OperatorTok{==}\NormalTok{w1\} }\OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{v}\OperatorTok{==}\NormalTok{w2\} }\OperatorTok{\textgreater{}}\NormalTok{a)}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ (unused}\OperatorTok{:}\NormalTok{a }\OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{v}\OperatorTok{==}\NormalTok{w2\} }\OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{v}\OperatorTok{==}\NormalTok{w3\} }\OperatorTok{\textgreater{}}\NormalTok{b)}
+  \OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{v}\OperatorTok{==}\NormalTok{w1\} }\OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{v}\OperatorTok{==}\NormalTok{w3\} }\OperatorTok{\textgreater{}}\NormalTok{b}
+\end{Highlighting}
+\end{Shaded}
+
+Using this, we can verify a more stateful version of the incr example
+from before.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=24,]
+\OtherTok{incr ::}\NormalTok{ i}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{\textasciitilde{}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{i}\OperatorTok{==}\NormalTok{v\} }\OperatorTok{\textgreater{}}\NormalTok{\{w}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{|}\NormalTok{w}\OperatorTok{==}\NormalTok{i}\OperatorTok{+}\DecValTok{1}\NormalTok{\} }\OperatorTok{\textgreater{}}\DataTypeTok{Unit}
+\NormalTok{incr }\OtherTok{=}\NormalTok{ bind (get }\DataTypeTok{True}\NormalTok{) (\textbackslash{}x }\OtherTok{{-}\textgreater{}}\NormalTok{ put (x}\OperatorTok{+}\DecValTok{1}\NormalTok{))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+$ mist tests/pos/incrState.hs
+SAFE
+\end{verbatim}
+
+Going forward, however, we're going to use a more polymorphic definition
+of state:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=13,]
+\OtherTok{bind ::}\NormalTok{ rforall a, b, p, q, r}\OperatorTok{.}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{q }\OperatorTok{\textgreater{}}\NormalTok{a }\OtherTok{{-}\textgreater{}}
+\NormalTok{  (x}\OperatorTok{:}\NormalTok{a }\OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{q }\OperatorTok{\textgreater{}}\NormalTok{r }\OperatorTok{\textgreater{}}\NormalTok{b) }\OtherTok{{-}\textgreater{}}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{r }\OperatorTok{\textgreater{}}\NormalTok{b}
+\NormalTok{bind }\OtherTok{=} \FunctionTok{undefined}
+
+\FunctionTok{pure}\OtherTok{ ::}\NormalTok{ rforall a, p}\OperatorTok{.}\NormalTok{ x}\OperatorTok{:}\NormalTok{a }\OtherTok{{-}\textgreater{}} \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{a}
+\FunctionTok{pure} \OtherTok{=} \FunctionTok{undefined}
+
+\OtherTok{thenn ::}\NormalTok{ rforall a, b, p, q, r}\OperatorTok{.}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{q }\OperatorTok{\textgreater{}}\NormalTok{a }\OtherTok{{-}\textgreater{}}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{q }\OperatorTok{\textgreater{}}\NormalTok{r }\OperatorTok{\textgreater{}}\NormalTok{b }\OtherTok{{-}\textgreater{}}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{r }\OperatorTok{\textgreater{}}\NormalTok{b}
+\NormalTok{thenn }\OtherTok{=}\NormalTok{ \textbackslash{}f g }\OtherTok{{-}\textgreater{}}\NormalTok{ bind f (\textbackslash{}underscore }\OtherTok{{-}\textgreater{}}\NormalTok{ g)}
+
+\FunctionTok{fmap}\OtherTok{ ::}\NormalTok{ rforall a, b, p, q}\OperatorTok{.}
+\NormalTok{  (underscore}\OperatorTok{:}\NormalTok{a }\OtherTok{{-}\textgreater{}}\NormalTok{ b) }\OtherTok{{-}\textgreater{}}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{q }\OperatorTok{\textgreater{}}\NormalTok{a }\OtherTok{{-}\textgreater{}}
+  \DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{p }\OperatorTok{\textgreater{}}\NormalTok{q }\OperatorTok{\textgreater{}}\NormalTok{b}
+\FunctionTok{fmap} \OtherTok{=}\NormalTok{ \textbackslash{}f x }\OtherTok{{-}\textgreater{}}\NormalTok{ bind x (\textbackslash{}xx }\OtherTok{{-}\textgreater{}} \FunctionTok{pure}\NormalTok{ (f xx))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{quote}
+If a function type signature is failing to parse, try assigning a name
+to the argument (e.g.~\texttt{x:Int\ -\textgreater{}} instead of
+\texttt{Int\ -\textgreater{}}).
+\end{quote}
+
+\hypertarget{implicit-pair-types}{%
+\subsection{Implicit pair types}\label{implicit-pair-types}}
+
+Next, we demonstrate how to use another core feature unique to Mist:
+implicit pair types as described in the paper. In the paper the syntax
+is \([n:Int].\text{---}\), but in the implementation, we use
+\texttt{exists\ n.\ -}. Consider iterating through an infinite stream of
+token handlers. The API for getting the next token is:
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=37,]
+\NormalTok{nextPage as}
+\NormalTok{  token}\OperatorTok{:}\NormalTok{\{v}\OperatorTok{:} \DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v ≠ done\} }\OtherTok{{-}\textgreater{}}
+\NormalTok{  (exists tok}\OperatorTok{:}\DataTypeTok{Int}\OperatorTok{.}
+\NormalTok{    (}\DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ token\}}
+        \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ (v }\OtherTok{=}\NormalTok{ tok) }\OperatorTok{/}\NormalTok{\textbackslash{} (v ≠ token)\}}
+        \OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ tok\}))}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{quote}
+Remember to parenthesize both sides of conjunctions
+(\texttt{/\textbackslash{}})!
+\end{quote}
+
+That is, given a token, \texttt{nextPage} give you a state action where
+it picks a new token that's not equal to the old token, and updates the
+state of the world to reflect the new token.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=52,]
+\OtherTok{client ::}\NormalTok{ token}\OperatorTok{:}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}}
+\NormalTok{  (}\DataTypeTok{ST} \OperatorTok{\textless{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ token\} }\OperatorTok{\textgreater{}}\NormalTok{\{v}\OperatorTok{:}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ v }\OtherTok{=}\NormalTok{ done\} }\OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{)}
+\NormalTok{client }\OtherTok{=}\NormalTok{ \textbackslash{}token }\OtherTok{{-}\textgreater{}}
+  \KeywordTok{if}\NormalTok{ token }\OperatorTok{==}\NormalTok{ done}
+  \KeywordTok{then} \FunctionTok{pure} \DecValTok{1}
+  \KeywordTok{else}\NormalTok{ bind (nextPage token) (\textbackslash{}tok }\OtherTok{{-}\textgreater{}}\NormalTok{ client tok)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+$ mist tests/pos/paginationTokens.hs
+SAFE
+\end{verbatim}
+
+And that concludes our short tutorial on \texttt{mist}. Go forth and
+verify!
+
+\appendix
+
+\hypertarget{appendix-measures}{%
+\section{Appendix : Measures}\label{appendix-measures}}
+
+But these \texttt{List} constructors are all a bit boring --- what good
+are user datatypes if we can't say anything about them at the type
+level?! Until now, we've only been able to form refinements out of
+variables and primitive functions such as \texttt{+} and \texttt{∩} on
+special types such as \texttt{Int} and \texttt{Set}. We use (purely)
+refinement-level functions called measures (Vazou et al, ICFP 2014) to
+extend the language of refinements and enrich the types of our
+constructors.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,]
+\NormalTok{measure}\OtherTok{ mNil ::} \DataTypeTok{List}\NormalTok{ [}\OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{] }\OtherTok{{-}\textgreater{}} \DataTypeTok{Bool}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{quote}
+Measures use a different syntax for types --- type applications have a
+list of parameters in \texttt{{[}}square\texttt{,} brackets\texttt{,}
+separated\texttt{,} by\texttt{,} commas\texttt{{]}}, unlike applications
+of type constructors that produce refinement types, which use the usual
+space-separated syntax.
+\end{quote}
+
+This declares a measure \texttt{mNil} that takes a \texttt{List} of
+\texttt{Int}s and returns a \texttt{Bool}. Measure have unrefined types.
+
+\begin{quote}
+If you get an error message about free vars that implicates the start of
+the file, you probably tried to use a measure you didn't declare. This
+will cause the solver print a list of unbound measures and crash with
+some mumbo-jumbo about \texttt{-\/-prune-unsorted}. Measures always go
+at the top of the file.
+\end{quote}
+
+We can use these measures in constructor axioms to effectively define
+structurally recursive functions over a datatype.
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=10,]
+\NormalTok{nil as \{v}\OperatorTok{:} \DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ (mNil v) }\OperatorTok{/}\NormalTok{\textbackslash{} (mLength v }\OtherTok{=} \DecValTok{0}\NormalTok{) }\OperatorTok{/}\NormalTok{\textbackslash{} (}\FunctionTok{not}\NormalTok{ (mCons v))\}}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=13,]
+\NormalTok{cons as x}\OperatorTok{:}\DataTypeTok{Int} \OtherTok{{-}\textgreater{}}\NormalTok{ xs}\OperatorTok{:}\NormalTok{(}\DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{) }\OtherTok{{-}\textgreater{}}
+\NormalTok{  \{v}\OperatorTok{:} \DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ (mCons v) }\OperatorTok{/}\NormalTok{\textbackslash{} (mLength v }\OtherTok{=}\NormalTok{ mLength xs }\OperatorTok{+} \DecValTok{1}\NormalTok{) }\OperatorTok{/}\NormalTok{\textbackslash{} (}\FunctionTok{not}\NormalTok{ (mNil v))\}}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=17,]
+\NormalTok{first as \{v}\OperatorTok{:} \DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ mCons v\} }\OtherTok{{-}\textgreater{}} \DataTypeTok{Int}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=20,]
+\NormalTok{rest as rs}\OperatorTok{:}\NormalTok{\{v}\OperatorTok{:} \DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ mCons v\}}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ \{v}\OperatorTok{:} \DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ mLength v }\OperatorTok{+} \DecValTok{1} \OperatorTok{==}\NormalTok{ mLength rs \}}
+\NormalTok{rest }\OtherTok{=}\NormalTok{ (}\DecValTok{0}\NormalTok{)}
+\end{Highlighting}
+\end{Shaded}
+
+and we can then use them in verification!
+
+\begin{Shaded}
+\begin{Highlighting}[numbers=left,,firstnumber=24,]
+\OtherTok{append ::}\NormalTok{ xs}\OperatorTok{:}\NormalTok{(}\DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{)}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ ys}\OperatorTok{:}\NormalTok{(}\DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int}\NormalTok{)}
+  \OtherTok{{-}\textgreater{}}\NormalTok{ \{v}\OperatorTok{:} \DataTypeTok{List} \OperatorTok{\textgreater{}}\DataTypeTok{Int} \OperatorTok{|}\NormalTok{ mLength v }\OtherTok{=}\NormalTok{ (mLength xs) }\OperatorTok{+}\NormalTok{ (mLength ys)\}}
+\NormalTok{append }\OtherTok{=}\NormalTok{ \textbackslash{}xs }\OtherTok{{-}\textgreater{}}\NormalTok{ \textbackslash{}ys }\OtherTok{{-}\textgreater{}}
+  \KeywordTok{if}\NormalTok{ empty xs}
+    \KeywordTok{then}\NormalTok{ ys}
+    \KeywordTok{else}\NormalTok{ cons (first xs) (append (rest xs) ys)}
+\end{Highlighting}
+\end{Shaded}
+
+\begin{verbatim}
+$ mist tests/pos/recursion.hs
+SAFE
+\end{verbatim}
+
+\end{document}
