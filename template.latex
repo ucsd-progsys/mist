@@ -331,11 +331,20 @@ $endif$
 \author{Ranjit Jhala}{UC San Diego}{rjhala@cs.ucsd.edu}{}{}{}{}{}{}
 \authorrunning{A. Tondwalkar, M. Kolosick, and R. Jhala}
 \usepackage{tcolorbox}
-\newtcolorbox{myquote}{colback=lipicsLightGray, arc=1mm, boxrule=0mm}
+\newtcolorbox{myquote}{colback=lightgray, arc=1mm, boxrule=0mm}
 \renewenvironment{quote}{\begin{myquote}}{\end{myquote}}
-\ccsdesc{}
+\ccsdesc{Theory of computation~Program constructs}
+\ccsdesc{Theory of computation~Program specifications}
+\ccsdesc{Theory of computation~Program verification}
+\keywords{Refinement Types, Implicit Parameters, Verification, Dependent Pairs}  %% \keywords is optional
 \keywords{Refinement Types, Theorem Proving, Verification}  %% \keywords is optional
-\hideLIPIcs
+\Volume{7}
+\Issue{2}
+\Article{20}
+\Copyright{Tondwalkar, Kolosick, and Jhala}
+\RelatedConference{35th European Conference on Object-Oriented
+Programming (ECOOP 2021), July 12-16, 2021, Aarhus, Denmark (Virtual
+Conference)}
 \lstset{
   literate={~} {\ensuremath{\sim}}{1}
 }
